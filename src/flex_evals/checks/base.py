@@ -65,7 +65,7 @@ class BaseCheck(ABC):
     def execute(
         self,
         check_type: str,
-        raw_arguments: dict[str, Any],
+        arguments: dict[str, Any],
         context: EvaluationContext,
         check_version: str | None = None,
     ) -> CheckResult:
@@ -77,7 +77,7 @@ class BaseCheck(ABC):
 
         Args:
             check_type: The type identifier for this check
-            raw_arguments: Raw check arguments (may contain JSONPath expressions)
+            arguments: Raw check arguments (may contain JSONPath expressions)
             context: Evaluation context
             check_version: Version of the check definition
 
@@ -89,7 +89,7 @@ class BaseCheck(ABC):
         try:
             # Resolve arguments
             resolved_arguments = self._resolver.resolve_arguments(
-                raw_arguments,
+                arguments,
                 context.context_dict,
             )
 
@@ -231,7 +231,7 @@ class BaseAsyncCheck(ABC):
     async def execute(
         self,
         check_type: str,
-        raw_arguments: dict[str, Any],
+        arguments: dict[str, Any],
         context: EvaluationContext,
         check_version: str | None = None,
     ) -> CheckResult:
@@ -243,7 +243,7 @@ class BaseAsyncCheck(ABC):
 
         Args:
             check_type: The type identifier for this check
-            raw_arguments: Raw check arguments (may contain JSONPath expressions)
+            arguments: check arguments (may contain JSONPath expressions that need to be resolved)
             context: Evaluation context
             check_version: Version of the check definition
 
@@ -255,7 +255,7 @@ class BaseAsyncCheck(ABC):
         try:
             # Resolve arguments
             resolved_arguments = self._resolver.resolve_arguments(
-                raw_arguments,
+                arguments,
                 context.context_dict,
             )
 

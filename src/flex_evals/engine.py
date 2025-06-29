@@ -181,7 +181,7 @@ def _evaluate_sync(
                 # Execute the check
                 result = check_instance.execute(
                     check_type=check.type,
-                    raw_arguments=check.arguments,
+                    arguments=check.arguments,
                     context=context,
                     check_version=check.version,
                 )
@@ -220,14 +220,14 @@ async def _evaluate_async(
                 if isinstance(check_instance, BaseAsyncCheck):
                     result = await check_instance.execute(
                         check_type=check.type,
-                        raw_arguments=check.arguments,
+                        arguments=check.arguments,
                         context=context,
                         check_version=check.version,
                     )
                 elif isinstance(check_instance, BaseCheck):
                     result = check_instance.execute(
                         check_type=check.type,
-                        raw_arguments=check.arguments,
+                        arguments=check.arguments,
                         context=context,
                         check_version=check.version,
                     )
