@@ -41,7 +41,8 @@ print(f"Passed: {results.results[0].check_results[0].results}")
 
 **See `examples` directory for more detailed usage examples**:
 - **[Quickstart Notebook](examples/quickstart.ipynb)** - Introduction to FEP concepts
-- **[Advanced Examples](example_yaml_test_cases.ipynb)** - Using YAML for defining test cases
+- **[Advanced Examples](examples/example_yaml_test_cases.ipynb)** - Using YAML for defining test cases
+- **[LLM-as-a-Judge](examples/llm-as-a-judge.ipynb)** - Using YAML for defining test cases
 
 ## Table of Contents
 
