@@ -8,6 +8,8 @@ that produces complex or variable outputs.
 from .engine import evaluate
 from . import schemas
 from .constants import CheckType, Status, ErrorType, SimilarityMetric
+# Import checks to trigger registration of standard checks
+from . import checks  # noqa: F401
 from .schemas.check import Check, CheckError, CheckResult, CheckResultMetadata
 from .schemas.test_case import TestCase
 from .schemas.output import Output

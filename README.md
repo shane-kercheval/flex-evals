@@ -16,32 +16,32 @@ test_cases = [
     TestCase(
         id="test_001",
         input="What is the capital of France?",
-        expected="Paris"
-    )
+        checks=[
+            Check(
+                type=CheckType.CONTAINS,  # Can also use 'exact_match' string
+                arguments={
+                    "text": "$.output.value",  # JSONPath expression
+                    "phrases": ["Paris", "France"],
+                },
+            ),
+        ],
+    ),
 ]
 
 # System outputs to evaluate
 outputs = [
-    Output(value="The capital of France is Paris.")
-]
-
-# Define evaluation criteria using enums (strings also supported)
-checks = [
-    Check(
-        type=CheckType.EXACT_MATCH,  # Can also use 'exact_match' string
-        arguments={
-            "actual": "$.output.value",  # JSONPath expression
-            "expected": "$.test_case.expected",
-            "case_sensitive": False
-        }
-    )
+    Output(value="The capital of France is Paris."),
 ]
 
 # Run evaluation
-results = evaluate(test_cases, outputs, checks)
+results = evaluate(test_cases, outputs)
 print(f"Evaluation completed: {results.status}")
-print(f"Passed: {results.results[0].check_results[0].results['passed']}")
+print(f"Passed: {results.results[0].check_results[0].results}")
 ```
+
+**See `examples` directory for more detailed usage examples**:
+- **[Quickstart Notebook](examples/quickstart.ipynb)** - Introduction to FEP concepts
+- **[Advanced Examples](example_yaml_test_cases.ipynb)** - Using YAML for defining test cases
 
 ## Table of Contents
 

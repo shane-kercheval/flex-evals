@@ -6,7 +6,12 @@ from flex_evals.checks.standard.exact_match import ExactMatchCheck
 from flex_evals.checks.standard.contains import ContainsCheck
 from flex_evals.checks.standard.regex import RegexCheck
 from flex_evals.checks.standard.threshold import ThresholdCheck
+from flex_evals.constants import CheckType, Status
+from flex_evals.engine import evaluate
 from flex_evals.exceptions import ValidationError
+from flex_evals.schemas.check import Check
+from flex_evals.schemas.output import Output
+from flex_evals.schemas.test_case import TestCase
 
 
 class TestExactMatchCheck:
@@ -82,6 +87,39 @@ class TestExactMatchCheck:
         assert isinstance(result, dict)
         assert set(result.keys()) == {"passed"}
         assert isinstance(result["passed"], bool)
+
+    def test_exact_match_via_evaluate(self):
+        """Test using JSONPath for actual and expected values."""
+        # Define your test cases
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="What is the capital of France?",
+                expected="Paris",
+                checks=[
+                    Check(
+                        type=CheckType.EXACT_MATCH,
+                        arguments={
+                            "actual": "$.output.value",
+                            "expected": "$.test_case.expected",
+                        },
+                    ),
+                ],
+            ),
+        ]
+        # System outputs to evaluate
+        outputs = [
+            Output(value="Paris"),
+        ]
+        # Run evaluation
+        results = evaluate(test_cases, outputs)
+        assert results.summary.total_test_cases == 1
+        assert results.summary.completed_test_cases == 1
+        assert results.summary.error_test_cases == 0
+        assert results.summary.skipped_test_cases == 0
+        assert results.results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].results == {"passed": True}
 
 
 class TestContainsCheck:
@@ -188,6 +226,40 @@ class TestContainsCheck:
         """Test non-list phrases argument raises ValueError."""
         with pytest.raises(ValidationError, match="must be a list"):
             self.check(text="test", phrases="not a list")
+
+    def test_contains_via_evaluate(self):
+        """Test using JSONPath for text and phrases."""
+        # Define your test cases
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="What is the capital of France?",
+                expected=["Paris", "France"],
+                checks=[
+                    Check(
+                        type=CheckType.CONTAINS,  # Can also use 'exact_match' string
+                        arguments={
+                            "text": "$.output.value",
+                            "phrases": "$.test_case.expected",
+                        },
+                    ),
+                ],
+            ),
+        ]
+        # System outputs to evaluate
+        outputs = [
+            Output(value="The capital of France is Paris."),
+        ]
+        # Run evaluation
+        results = evaluate(test_cases, outputs)
+        print(results)
+        assert results.summary.total_test_cases == 1
+        assert results.summary.completed_test_cases == 1
+        assert results.summary.error_test_cases == 0
+        assert results.summary.skipped_test_cases == 0
+        assert results.results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].results == {"passed": True}
 
 
 class TestRegexCheck:
@@ -298,6 +370,39 @@ class TestRegexCheck:
         with pytest.raises(ValidationError, match="must be a string"):
             self.check(text="test", pattern=123)
 
+    def test_regex_via_evaluate(self):
+        """Test using JSONPath for text and pattern."""
+        # Define your test cases
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="What is your email?",
+                expected=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
+                checks=[
+                    Check(
+                        type=CheckType.REGEX,
+                        arguments={
+                            "text": "$.output.value",
+                            "pattern": "$.test_case.expected",
+                        },
+                    ),
+                ],
+            ),
+        ]
+        # System outputs to evaluate
+        outputs = [
+            Output(value="user@example.com"),
+        ]
+        # Run evaluation
+        results = evaluate(test_cases, outputs)
+        assert results.summary.total_test_cases == 1
+        assert results.summary.completed_test_cases == 1
+        assert results.summary.error_test_cases == 0
+        assert results.summary.skipped_test_cases == 0
+        assert results.results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].results == {"passed": True}
+
 
 class TestThresholdCheck:
     """Test Threshold check implementation."""
@@ -406,3 +511,37 @@ class TestThresholdCheck:
         """Test non-numeric max_value raises ValidationError."""
         with pytest.raises(ValidationError, match="'max_value' must be numeric"):
             self.check(value=0.85, max_value="not numeric")
+
+    def test_threshold_via_evaluate(self):
+        """Test using JSONPath for value and thresholds."""
+        # Define your test cases
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="What is the confidence score?",
+                expected={"min": 0.8, "max": 1.0},
+                checks=[
+                    Check(
+                        type=CheckType.THRESHOLD,
+                        arguments={
+                            "value": "$.output.value.confidence",
+                            "min_value": "$.test_case.expected.min",
+                            "max_value": "$.test_case.expected.max",
+                        },
+                    ),
+                ],
+            ),
+        ]
+        # System outputs to evaluate
+        outputs = [
+            Output(value={"message": "High confidence", "confidence": 0.95}),
+        ]
+        # Run evaluation
+        results = evaluate(test_cases, outputs)
+        assert results.summary.total_test_cases == 1
+        assert results.summary.completed_test_cases == 1
+        assert results.summary.error_test_cases == 0
+        assert results.summary.skipped_test_cases == 0
+        assert results.results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].results == {"passed": True}
