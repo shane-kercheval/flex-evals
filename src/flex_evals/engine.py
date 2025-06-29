@@ -60,16 +60,8 @@ def evaluate(
     # Resolve checks for each test case
     resolved_checks = _resolve_checks(test_cases, checks)
 
-    # Detect if any checks are async
-    has_async_checks = _detect_async_checks(resolved_checks)
-
-    # Execute evaluation (async or sync based on check types)
-    if has_async_checks:
-        test_case_results = asyncio.run(
-            _evaluate_async(test_cases, outputs, resolved_checks),
-        )
-    else:
-        test_case_results = _evaluate_sync(test_cases, outputs, resolved_checks)
+    # Execute evaluation with optimal sync/async separation
+    test_case_results = _evaluate(test_cases, outputs, resolved_checks)
 
     completed_at = datetime.now(UTC)
 
@@ -144,53 +136,31 @@ def _resolve_checks(
     return [[] for _ in test_cases]
 
 
-def _detect_async_checks(resolved_checks: list[list[Check]]) -> bool:
-    """Detect if any checks require async execution."""
-    for check_list in resolved_checks:
-        for check in check_list:
-            try:
-                if is_async_check(check.type):
-                    return True
-            except ValueError:
-                # Check type not registered - will be handled during execution
-                continue
-    return False
-
-
-def _evaluate_sync(
+def _evaluate(
     test_cases: list[TestCase],
     outputs: list[Output],
     resolved_checks: list[list[Check]],
 ) -> list[TestCaseResult]:
-    """Execute evaluation synchronously."""
+    """Execute evaluation with optimal sync/async separation."""
     results = []
 
-    for i, (test_case, output, checks) in enumerate(zip(test_cases, outputs, resolved_checks)):
+    for (test_case, output, checks) in zip(test_cases, outputs, resolved_checks):
         context = EvaluationContext(test_case, output)
-        check_results = []
 
-        for check in checks:
-            try:
-                check_class = get_check_class(check.type)
-                check_instance = check_class()
+        # Separate checks by type and track original order
+        sync_checks, async_checks, order_map = _separate_checks_by_type(checks)
 
-                # Ensure this is a sync check
-                if not isinstance(check_instance, BaseCheck):
-                    raise ValidationError(f"Check type '{check.type}' is async but sync execution was selected")  # noqa: E501
+        # Execute sync checks directly (no event loop overhead)
+        sync_results = [_execute_sync_check(check, context) for check in sync_checks]
 
-                # Execute the check
-                result = check_instance.execute(
-                    check_type=check.type,
-                    arguments=check.arguments,
-                    context=context,
-                    check_version=check.version,
-                )
-                check_results.append(result)
+        # Execute async checks concurrently (only if needed)
+        if async_checks:
+            async_results = asyncio.run(_execute_async_checks_concurrent(async_checks, context))
+        else:
+            async_results = []
 
-            except Exception as e:
-                # Create error result for unhandled exceptions
-                error_result = _create_error_check_result(check, context, str(e))
-                check_results.append(error_result)
+        # Reconstruct results in original order
+        check_results = _reconstruct_check_order(sync_results, async_results, order_map)
 
         # Create test case result
         test_case_result = _create_test_case_result(test_case.id, check_results)
@@ -199,53 +169,118 @@ def _evaluate_sync(
     return results
 
 
-async def _evaluate_async(
-    test_cases: list[TestCase],
-    outputs: list[Output],
-    resolved_checks: list[list[Check]],
-) -> list[TestCaseResult]:
-    """Execute evaluation asynchronously."""
-    results = []
+def _separate_checks_by_type(
+    checks: list[Check],
+) -> tuple[list[Check], list[Check], list[tuple[str, int]]]:
+    """
+    Separate checks into sync and async lists, tracking original order.
 
-    for i, (test_case, output, checks) in enumerate(zip(test_cases, outputs, resolved_checks)):
-        context = EvaluationContext(test_case, output)
-        check_results = []
+    Returns:
+        sync_checks: List of synchronous checks
+        async_checks: List of asynchronous checks
+        order_map: List of (type, index) tuples to reconstruct original order
+    """
+    sync_checks = []
+    async_checks = []
+    order_map = []
 
-        for check in checks:
-            try:
-                check_class = get_check_class(check.type)
-                check_instance = check_class()
+    for check in checks:
+        try:
+            if is_async_check(check.type):
+                async_checks.append(check)
+                order_map.append(('async', len(async_checks) - 1))
+            else:
+                sync_checks.append(check)
+                order_map.append(('sync', len(sync_checks) - 1))
+        except ValueError:
+            # Check type not registered - treat as sync and handle error during execution
+            sync_checks.append(check)
+            order_map.append(('sync', len(sync_checks) - 1))
 
-                # Execute the check (async or sync)
-                if isinstance(check_instance, BaseAsyncCheck):
-                    result = await check_instance.execute(
-                        check_type=check.type,
-                        arguments=check.arguments,
-                        context=context,
-                        check_version=check.version,
-                    )
-                elif isinstance(check_instance, BaseCheck):
-                    result = check_instance.execute(
-                        check_type=check.type,
-                        arguments=check.arguments,
-                        context=context,
-                        check_version=check.version,
-                    )
-                else:
-                    raise ValidationError(f"Invalid check class type for '{check.type}'")
+    return sync_checks, async_checks, order_map
 
-                check_results.append(result)
 
-            except Exception as e:
-                # Create error result for unhandled exceptions
-                error_result = _create_error_check_result(check, context, str(e))
-                check_results.append(error_result)
+def _execute_sync_check(check: Check, context: EvaluationContext) -> CheckResult:
+    """Execute a single synchronous check and return the result."""
+    try:
+        check_class = get_check_class(check.type)
+        check_instance = check_class()
 
-        # Create test case result
-        test_case_result = _create_test_case_result(test_case.id, check_results)
-        results.append(test_case_result)
+        # Ensure this is a sync check
+        if not isinstance(check_instance, BaseCheck):
+            raise ValidationError(
+                f"Check type '{check.type}' is async but was categorized as sync",
+            )
 
-    return results
+        # Execute the check
+        return check_instance.execute(
+            check_type=check.type,
+            arguments=check.arguments,
+            context=context,
+            check_version=check.version,
+        )
+
+    except Exception as e:
+        # Create error result for unhandled exceptions
+        return _create_error_check_result(check, context, str(e))
+
+
+async def _execute_async_checks_concurrent(
+    async_checks: list[Check], context: EvaluationContext,
+) -> list[CheckResult]:
+    """Execute multiple async checks concurrently."""
+    tasks = []
+    for check in async_checks:
+        task = asyncio.create_task(_execute_async_check(check, context))
+        tasks.append(task)
+
+    return await asyncio.gather(*tasks)
+
+
+async def _execute_async_check(check: Check, context: EvaluationContext) -> CheckResult:
+    """Execute a single asynchronous check and return the result."""
+    try:
+        check_class = get_check_class(check.type)
+        check_instance = check_class()
+
+        # Ensure this is an async check
+        if not isinstance(check_instance, BaseAsyncCheck):
+            raise ValidationError(
+                f"Check type '{check.type}' is sync but was categorized as async",
+            )
+
+        # Execute the check
+        return await check_instance.execute(
+            check_type=check.type,
+            arguments=check.arguments,
+            context=context,
+            check_version=check.version,
+        )
+
+    except Exception as e:
+        # Create error result for unhandled exceptions
+        return _create_error_check_result(check, context, str(e))
+
+
+def _reconstruct_check_order(
+    sync_results: list[CheckResult],
+    async_results: list[CheckResult],
+    order_map: list[tuple[str, int]],
+) -> list[CheckResult]:
+    """Reconstruct check results in their original order."""
+    final_results = []
+    sync_idx = 0
+    async_idx = 0
+
+    for check_type, _ in order_map:
+        if check_type == 'sync':
+            final_results.append(sync_results[sync_idx])
+            sync_idx += 1
+        else:  # async
+            final_results.append(async_results[async_idx])
+            async_idx += 1
+
+    return final_results
 
 
 def _create_error_check_result(

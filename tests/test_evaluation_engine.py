@@ -1,10 +1,12 @@
 """Tests for core evaluation engine."""
 
 import pytest
+import asyncio
+import time
 from datetime import datetime, UTC
 from typing import Any
 
-from flex_evals.engine import evaluate
+from flex_evals.engine import _reconstruct_check_order, _separate_checks_by_type, evaluate
 from flex_evals.schemas import (
     TestCase, Output, Check, EvaluationRunResult,
     ExperimentMetadata,
@@ -12,6 +14,7 @@ from flex_evals.schemas import (
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck
 from flex_evals.registry import register, clear_registry
 from flex_evals.exceptions import ValidationError
+from flex_evals.schemas.check import CheckResult, CheckResultMetadata
 from tests.conftest import restore_standard_checks
 
 
@@ -38,6 +41,14 @@ class TestFailingCheck(BaseCheck):
         raise RuntimeError("This check always fails")
 
 
+class SlowAsyncCheck(BaseAsyncCheck):
+    """Test async check with configurable delay for concurrency testing."""
+
+    async def __call__(self, delay: float = 0.1, **kwargs) -> dict[str, Any]:  # noqa
+        await asyncio.sleep(delay)
+        return {"passed": True, "delay_used": delay}
+
+
 class TestEvaluationEngine:
     """Test evaluation engine functionality."""
 
@@ -48,6 +59,7 @@ class TestEvaluationEngine:
         register("test_check", version="1.0.0")(TestExampleCheck)
         register("test_async_check", version="1.0.0")(TestExampleAsyncCheck)
         register("test_failing_check", version="1.0.0")(TestFailingCheck)
+        register("slow_async_check", version="1.0.0")(SlowAsyncCheck)
 
         # Create test data
         self.test_cases = [
@@ -360,3 +372,397 @@ class TestEvaluationEngine:
         ]
         result = evaluate(self.test_cases, self.outputs, failing_checks)
         assert result.status == 'error'
+
+    def test_async_checks_run_concurrently(self):
+        """Test that multiple async checks run in parallel, not sequentially."""
+        # Create 20 async checks, each with 0.1s delay
+        # If sequential: ~2.0s total (20 * 0.1s)
+        # If parallel: ~0.1s total (max delay)
+        num_checks = 20
+        delay_per_check = 0.1
+
+        concurrent_checks = [
+            Check(
+                type="slow_async_check",
+                arguments={"delay": delay_per_check, "expected": "test"},
+            )
+            for _ in range(num_checks)
+        ]
+
+        start_time = time.time()
+        result = evaluate(
+            test_cases=[TestCase(id="test_1", input="test input", expected="test")],
+            outputs=[Output(value="test")],
+            checks=[concurrent_checks],
+        )  # Single check per test case
+        duration = time.time() - start_time
+
+        # Verify the evaluation completed successfully
+        assert result.status == 'completed'
+        assert len(result.results) == 1  # Single test case
+
+        # Verify all checks passed
+        test_result = result.results[0]
+        assert test_result.status == 'completed'
+        assert len(test_result.check_results) == num_checks
+
+        for check_result in test_result.check_results:
+            assert check_result.results["passed"] is True
+            assert check_result.results["delay_used"] == delay_per_check
+
+        # Key assertion: total time should be much closer to single delay than sum of all delays
+        # Allow generous buffer for test environment overhead
+        max_allowed_time = delay_per_check + 0.2  # buffer for overhead
+
+        # This test will fail if async checks run sequentially instead of concurrently
+        assert duration < max_allowed_time, (
+            f"Async checks appear to run sequentially "
+            f"(took {duration:.3f}s, expected < {max_allowed_time:.1f}s)"
+        )
+
+    def test_mixed_sync_async_performance(self):
+        """Test that mixed sync/async checks perform optimally."""
+        # Create mix: 20 fast sync checks + 20 slow async checks
+        # Total time should be dominated by async (concurrent) not sync (sequential)
+        num_sync = 20
+        num_async = 20
+        async_delay = 0.1
+
+        mixed_checks = []
+
+        # Add sync checks (fast)
+        for i in range(num_sync):
+            mixed_checks.append(
+                Check(type="test_check", arguments={"expected": "test", "actual": "test"}),
+            )
+
+        # Add async checks (slow)
+        for i in range(num_async):
+            mixed_checks.append(
+                Check(
+                    type="slow_async_check",
+                    arguments={"delay": async_delay, "expected": "test"},
+                ),
+            )
+
+        start_time = time.time()
+        result = evaluate(
+            test_cases=[TestCase(id="test_1", input="test", expected="test")],
+            outputs=[Output(value="test")],
+            checks=mixed_checks,
+        )
+        duration = time.time() - start_time
+
+        # Verify success
+        assert result.status == 'completed'
+        test_result = result.results[0]
+        assert len(test_result.check_results) == num_sync + num_async
+
+        # Performance assertion: should complete in ~async_delay time
+        # not sync_time + async_delay time
+        max_allowed_time = async_delay + 0.3  # Buffer for overhead
+
+        assert duration < max_allowed_time, (
+            f"Mixed sync/async execution too slow "
+            f"(took {duration:.3f}s, expected < {max_allowed_time:.1f}s)"
+        )
+
+    def test_check_order_preservation_mixed(self):
+        """Test that check results maintain original order in mixed sync/async scenarios."""
+        # Create alternating pattern: sync, async, sync, async, sync
+        checks = [
+            Check(type="test_check", arguments={"expected": "sync1"}),          # sync
+            Check(type="slow_async_check", arguments={"delay": 0.05}),         # async
+            Check(type="test_check", arguments={"expected": "sync2"}),          # sync
+            Check(type="slow_async_check", arguments={"delay": 0.05}),         # async
+            Check(type="test_check", arguments={"expected": "sync3"}),          # sync
+        ]
+
+        result = evaluate(
+            test_cases=[TestCase(id="test_1", input="test", expected="test")],
+            outputs=[Output(value="test")],
+            checks=checks,
+        )
+
+        # Verify order is preserved
+        assert result.status == 'completed'
+        test_result = result.results[0]
+        assert len(test_result.check_results) == 5
+
+        check_results = test_result.check_results
+
+        # Check that results are in the same order as input checks
+        assert check_results[0].check_type == "test_check"      # sync1
+        assert check_results[1].check_type == "slow_async_check" # async1
+        assert check_results[2].check_type == "test_check"      # sync2
+        assert check_results[3].check_type == "slow_async_check" # async2
+        assert check_results[4].check_type == "test_check"      # sync3
+
+        # Verify sync checks got their expected values (order-dependent)
+        sync_results = [check_results[0], check_results[2], check_results[4]]
+        expected_values = ["sync1", "sync2", "sync3"]
+
+        for i, (sync_result, expected) in enumerate(zip(sync_results, expected_values)):
+            resolved_expected = sync_result.resolved_arguments["expected"]["value"]
+            assert resolved_expected == expected, f"Sync check {i+1} order wrong"
+
+    def test_pure_sync_no_async_overhead(self):
+        """Test that pure sync checks don't use async machinery."""
+        # This test verifies that sync-only evaluations don't call asyncio.run()
+        # We test this indirectly by ensuring very fast execution
+        num_checks = 50
+        sync_checks = [
+            Check(type="test_check", arguments={"expected": "test", "actual": "test"})
+            for _ in range(num_checks)
+        ]
+
+        start_time = time.time()
+        result = evaluate(
+            test_cases=[TestCase(id="test_1", input="test", expected="test")],
+            outputs=[Output(value="test")],
+            checks=sync_checks,
+        )
+        duration = time.time() - start_time
+
+        # Verify success
+        assert result.status == 'completed'
+        assert len(result.results[0].check_results) == num_checks
+
+        # Should complete very quickly (no async overhead)
+        max_allowed_time = 0.05  # 50ms should be plenty for 50 simple sync checks
+
+        assert duration < max_allowed_time, (
+            f"Pure sync execution too slow, may have async overhead "
+            f"(took {duration:.4f}s, expected < {max_allowed_time:.2f}s)"
+        )
+
+    def test_separate_checks_by_type_all_sync(self):
+        """Test _separate_checks_by_type with only sync checks."""
+        checks = [
+            Check(type="test_check", arguments={"expected": "test1"}),
+            Check(type="test_check", arguments={"expected": "test2"}),
+            Check(type="test_check", arguments={"expected": "test3"}),
+        ]
+
+        sync_checks, async_checks, order_map = _separate_checks_by_type(checks)
+
+        # All should be sync
+        assert len(sync_checks) == 3
+        assert len(async_checks) == 0
+        assert len(order_map) == 3
+
+        # Order map should be all sync
+        expected_order = [('sync', 0), ('sync', 1), ('sync', 2)]
+        assert order_map == expected_order
+
+        # Sync checks should be in same order as input
+        assert sync_checks[0].arguments["expected"] == "test1"
+        assert sync_checks[1].arguments["expected"] == "test2"
+        assert sync_checks[2].arguments["expected"] == "test3"
+
+    def test_separate_checks_by_type_all_async(self):
+        """Test _separate_checks_by_type with only async checks."""
+        checks = [
+            Check(type="slow_async_check", arguments={"delay": 0.1}),
+            Check(type="slow_async_check", arguments={"delay": 0.2}),
+            Check(type="slow_async_check", arguments={"delay": 0.3}),
+        ]
+
+        sync_checks, async_checks, order_map = _separate_checks_by_type(checks)
+
+        # All should be async
+        assert len(sync_checks) == 0
+        assert len(async_checks) == 3
+        assert len(order_map) == 3
+
+        # Order map should be all async
+        expected_order = [('async', 0), ('async', 1), ('async', 2)]
+        assert order_map == expected_order
+
+        # Async checks should be in same order as input
+        assert async_checks[0].arguments["delay"] == 0.1
+        assert async_checks[1].arguments["delay"] == 0.2
+        assert async_checks[2].arguments["delay"] == 0.3
+
+    def test_separate_checks_by_type_mixed(self):
+        """Test _separate_checks_by_type with mixed sync/async checks."""
+        checks = [
+            Check(type="test_check", arguments={"expected": "sync1"}),       # sync
+            Check(type="slow_async_check", arguments={"delay": 0.1}),       # async
+            Check(type="test_check", arguments={"expected": "sync2"}),       # sync
+            Check(type="slow_async_check", arguments={"delay": 0.2}),       # async
+            Check(type="test_check", arguments={"expected": "sync3"}),       # sync
+        ]
+
+        sync_checks, async_checks, order_map = _separate_checks_by_type(checks)
+
+        # Should separate correctly
+        assert len(sync_checks) == 3
+        assert len(async_checks) == 2
+        assert len(order_map) == 5
+
+        # Order map should reflect alternating pattern
+        expected_order = [
+            ('sync', 0), ('async', 0), ('sync', 1), ('async', 1), ('sync', 2),
+        ]
+        assert order_map == expected_order
+
+        # Sync checks should be grouped but maintain relative order
+        assert sync_checks[0].arguments["expected"] == "sync1"
+        assert sync_checks[1].arguments["expected"] == "sync2"
+        assert sync_checks[2].arguments["expected"] == "sync3"
+
+        # Async checks should be grouped but maintain relative order
+        assert async_checks[0].arguments["delay"] == 0.1
+        assert async_checks[1].arguments["delay"] == 0.2
+
+    def test_separate_checks_by_type_empty(self):
+        """Test _separate_checks_by_type with empty input."""
+        checks = []
+        sync_checks, async_checks, order_map = _separate_checks_by_type(checks)
+
+        assert len(sync_checks) == 0
+        assert len(async_checks) == 0
+        assert len(order_map) == 0
+
+    def test_separate_checks_by_type_unregistered_check(self):
+        """Test _separate_checks_by_type with unregistered check types."""
+        checks = [
+            Check(type="nonexistent_check", arguments={}),  # Should be treated as sync
+            Check(type="test_check", arguments={"expected": "test"}),
+        ]
+
+        sync_checks, async_checks, order_map = _separate_checks_by_type(checks)
+
+        # Unregistered check should be treated as sync
+        assert len(sync_checks) == 2
+        assert len(async_checks) == 0
+        assert len(order_map) == 2
+
+        expected_order = [('sync', 0), ('sync', 1)]
+        assert order_map == expected_order
+
+    def test_reconstruct_check_order_all_sync(self):
+        """Test _reconstruct_check_order with only sync results."""
+        # Mock sync results
+        sync_results = [
+            CheckResult(
+                check_type="test_check",
+                status="completed",
+                results={"id": i},
+                resolved_arguments={},
+                evaluated_at=datetime.now(UTC),
+                metadata=CheckResultMetadata(
+                    test_case_id="test",
+                    test_case_metadata=None,
+                    output_metadata=None,
+                    check_version=None,
+                ),
+            )
+            for i in range(3)
+        ]
+        async_results = []
+        order_map = [('sync', 0), ('sync', 1), ('sync', 2)]
+
+        final_results = _reconstruct_check_order(sync_results, async_results, order_map)
+
+        assert len(final_results) == 3
+        assert final_results[0].results["id"] == 0
+        assert final_results[1].results["id"] == 1
+        assert final_results[2].results["id"] == 2
+
+    def test_reconstruct_check_order_all_async(self):
+        """Test _reconstruct_check_order with only async results."""
+        # Mock async results
+        sync_results = []
+        async_results = [
+            CheckResult(
+                check_type="slow_async_check",
+                status="completed",
+                results={"id": i + 10},
+                resolved_arguments={},
+                evaluated_at=datetime.now(UTC),
+                metadata=CheckResultMetadata(
+                    test_case_id="test",
+                    test_case_metadata=None,
+                    output_metadata=None,
+                    check_version=None,
+                ),
+            )
+            for i in range(2)
+        ]
+        order_map = [('async', 0), ('async', 1)]
+
+        final_results = _reconstruct_check_order(sync_results, async_results, order_map)
+
+        assert len(final_results) == 2
+        assert final_results[0].results["id"] == 10
+        assert final_results[1].results["id"] == 11
+
+    def test_reconstruct_check_order_mixed(self):
+        """Test _reconstruct_check_order with mixed sync/async results."""
+        # Mock mixed results
+        sync_results = [
+            CheckResult(
+                check_type="test_check",
+                status="completed",
+                results={"type": "sync", "id": i},
+                resolved_arguments={},
+                evaluated_at=datetime.now(UTC),
+                metadata=CheckResultMetadata(
+                    test_case_id="test",
+                    test_case_metadata=None,
+                    output_metadata=None,
+                    check_version=None,
+                ),
+            )
+            for i in range(3)
+        ]
+
+        async_results = [
+            CheckResult(
+                check_type="slow_async_check",
+                status="completed",
+                results={"type": "async", "id": i + 100},
+                resolved_arguments={},
+                evaluated_at=datetime.now(UTC),
+                metadata=CheckResultMetadata(
+                    test_case_id="test",
+                    test_case_metadata=None,
+                    output_metadata=None,
+                    check_version=None,
+                ),
+            )
+            for i in range(2)
+        ]
+
+        # Pattern: sync, async, sync, async, sync
+        order_map = [
+            ('sync', 0), ('async', 0), ('sync', 1), ('async', 1), ('sync', 2),
+        ]
+
+        final_results = _reconstruct_check_order(sync_results, async_results, order_map)
+
+        assert len(final_results) == 5
+
+        # Verify alternating pattern is preserved
+        assert final_results[0].results["type"] == "sync"
+        assert final_results[0].results["id"] == 0
+        assert final_results[1].results["type"] == "async"
+        assert final_results[1].results["id"] == 100
+        assert final_results[2].results["type"] == "sync"
+        assert final_results[2].results["id"] == 1
+        assert final_results[3].results["type"] == "async"
+        assert final_results[3].results["id"] == 101
+        assert final_results[4].results["type"] == "sync"
+        assert final_results[4].results["id"] == 2
+
+    def test_reconstruct_check_order_empty(self):
+        """Test _reconstruct_check_order with empty inputs."""
+        sync_results = []
+        async_results = []
+        order_map = []
+
+        final_results = _reconstruct_check_order(sync_results, async_results, order_map)
+
+        assert len(final_results) == 0
