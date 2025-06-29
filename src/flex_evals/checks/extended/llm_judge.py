@@ -63,6 +63,12 @@ Where QualityAssessment might be:
         score: int = Field(ge=1, le=10)
         reasoning: str
         is_helpful: bool
+
+And my_llm_function must return:
+    return (
+        QualityAssessment(score=8, reasoning="Good answer", is_helpful=True),
+        {"cost_usd": 0.002, "tokens_used": 150, "model": "gpt-4o-mini"}
+    )
 """  # noqa: E501
 
 import asyncio
@@ -122,7 +128,8 @@ class LlmJudgeCheck(BaseAsyncCheck):
     Required Arguments:
     - prompt (str): Prompt template with optional {{$.jsonpath}} placeholders
     - response_format (type[BaseModel]): Pydantic model defining expected LLM response structure
-    - llm_function (callable): Function to call LLM with signature: (prompt: str, response_format: type[BaseModel]) -> BaseModel
+    - llm_function (callable): Function to call LLM with signature:
+        (prompt: str, response_format: type[BaseModel]) -> BaseModel | tuple[BaseModel, dict[str, Any]]
 
     Optional Arguments:
     - Any additional arguments will be passed through to __call__ after standard processing
@@ -142,9 +149,9 @@ class LlmJudgeCheck(BaseAsyncCheck):
     RESULTS SCHEMA:
     ==============
 
-    The results structure is entirely determined by the response_format argument.
-    The LLM response is validated against the provided Pydantic model and returned
-    as a dictionary matching that model's structure.
+    The results structure includes both the judge's response and metadata:
+    - response: Dictionary matching the response_format model structure
+    - metadata: Dictionary with LLM call metadata (if provided by llm_function)
 
     Example Response Format:
         class EvaluationResult(BaseModel):
@@ -155,10 +162,18 @@ class LlmJudgeCheck(BaseAsyncCheck):
 
     Would produce results like:
         {
-            "quality_score": 4,
-            "is_helpful": true,
-            "reasoning": "Response directly answers the question with accurate information",
-            "detected_issues": []
+            "response": {
+                "quality_score": 4,
+                "is_helpful": true,
+                "reasoning": "Response directly answers the question with accurate information",
+                "detected_issues": []
+            },
+            "metadata": {
+                "cost_usd": 0.0023,
+                "tokens_used": 150,
+                "response_time_ms": 842,
+                "model_version": "gpt-4o-mini-2024-07-02"
+            }
         }
 
     ERROR HANDLING:
@@ -278,7 +293,10 @@ class LlmJudgeCheck(BaseAsyncCheck):
         self,
         prompt: str,
         response_format: type[T],
-        llm_function: Callable[[str, type[T]], T | Awaitable[T]],
+        llm_function: Callable[
+            [str, type[T]],
+            tuple[T, dict[str, Any]] | Awaitable[tuple[T, dict[str, Any]]],
+        ],
     ) -> dict[str, Any]:
         """
         Execute LLM evaluation with fully processed arguments.
@@ -312,7 +330,7 @@ class LlmJudgeCheck(BaseAsyncCheck):
             - Function or method to call for LLM evaluation
             - Must accept (prompt: str, response_format: type[BaseModel])
             - Can be synchronous or asynchronous
-            - Should return BaseModel instance or compatible data
+            - Must return tuple of (BaseModel instance, metadata dict)
 
         **kwargs:
             - Additional arguments are accepted but not used
@@ -321,11 +339,12 @@ class LlmJudgeCheck(BaseAsyncCheck):
         RESPONSE PROCESSING:
         ===================
 
-        The LLM response is processed and validated as follows:
-        1. If response is BaseModel instance: convert to dict via model_dump()
-        2. If response is string: parse as JSON and validate against response_format
-        3. If response is dict: validate against response_format and convert
-        4. Any other type: raise ValidationError
+        The LLM response must be a tuple of (BaseModel, metadata_dict).
+        Processing steps:
+        1. Validate tuple format and extract (model, metadata)
+        2. Validate model instance against response_format
+        3. Convert to dict via model_dump()
+        4. Return structured response with response and metadata
 
         Args:
             prompt: Fully processed prompt string (no templates)
@@ -334,7 +353,9 @@ class LlmJudgeCheck(BaseAsyncCheck):
             **kwargs: Additional arguments (passed through but not used)
 
         Returns:
-            dict[str, Any]: Structured results matching the response_format schema
+            dict[str, Any]: Structured results with:
+                - response: dict matching the response_format schema
+                - metadata: dict with LLM call metadata (if provided)
 
         Raises:
             ValidationError: If arguments are invalid or response format validation fails
@@ -347,7 +368,10 @@ class LlmJudgeCheck(BaseAsyncCheck):
                 response_format=QualityAssessment,
                 llm_function=my_llm_function
             )
-            # Returns: {"score": 5, "reasoning": "Accurate and helpful response"}
+            # Returns: {
+            #     "response": {"score": 5, "reasoning": "Accurate and helpful response"},
+            #     "metadata": {"cost_usd": 0.002, "tokens_used": 150, ...}
+            # }
         """  # noqa: E501
         # Validate argument types
         if not isinstance(prompt, str):
@@ -363,8 +387,19 @@ class LlmJudgeCheck(BaseAsyncCheck):
             # Execute LLM evaluation with the fully processed prompt
             llm_response = await self._call_llm_function(llm_function, prompt, response_format)
 
-            # Validate and convert response to dict format
-            return self._validate_response_format(llm_response, response_format)
+            # Expect tuple of (model_response, metadata)
+            if not isinstance(llm_response, tuple) or len(llm_response) != 2:
+                raise ValidationError(
+                    "llm_function must return tuple of (BaseModel, metadata_dict)",
+                )
+
+            model_response, metadata = llm_response
+            validated_response = self._validate_response_format(model_response, response_format)
+
+            return {
+                "response": validated_response,
+                "metadata": metadata if isinstance(metadata, dict) else {},
+            }
 
         except Exception as e:
             raise CheckExecutionError(f"Error in LLM judge evaluation: {e!s}") from e
@@ -468,10 +503,13 @@ class LlmJudgeCheck(BaseAsyncCheck):
 
     async def _call_llm_function(
         self,
-        llm_function: Callable[[str, type[T]], T | Awaitable[T]],
+        llm_function: Callable[
+            [str, type[T]],
+            tuple[T, dict[str, Any]] | Awaitable[tuple[T, dict[str, Any]]],
+        ],
         prompt: str,
         response_format: type[T],
-    ) -> T:
+    ) -> tuple[T, dict[str, Any]]:
         """
         Call the user-provided LLM function with proper error handling.
 
@@ -485,7 +523,7 @@ class LlmJudgeCheck(BaseAsyncCheck):
             response_format: Expected response format (Pydantic model class)
 
         Returns:
-            T: Response from LLM function (typically BaseModel instance)
+            tuple[T, dict[str, Any]]: Tuple of (BaseModel instance, metadata dict)
 
         Raises:
             CheckExecutionError: If LLM function execution fails

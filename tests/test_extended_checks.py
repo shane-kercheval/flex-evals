@@ -64,28 +64,48 @@ class TestLlmJudgeCheck:
 
         self.context = EvaluationContext(self.test_case, self.output)
 
-    def create_sync_llm_function(self, response: Any):  # noqa
+    def create_sync_llm_function(self, response: Any, metadata: dict[str, Any] | None = None):  # noqa
         """Create a synchronous mock LLM function that returns the given response."""
-        def mock_llm(prompt: str, response_format: type[BaseModel]) -> BaseModel:  # noqa
+        def mock_llm(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict[str, Any]]:  # noqa
             if isinstance(response, BaseModel):
-                return response
-            if isinstance(response, dict):
-                return response_format(**response)
-            if isinstance(response, str):
-                return response_format(**json.loads(response))
-            return response_format(response)
+                parsed = response
+            elif isinstance(response, dict):
+                parsed = response_format(**response)
+            elif isinstance(response, str):
+                parsed = response_format(**json.loads(response))
+            else:
+                parsed = response_format(response)
+
+            # Return tuple with metadata
+            mock_metadata = metadata or {
+                "cost_usd": 0.0023,
+                "tokens_used": 150,
+                "response_time_ms": 842,
+                "model_version": "gpt-4o-mini-2024-07-02",
+            }
+            return parsed, mock_metadata
         return mock_llm
 
-    def create_async_llm_function(self, response: Any):  # noqa
+    def create_async_llm_function(self, response: Any, metadata: dict[str, Any] | None = None):  # noqa
         """Create an asynchronous mock LLM function that returns the given response."""
-        async def mock_llm(prompt: str, response_format: type[BaseModel]) -> BaseModel:  # noqa
+        async def mock_llm(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict[str, Any]]:  # noqa
             if isinstance(response, BaseModel):
-                return response
-            if isinstance(response, dict):
-                return response_format(**response)
-            if isinstance(response, str):
-                return response_format(**json.loads(response))
-            return response_format(response)
+                parsed = response
+            elif isinstance(response, dict):
+                parsed = response_format(**response)
+            elif isinstance(response, str):
+                parsed = response_format(**json.loads(response))
+            else:
+                parsed = response_format(response)
+
+            # Return tuple with metadata
+            mock_metadata = metadata or {
+                "cost_usd": 0.0015,
+                "tokens_used": 120,
+                "response_time_ms": 650,
+                "model_version": "gpt-4o-mini-async",
+            }
+            return parsed, mock_metadata
         return mock_llm
 
     def create_failing_llm_function(self, error_message: str = "LLM API failed"):
@@ -110,8 +130,22 @@ class TestLlmJudgeCheck:
             llm_function=llm_function,
         )
 
-        expected = {"score": 4, "is_helpful": True, "reasoning": "Clear and accurate response"}
-        assert result == expected
+        # Check new structure
+        assert "response" in result
+        assert "metadata" in result
+
+        expected_response = {
+            "score": 4,
+            "is_helpful": True,
+            "reasoning": "Clear and accurate response",
+        }
+        assert result["response"] == expected_response
+
+        # Check metadata
+        assert result["metadata"]["cost_usd"] == 0.0023
+        assert result["metadata"]["tokens_used"] == 150
+        assert result["metadata"]["response_time_ms"] == 842
+        assert result["metadata"]["model_version"] == "gpt-4o-mini-2024-07-02"
 
     @pytest.mark.asyncio
     async def test_call_with_async_llm_function(self):
@@ -125,7 +159,9 @@ class TestLlmJudgeCheck:
             llm_function=llm_function,
         )
 
-        assert result == {"passed": True}
+        assert result["response"] == {"passed": True}
+        assert "metadata" in result
+        assert result["metadata"]["model_version"] == "gpt-4o-mini-async"
 
     @pytest.mark.asyncio
     async def test_call_with_complex_response_format(self):
@@ -145,7 +181,8 @@ class TestLlmJudgeCheck:
             llm_function=llm_function,
         )
 
-        assert result == response_data
+        assert result["response"] == response_data
+        assert "metadata" in result
 
     @pytest.mark.asyncio
     async def test_call_argument_validation(self):
@@ -191,22 +228,22 @@ class TestLlmJudgeCheck:
     @pytest.mark.asyncio
     async def test_call_response_validation_errors(self):
         """Test __call__ response format validation errors."""
-        # Test invalid JSON string response
+        # Test invalid return type (not tuple)
         def invalid_json_llm(prompt: str, response_format: type[BaseModel]) -> str:  # noqa
             return "invalid json{{"
 
-        with pytest.raises(CheckExecutionError, match="LLM response is not valid JSON"):
+        with pytest.raises(CheckExecutionError, match="llm_function must return tuple"):
             await self.check(
                 prompt="test",
                 response_format=SimpleBooleanResult,
                 llm_function=invalid_json_llm,
             )
 
-        # Test response that doesn't match schema
+        # Test invalid return type (dict instead of tuple)
         def invalid_schema_llm(prompt: str, response_format: type[BaseModel]) -> dict:  # noqa
-            return {"invalid_field": "value"}  # Missing required 'passed' field
+            return {"invalid_field": "value"}  # Not a tuple
 
-        with pytest.raises(CheckExecutionError, match="Failed to create model from response"):
+        with pytest.raises(CheckExecutionError, match="llm_function must return tuple"):
             await self.check(
                 prompt="test",
                 response_format=SimpleBooleanResult,
@@ -216,41 +253,31 @@ class TestLlmJudgeCheck:
     @pytest.mark.asyncio
     async def test_call_response_format_handling(self):
         """Test __call__ handling of different response types."""
-        # Test BaseModel instance response
+        # Test with tuple response (new required format)
         response_instance = QualityAssessment(score=5, is_helpful=True, reasoning="Perfect")
+        custom_metadata = {"cost_usd": 0.001, "tokens_used": 75, "model": "test-model"}
         def llm_function(p, rf):  # noqa
-            return response_instance
+            return response_instance, custom_metadata
 
         result = await self.check(
             prompt="test",
             response_format=QualityAssessment,
             llm_function=llm_function,
         )
-        assert result == {"score": 5, "is_helpful": True, "reasoning": "Perfect"}
+        assert result["response"] == {"score": 5, "is_helpful": True, "reasoning": "Perfect"}
+        assert result["metadata"] == custom_metadata
 
-        # Test JSON string response
-        json_response = '{"score": 3, "is_helpful": false, "reasoning": "Needs improvement"}'
-        def llm_function(p, rf):  # noqa
-            return json_response
+        # Test invalid response format (not tuple)
+        def invalid_llm_function(p, rf):  # noqa
+            # Invalid - not tuple
+            return QualityAssessment(score=3, is_helpful=False, reasoning="Not tuple")
 
-        result = await self.check(
-            prompt="test",
-            response_format=QualityAssessment,
-            llm_function=llm_function,
-        )
-        assert result == {"score": 3, "is_helpful": False, "reasoning": "Needs improvement"}
-
-        # Test dict response
-        dict_response = {"score": 2, "is_helpful": True, "reasoning": "Partially helpful"}
-        def llm_function(p, rf):  # noqa
-            return dict_response
-
-        result = await self.check(
-            prompt="test",
-            response_format=QualityAssessment,
-            llm_function=llm_function,
-        )
-        assert result == {"score": 2, "is_helpful": True, "reasoning": "Partially helpful"}
+        with pytest.raises(CheckExecutionError, match="llm_function must return tuple"):
+            await self.check(
+                prompt="test",
+                response_format=QualityAssessment,
+                llm_function=invalid_llm_function,
+            )
 
     # Test execute method (handles template processing)
 
@@ -276,7 +303,8 @@ class TestLlmJudgeCheck:
 
         assert result.status == Status.COMPLETED
         assert result.check_type == "llm_judge"
-        assert result.results == {"score": 4, "is_helpful": True, "reasoning": "Good"}
+        assert result.results["response"] == {"score": 4, "is_helpful": True, "reasoning": "Good"}
+        assert "metadata" in result.results
 
         # Verify template was processed
         resolved_prompt = result.resolved_arguments["prompt"]["value"]
@@ -472,15 +500,19 @@ class TestLlmJudgeCheck:
 
     def test_llm_judge_via_evaluate_basic(self):
         """Test LLM judge via evaluate function with basic template."""
-        def mock_llm_function(prompt: str, response_format: type[BaseModel]) -> BaseModel:  # noqa
+        def mock_llm_function(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict[str, Any]]:  # noqa
             # Simple mock that returns based on prompt content
             if "Paris" in prompt:
-                return QualityAssessment(
+                response = QualityAssessment(
                     score=5,
                     is_helpful=True,
                     reasoning="Accurate geographical answer",
                 )
-            return QualityAssessment(score=1, is_helpful=False, reasoning="Incorrect answer")
+            else:
+                response = QualityAssessment(score=1, is_helpful=False, reasoning="Incorrect answer")  # noqa: E501
+
+            metadata = {"cost_usd": 0.002, "tokens_used": 100, "model": "test-model"}
+            return response, metadata
 
         test_cases = [
             TestCase(
@@ -514,17 +546,21 @@ class TestLlmJudgeCheck:
         assert results.results[0].check_results[0].status == Status.COMPLETED
 
         check_result = results.results[0].check_results[0]
-        assert check_result.results["score"] == 5
-        assert check_result.results["is_helpful"] is True
-        assert "Accurate geographical answer" in check_result.results["reasoning"]
+        assert check_result.results["response"]["score"] == 5
+        assert check_result.results["response"]["is_helpful"] is True
+        assert "Accurate geographical answer" in check_result.results["response"]["reasoning"]
+        assert "metadata" in check_result.results
 
     def test_llm_judge_via_evaluate_complex_jsonpath(self):
         """Test LLM judge via evaluate with complex JSONPath expressions."""
-        def mock_llm_function(prompt: str, response_format: type[BaseModel]) -> BaseModel:  # noqa
+        def mock_llm_function(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict[str, Any]]:  # noqa
             # Mock that evaluates based on confidence scores
             if "0.9" in prompt:  # High confidence
-                return SimpleBooleanResult(passed=True)
-            return SimpleBooleanResult(passed=False)
+                response = SimpleBooleanResult(passed=True)
+            else:
+                response = SimpleBooleanResult(passed=False)
+            metadata = {"cost_usd": 0.001, "tokens_used": 50, "model": "test-eval"}
+            return response, metadata
 
         test_cases = [
             TestCase(
@@ -562,7 +598,7 @@ class TestLlmJudgeCheck:
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
-        assert results.results[0].check_results[0].results["passed"] is True
+        assert results.results[0].check_results[0].results["response"]["passed"] is True
 
         # Verify complex JSONPath resolution
         resolved_prompt = results.results[0].check_results[0].resolved_arguments["prompt"]["value"]
@@ -573,11 +609,15 @@ class TestLlmJudgeCheck:
 
     def test_llm_judge_via_evaluate_multiple_checks(self):
         """Test multiple LLM judge checks on same test case."""
-        def quality_evaluator(prompt: str, response_format: type[BaseModel]) -> BaseModel:  # noqa
-            return QualityAssessment(score=4, is_helpful=True, reasoning="Good quality")
+        def quality_evaluator(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict[str, Any]]:  # noqa
+            response = QualityAssessment(score=4, is_helpful=True, reasoning="Good quality")
+            metadata = {"cost_usd": 0.003, "tokens_used": 200, "model": "quality-judge"}
+            return response, metadata
 
-        def boolean_evaluator(prompt: str, response_format: type[BaseModel]) -> BaseModel:  # noqa
-            return SimpleBooleanResult(passed=True)
+        def boolean_evaluator(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict[str, Any]]:  # noqa
+            response = SimpleBooleanResult(passed=True)
+            metadata = {"cost_usd": 0.001, "tokens_used": 30, "model": "bool-judge"}
+            return response, metadata
 
         test_cases = [
             TestCase(
@@ -616,16 +656,16 @@ class TestLlmJudgeCheck:
 
         # First check (quality assessment)
         quality_result = results.results[0].check_results[0]
-        assert quality_result.results["score"] == 4
-        assert quality_result.results["is_helpful"] is True
+        assert quality_result.results["response"]["score"] == 4
+        assert quality_result.results["response"]["is_helpful"] is True
 
         # Second check (boolean result)
         boolean_result = results.results[0].check_results[1]
-        assert boolean_result.results["passed"] is True
+        assert boolean_result.results["response"]["passed"] is True
 
     def test_llm_judge_via_evaluate_error_handling(self):
         """Test error handling via evaluate function."""
-        def failing_llm_function(prompt: str, response_format: type[BaseModel]) -> BaseModel:  # noqa
+        def failing_llm_function(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict[str, Any]]:  # noqa
             raise RuntimeError("LLM service unavailable")
 
         test_cases = [
@@ -805,6 +845,36 @@ class TestLlmJudgeCheck:
                 assert "value" in result.resolved_arguments["prompt"]
 
     @pytest.mark.asyncio
+    async def test_new_tuple_format_with_metadata(self):
+        """Test that the new tuple format properly returns response and metadata."""
+        custom_metadata = {
+            "cost_usd": 0.0045,
+            "tokens_used": 250,
+            "input_tokens": 180,
+            "output_tokens": 70,
+            "response_time_ms": 1200,
+            "model_version": "gpt-4o-mini-test",
+            "temperature": 0.1,
+        }
+
+        response_data = {"passed": True}
+        llm_function = self.create_sync_llm_function(response_data, custom_metadata)
+
+        result = await self.check(
+            prompt="test prompt",
+            response_format=SimpleBooleanResult,
+            llm_function=llm_function,
+        )
+
+        # Verify structure
+        assert "response" in result
+        assert "metadata" in result
+
+        # Verify content
+        assert result["response"] == {"passed": True}
+        assert result["metadata"] == custom_metadata
+
+    @pytest.mark.asyncio
     async def test_response_format_validation_edge_cases(self):
         """Test response format validation with edge cases."""
         # Test with minimal valid response
@@ -816,7 +886,8 @@ class TestLlmJudgeCheck:
             response_format=SimpleBooleanResult,
             llm_function=llm_function,
         )
-        assert result == {"passed": True}
+        assert result["response"] == {"passed": True}
+        assert "metadata" in result
 
         # Test with response containing extra fields (should be preserved)
         extra_fields_response = {"passed": True, "extra_field": "value", "another": 123}
@@ -833,17 +904,22 @@ class TestLlmJudgeCheck:
             response_format=ExtendedResult,
             llm_function=llm_function,
         )
-        assert result == {"passed": True, "extra_field": "value", "another": 123}
+        assert result["response"] == {"passed": True, "extra_field": "value", "another": 123}
+        assert "metadata" in result
 
     def test_concurrent_evaluations(self):
         """Test multiple concurrent LLM judge evaluations."""
-        def mock_llm_function(prompt: str, response_format: type[BaseModel]) -> BaseModel:  # noqa
+        def mock_llm_function(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict[str, Any]]:  # noqa
             # Return different scores based on test case ID
             if "test_001" in prompt:
-                return QualityAssessment(score=5, is_helpful=True, reasoning="Excellent")
-            if "test_002" in prompt:
-                return QualityAssessment(score=3, is_helpful=True, reasoning="Good")
-            return QualityAssessment(score=1, is_helpful=False, reasoning="Poor")
+                response = QualityAssessment(score=5, is_helpful=True, reasoning="Excellent")
+            elif "test_002" in prompt:
+                response = QualityAssessment(score=3, is_helpful=True, reasoning="Good")
+            else:
+                response = QualityAssessment(score=1, is_helpful=False, reasoning="Poor")
+
+            metadata = {"cost_usd": 0.002, "tokens_used": 100, "model": "batch-judge"}
+            return response, metadata
 
         test_cases = [
             TestCase(
@@ -903,11 +979,11 @@ class TestLlmJudgeCheck:
         assert results.summary.error_test_cases == 0
 
         # Verify each test case got the expected score
-        scores = [result.check_results[0].results["score"] for result in results.results]
+        scores = [result.check_results[0].results["response"]["score"] for result in results.results]  # noqa: E501
         assert scores == [5, 3, 1]
-        is_helpful = [result.check_results[0].results["is_helpful"] for result in results.results]
+        is_helpful = [result.check_results[0].results["response"]["is_helpful"] for result in results.results]  # noqa: E501
         assert is_helpful == [True, True, False]
-        reasoning = [result.check_results[0].results["reasoning"] for result in results.results]
+        reasoning = [result.check_results[0].results["response"]["reasoning"] for result in results.results]  # noqa: E501
         assert reasoning == [
             "Excellent",
             "Good",
