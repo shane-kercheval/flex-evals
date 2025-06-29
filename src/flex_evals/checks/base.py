@@ -46,7 +46,7 @@ class BaseCheck(ABC):
         self._resolver = JSONPathResolver()
 
     @abstractmethod
-    def __call__(self, **kwargs: Any) -> dict[str, Any]:
+    def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
         """
         Execute the check with direct arguments.
 
@@ -67,7 +67,7 @@ class BaseCheck(ABC):
         check_type: str,
         raw_arguments: dict[str, Any],
         context: EvaluationContext,
-        check_metadata: dict[str, Any] | None = None,
+        check_version: str | None = None,
     ) -> CheckResult:
         """
         Execute the check and return a complete CheckResult.
@@ -79,7 +79,7 @@ class BaseCheck(ABC):
             check_type: The type identifier for this check
             raw_arguments: Raw check arguments (may contain JSONPath expressions)
             context: Evaluation context
-            check_metadata: Metadata from the original check definition
+            check_version: Version of the check definition
 
         Returns:
             Complete CheckResult with all required fields
@@ -116,7 +116,7 @@ class BaseCheck(ABC):
                     test_case_id=context.test_case.id,
                     test_case_metadata=context.test_case.metadata,
                     output_metadata=context.output.metadata,
-                    check_metadata=check_metadata,
+                    check_version=check_version,
                 ),
             )
 
@@ -128,7 +128,7 @@ class BaseCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 context=context,
-                check_metadata=check_metadata,
+                check_version=check_version,
                 recoverable=False,
             )
 
@@ -140,7 +140,7 @@ class BaseCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 context=context,
-                check_metadata=check_metadata,
+                check_version=check_version,
                 recoverable=False,
             )
 
@@ -152,7 +152,7 @@ class BaseCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 context=context,
-                check_metadata=check_metadata,
+                check_version=check_version,
                 recoverable=False,
             )
 
@@ -164,7 +164,7 @@ class BaseCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 context=context,
-                check_metadata=check_metadata,
+                check_version=check_version,
                 recoverable=False,
             )
 
@@ -176,7 +176,7 @@ class BaseCheck(ABC):
         resolved_arguments: dict[str, Any],
         evaluated_at: datetime,
         context: EvaluationContext,
-        check_metadata: dict[str, Any] | None,
+        check_version: str | None,
         recoverable: bool = False,
     ) -> CheckResult:
         """Create a CheckResult for error cases."""
@@ -190,7 +190,7 @@ class BaseCheck(ABC):
                 test_case_id=context.test_case.id,
                 test_case_metadata=context.test_case.metadata,
                 output_metadata=context.output.metadata,
-                check_metadata=check_metadata,
+                check_version=check_version,
             ),
             error=CheckError(
                 type=error_type,
@@ -212,7 +212,7 @@ class BaseAsyncCheck(ABC):
         self._resolver = JSONPathResolver()
 
     @abstractmethod
-    async def __call__(self, **kwargs: Any) -> dict[str, Any]:
+    async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
         """
         Execute the check with direct arguments asynchronously.
 
@@ -233,7 +233,7 @@ class BaseAsyncCheck(ABC):
         check_type: str,
         raw_arguments: dict[str, Any],
         context: EvaluationContext,
-        check_metadata: dict[str, Any] | None = None,
+        check_version: str | None = None,
     ) -> CheckResult:
         """
         Execute the check asynchronously and return a complete CheckResult.
@@ -245,7 +245,7 @@ class BaseAsyncCheck(ABC):
             check_type: The type identifier for this check
             raw_arguments: Raw check arguments (may contain JSONPath expressions)
             context: Evaluation context
-            check_metadata: Metadata from the original check definition
+            check_version: Version of the check definition
 
         Returns:
             Complete CheckResult with all required fields
@@ -282,7 +282,7 @@ class BaseAsyncCheck(ABC):
                     test_case_id=context.test_case.id,
                     test_case_metadata=context.test_case.metadata,
                     output_metadata=context.output.metadata,
-                    check_metadata=check_metadata,
+                    check_version=check_version,
                 ),
             )
 
@@ -294,7 +294,7 @@ class BaseAsyncCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 context=context,
-                check_metadata=check_metadata,
+                check_version=check_version,
                 recoverable=False,
             )
 
@@ -306,7 +306,7 @@ class BaseAsyncCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 context=context,
-                check_metadata=check_metadata,
+                check_version=check_version,
                 recoverable=False,
             )
 
@@ -318,7 +318,7 @@ class BaseAsyncCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 context=context,
-                check_metadata=check_metadata,
+                check_version=check_version,
                 recoverable=False,
             )
 
@@ -330,7 +330,7 @@ class BaseAsyncCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 context=context,
-                check_metadata=check_metadata,
+                check_version=check_version,
                 recoverable=False,
             )
 
@@ -342,7 +342,7 @@ class BaseAsyncCheck(ABC):
         resolved_arguments: dict[str, Any],
         evaluated_at: datetime,
         context: EvaluationContext,
-        check_metadata: dict[str, Any] | None,
+        check_version: str | None,
         recoverable: bool = False,
     ) -> CheckResult:
         """Create a CheckResult for error cases."""
@@ -356,7 +356,7 @@ class BaseAsyncCheck(ABC):
                 test_case_id=context.test_case.id,
                 test_case_metadata=context.test_case.metadata,
                 output_metadata=context.output.metadata,
-                check_metadata=check_metadata,
+                check_version=check_version,
             ),
             error=CheckError(
                 type=error_type,

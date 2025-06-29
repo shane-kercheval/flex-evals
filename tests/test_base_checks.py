@@ -140,7 +140,7 @@ class TestBaseCheck:
     def test_check_execution_error(self):
         """Test check execution with unexpected error."""
         class FailingCheck(BaseCheck):
-            def __call__(self, **kwargs):
+            def __call__(self, **kwargs):  # noqa
                 raise RuntimeError("Unexpected error")
 
         check = FailingCheck()
@@ -152,14 +152,14 @@ class TestBaseCheck:
         assert result.error.type == "unknown_error"
         assert "Unexpected error during check execution" in result.error.message
 
-    def test_check_metadata_preservation(self):
-        """Test that check metadata is preserved in results."""
-        check_metadata = {"version": "1.0.0", "weight": 2.0}
+    def test_check_version_preservation(self):
+        """Test that check version is preserved in results."""
+        check_version = "1.0.0"
         arguments = {"value": "expected"}
 
-        result = self.check.execute("test_check", arguments, self.context, check_metadata)
+        result = self.check.execute("test_check", arguments, self.context, check_version)
 
-        assert result.metadata.check_metadata == check_metadata
+        assert result.metadata.check_version == check_version
 
     def test_timestamp_format(self):
         """Test that evaluated_at timestamp is in correct format."""
@@ -230,7 +230,7 @@ class TestBaseAsyncCheck:
     async def test_async_check_execution_error(self):
         """Test async check execution with unexpected error."""
         class FailingAsyncCheck(BaseAsyncCheck):
-            async def __call__(self, **kwargs):
+            async def __call__(self, **kwargs):  # noqa
                 raise RuntimeError("Async error")
 
         check = FailingAsyncCheck()

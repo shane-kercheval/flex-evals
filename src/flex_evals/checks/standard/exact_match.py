@@ -25,7 +25,13 @@ class ExactMatchCheck(BaseCheck):
     - passed: boolean - Whether the exact match check passed
     """
 
-    def __call__(self, actual: str, expected: str, case_sensitive: bool = True, negate: bool = False) -> dict[str, Any]:
+    def __call__(  # noqa: D102
+            self,
+            actual: str,
+            expected: str,
+            case_sensitive: bool = True,
+            negate: bool = False,
+        ) -> dict[str, Any]:
 
         # Convert to strings for comparison
         actual_str = str(actual) if actual is not None else ""

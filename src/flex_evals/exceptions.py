@@ -44,16 +44,6 @@ class LLMError(FlexEvalsError):
     pass
 
 
-class TimeoutError(FlexEvalsError):
-    """
-    Operation timeout errors.
-
-    Maps to protocol error type: timeout_error
-    """
-
-    pass
-
-
 class CheckExecutionError(FlexEvalsError):
     """
     Check execution errors.

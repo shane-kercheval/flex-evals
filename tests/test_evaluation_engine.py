@@ -33,7 +33,7 @@ class TestExampleAsyncCheck(BaseAsyncCheck):
 class TestFailingCheck(BaseCheck):
     """Test check that always fails for error testing."""
 
-    def __call__(self, **kwargs) -> dict[str, Any]:
+    def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
         raise RuntimeError("This check always fails")
 
 
@@ -60,7 +60,7 @@ class TestEvaluationEngine:
         ]
 
         self.shared_checks = [
-            Check(type="test_check", arguments={"expected": "$.test_case.expected", "actual": "$.output.value"}),
+            Check(type="test_check", arguments={"expected": "$.test_case.expected", "actual": "$.output.value"}),  # noqa: E501
         ]
 
     def teardown_method(self):
@@ -118,7 +118,7 @@ class TestEvaluationEngine:
     def test_evaluate_per_test_case_checks(self):
         """Test different checks per test case."""
         per_test_case_checks = [
-            [Check(type="test_check", arguments={"expected": "Paris", "actual": "$.output.value"})],
+            [Check(type="test_check", arguments={"expected": "Paris", "actual": "$.output.value"})],  # noqa: E501
             [Check(type="test_check", arguments={"expected": "4", "actual": "$.output.value"})],
         ]
 
@@ -137,7 +137,7 @@ class TestEvaluationEngine:
             # Missing second check list
         ]
 
-        with pytest.raises(ValidationError, match="checks list must have same length as test_cases"):
+        with pytest.raises(ValidationError, match="checks list must have same length as test_cases"):  # noqa: E501
             evaluate(self.test_cases, self.outputs, per_test_case_checks)
 
     def test_evaluate_checks_none_fallback(self):
@@ -146,12 +146,12 @@ class TestEvaluationEngine:
             TestCase(
                 id="test_001",
                 input="test",
-                checks=[Check(type="test_check", arguments={"expected": "Paris", "actual": "$.output.value"})],
+                checks=[Check(type="test_check", arguments={"expected": "Paris", "actual": "$.output.value"})],  # noqa: E501
             ),
             TestCase(
                 id="test_002",
                 input="test",
-                checks=[Check(type="test_check", arguments={"expected": "4", "actual": "$.output.value"})],
+                checks=[Check(type="test_check", arguments={"expected": "4", "actual": "$.output.value"})],  # noqa: E501
             ),
         ]
 
@@ -194,7 +194,7 @@ class TestEvaluationEngine:
     def test_evaluate_async_detection(self):
         """Test async checks trigger async execution."""
         async_checks = [
-            Check(type="test_async_check", arguments={"expected": "$.test_case.expected", "actual": "$.output.value"}),
+            Check(type="test_async_check", arguments={"expected": "$.test_case.expected", "actual": "$.output.value"}),  # noqa: E501
         ]
 
         result = evaluate(self.test_cases, self.outputs, async_checks)
@@ -255,22 +255,20 @@ class TestEvaluationEngine:
         assert result.started_at.tzinfo == UTC
         assert result.completed_at.tzinfo == UTC
 
-    def test_evaluate_check_metadata_preservation(self):
-        """Test check version and weight are preserved in results."""
-        checks_with_metadata = [
+    def test_evaluate_check_version_preservation(self):
+        """Test check version is preserved in results."""
+        checks_with_version = [
             Check(
                 type="test_check",
                 arguments={"expected": "Paris"},
                 version="2.1.0",
-                weight=1.5,
             ),
         ]
 
-        result = evaluate(self.test_cases, self.outputs, checks_with_metadata)
+        result = evaluate(self.test_cases, self.outputs, checks_with_version)
 
         check_result = result.results[0].check_results[0]
-        assert check_result.metadata.check_metadata["version"] == "2.1.0"
-        assert check_result.metadata.check_metadata["weight"] == 1.5
+        assert check_result.metadata.check_version == "2.1.0"
 
     def test_evaluate_jsonpath_resolution(self):
         """Test JSONPath expressions are resolved correctly."""
@@ -333,7 +331,7 @@ class TestEvaluationEngine:
         """Test summary statistics are computed correctly."""
         # Mix of passing and failing checks
         mixed_checks = [
-            Check(type="test_check", arguments={"expected": "Paris"}),  # Will pass for first, fail for second
+            Check(type="test_check", arguments={"expected": "Paris"}),  # Will pass for first, fail for second  # noqa: E501
             Check(type="test_failing_check", arguments={}),  # Will fail for both
         ]
 

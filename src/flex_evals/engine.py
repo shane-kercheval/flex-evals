@@ -13,6 +13,7 @@ from .schemas import (
     TestCase, Output, Check, CheckResult, TestCaseResult, TestCaseSummary,
     EvaluationRunResult, EvaluationSummary, ExperimentMetadata,
 )
+from .schemas.check import CheckError, CheckResultMetadata
 from .checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
 from .registry import get_check_class, is_async_check
 from .exceptions import ValidationError
@@ -103,10 +104,10 @@ def _validate_inputs(
         raise ValidationError("At least one test case is required for evaluation")
 
     # Validate per-test-case checks pattern
-    if isinstance(checks, list) and len(checks) > 0 and isinstance(checks[0], list):
+    if isinstance(checks, list) and len(checks) > 0 and isinstance(checks[0], list):  # noqa: SIM102
         if len(checks) != len(test_cases):
             raise ValidationError(
-                f"When using per-test-case checks pattern, checks list must have same length as test_cases. "
+                f"When using per-test-case checks pattern, checks list must have same length as test_cases. "  # noqa: E501
                 f"Got {len(checks)} check lists and {len(test_cases)} test cases",
             )
 
@@ -175,20 +176,14 @@ def _evaluate_sync(
 
                 # Ensure this is a sync check
                 if not isinstance(check_instance, BaseCheck):
-                    raise ValidationError(f"Check type '{check.type}' is async but sync execution was selected")
-
-                # Prepare check metadata
-                check_metadata = {
-                    "version": check.version,
-                    "weight": check.weight,
-                }
+                    raise ValidationError(f"Check type '{check.type}' is async but sync execution was selected")  # noqa: E501
 
                 # Execute the check
                 result = check_instance.execute(
                     check_type=check.type,
                     raw_arguments=check.arguments,
                     context=context,
-                    check_metadata=check_metadata,
+                    check_version=check.version,
                 )
                 check_results.append(result)
 
@@ -221,26 +216,20 @@ async def _evaluate_async(
                 check_class = get_check_class(check.type)
                 check_instance = check_class()
 
-                # Prepare check metadata
-                check_metadata = {
-                    "version": check.version,
-                    "weight": check.weight,
-                }
-
                 # Execute the check (async or sync)
                 if isinstance(check_instance, BaseAsyncCheck):
                     result = await check_instance.execute(
                         check_type=check.type,
                         raw_arguments=check.arguments,
                         context=context,
-                        check_metadata=check_metadata,
+                        check_version=check.version,
                     )
                 elif isinstance(check_instance, BaseCheck):
                     result = check_instance.execute(
                         check_type=check.type,
                         raw_arguments=check.arguments,
                         context=context,
-                        check_metadata=check_metadata,
+                        check_version=check.version,
                     )
                 else:
                     raise ValidationError(f"Invalid check class type for '{check.type}'")
@@ -259,10 +248,11 @@ async def _evaluate_async(
     return results
 
 
-def _create_error_check_result(check: Check, context: EvaluationContext, error_message: str) -> CheckResult:
+def _create_error_check_result(
+        check: Check,
+        context: EvaluationContext,
+        error_message: str) -> CheckResult:
     """Create a CheckResult for unhandled errors during check execution."""
-    from .schemas import CheckError, CheckResultMetadata
-
     return CheckResult(
         check_type=check.type,
         status="error",
@@ -273,7 +263,7 @@ def _create_error_check_result(check: Check, context: EvaluationContext, error_m
             test_case_id=context.test_case.id,
             test_case_metadata=context.test_case.metadata,
             output_metadata=context.output.metadata,
-            check_metadata={"version": check.version, "weight": check.weight},
+            check_version=check.version,
         ),
         error=CheckError(
             type="unknown_error",
@@ -283,7 +273,10 @@ def _create_error_check_result(check: Check, context: EvaluationContext, error_m
     )
 
 
-def _create_test_case_result(test_case_id: str, check_results: list[CheckResult]) -> TestCaseResult:
+def _create_test_case_result(
+        test_case_id: str,
+        check_results: list[CheckResult],
+    ) -> TestCaseResult:
     """Create a TestCaseResult from check results."""
     # Compute summary statistics
     total_checks = len(check_results)

@@ -10,7 +10,7 @@ import re
 from typing import Any
 from collections.abc import Callable
 
-from ..base import BaseAsyncCheck
+from ..base import BaseAsyncCheck, EvaluationContext
 from ...registry import register
 from ...exceptions import ValidationError, CheckExecutionError
 from ...jsonpath_resolver import JSONPathResolver
@@ -62,7 +62,7 @@ class LlmJudgeCheck(BaseAsyncCheck):
                 f"Error in LLM judge evaluation: {e!s}",
             ) from e
 
-    def _process_prompt_template(self, template: str, context: Any) -> str:
+    def _process_prompt_template(self, template: str, context: EvaluationContext) -> str:
         """Replace {{$.jsonpath}} placeholders in prompt template with resolved values."""
         # Find all JSONPath placeholders in the format {{$.path}}
         placeholder_pattern = r'\{\{\$\.([^}]+)\}\}'
@@ -87,7 +87,9 @@ class LlmJudgeCheck(BaseAsyncCheck):
                 }
 
                 # Resolve JSONPath expression
-                resolved_result = self.jsonpath_resolver.resolve_argument(jsonpath_expr, context_dict)
+                resolved_result = self.jsonpath_resolver.resolve_argument(
+                    jsonpath_expr, context_dict,
+                )
                 resolved_value = resolved_result.get("value")
 
                 # Convert to string for substitution
@@ -107,7 +109,7 @@ class LlmJudgeCheck(BaseAsyncCheck):
 
         return processed_prompt
 
-    async def _call_llm_function(self, llm_function: Callable, prompt: str) -> Any:
+    async def _call_llm_function(self, llm_function: Callable, prompt: str) -> object:
         """Call the user-provided LLM function with error handling."""
         try:
             # Handle both sync and async LLM functions
@@ -115,7 +117,6 @@ class LlmJudgeCheck(BaseAsyncCheck):
                 result = await llm_function(prompt)
             else:
                 result = llm_function(prompt)
-
             return result
 
         except Exception as e:
@@ -123,7 +124,11 @@ class LlmJudgeCheck(BaseAsyncCheck):
                 f"LLM function failed: {e!s}",
             ) from e
 
-    def _validate_response_format(self, response: Any, schema: dict[str, Any]) -> dict[str, Any]:
+    def _validate_response_format(
+            self,
+            response: object,
+            schema: dict[str, Any],
+        ) -> dict[str, Any]:
         """Validate LLM response against the provided JSON schema."""
         # First, try to parse response as JSON if it's a string
         if isinstance(response, str):
@@ -138,7 +143,7 @@ class LlmJudgeCheck(BaseAsyncCheck):
         return self._validate_schema(parsed_response, schema)
 
 
-    def _validate_schema(self, data: Any, schema: dict[str, Any]) -> dict[str, Any]:
+    def _validate_schema(self, data: object, schema: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0911, PLR0912
         """
         Basic JSON Schema validation.
 

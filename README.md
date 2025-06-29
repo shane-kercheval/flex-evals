@@ -129,7 +129,6 @@ check = Check(
         "expected": "Paris",         # Literal value
         "case_sensitive": False
     },
-    weight=1.0  # Optional weighting
 )
 ```
 

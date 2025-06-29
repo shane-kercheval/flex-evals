@@ -3,7 +3,12 @@
 import pytest
 from datetime import datetime, UTC
 
-from flex_evals.schemas.results import TestCaseSummary, TestCaseResult, EvaluationSummary, EvaluationRunResult
+from flex_evals.schemas.results import (
+    TestCaseSummary,
+    TestCaseResult,
+    EvaluationSummary,
+    EvaluationRunResult,
+)
 from flex_evals.schemas.check import CheckResult, CheckResultMetadata, CheckError
 from flex_evals.schemas.experiments import ExperimentMetadata
 
@@ -94,7 +99,7 @@ class TestTestCaseResult:
                 test_case_id="test-1",
                 test_case_metadata=None,
                 output_metadata=None,
-                check_metadata={},
+                check_version=None,
             ),
         )
 
@@ -127,7 +132,7 @@ class TestTestCaseResult:
     def test_with_metadata(self):
         """Test TestCaseResult with metadata."""
         check_results = [self.create_check_result("completed")]
-        summary = TestCaseSummary(total_checks=1, completed_checks=1, error_checks=0, skipped_checks=0)
+        summary = TestCaseSummary(total_checks=1, completed_checks=1, error_checks=0, skipped_checks=0)  # noqa: E501
 
         result = TestCaseResult(
             test_case_id="test-1",

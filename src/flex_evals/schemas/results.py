@@ -77,9 +77,9 @@ class TestCaseResult:
         # Validate status matches check results
         expected_status = self._compute_status(self.check_results)
         if self.status != expected_status:
-            raise ValueError(f"TestCaseResult.status should be '{expected_status}' based on check results")
+            raise ValueError(f"TestCaseResult.status should be '{expected_status}' based on check results")  # noqa: E501
 
-    def _compute_status(self, check_results: list["CheckResult"]) -> Literal["completed", "error", "skip"]:
+    def _compute_status(self, check_results: list["CheckResult"]) -> Literal["completed", "error", "skip"]:  # noqa: E501
         """Compute status based on check result statuses."""
         if any(r.status == "error" for r in check_results):
             return "error"
@@ -102,7 +102,7 @@ class EvaluationSummary:
         if self.total_test_cases < 0:
             raise ValueError("EvaluationSummary.total_test_cases must be non-negative")
 
-        if (self.completed_test_cases + self.error_test_cases + self.skipped_test_cases) != self.total_test_cases:
+        if (self.completed_test_cases + self.error_test_cases + self.skipped_test_cases) != self.total_test_cases:  # noqa: E501
             raise ValueError("EvaluationSummary test case counts must sum to total_test_cases")
 
 
@@ -158,9 +158,9 @@ class EvaluationRunResult:
         # Validate status matches results
         expected_status = self._compute_status(self.results)
         if self.status != expected_status:
-            raise ValueError(f"EvaluationRunResult.status should be '{expected_status}' based on test case results")
+            raise ValueError(f"EvaluationRunResult.status should be '{expected_status}' based on test case results")  # noqa: E501
 
-    def _compute_status(self, results: list[TestCaseResult]) -> Literal["completed", "error", "skip"]:
+    def _compute_status(self, results: list[TestCaseResult]) -> Literal["completed", "error", "skip"]:  # noqa: E501
         """Compute status based on test case result statuses."""
         if any(r.status == "error" for r in results):
             return "error"

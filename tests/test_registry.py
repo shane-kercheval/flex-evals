@@ -8,19 +8,21 @@ from flex_evals.registry import (
     is_async_check, list_registered_checks, clear_registry,
 )
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
+from flex_evals.schemas.output import Output
+from flex_evals.schemas.test_case import TestCase
 
 
 class SampleSyncCheck(BaseCheck):
     """Sample sync check for testing."""
 
-    def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:
+    def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:  # noqa: ARG002
         return {"passed": True}
 
 
 class SampleAsyncCheck(BaseAsyncCheck):
     """Sample async check for testing."""
 
-    async def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:
+    async def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:  # noqa: ARG002, E501
         return {"passed": True}
 
 
@@ -135,7 +137,7 @@ class TestRegistryDecorator:
         """Test basic check registration with decorator."""
         @register("decorated_check", version="1.0.0")
         class DecoratedCheck(BaseCheck):
-            def __call__(self, arguments, context):
+            def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 return {"passed": True}
 
         # Test check is registered in global registry
@@ -150,7 +152,7 @@ class TestRegistryDecorator:
         """Test registering async check with decorator."""
         @register("decorated_async", version="2.0.0")
         class DecoratedAsyncCheck(BaseAsyncCheck):
-            async def __call__(self, arguments, context):
+            async def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 return {"passed": True}
 
         assert is_async_check("decorated_async") is True
@@ -163,7 +165,7 @@ class TestRegistryDecorator:
         """Test registering user-defined checks."""
         @register("custom_business_logic", version="1.2.3")
         class CustomBusinessCheck(BaseCheck):
-            def __call__(self, arguments, context):
+            def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 # Custom business logic
                 business_value = arguments.get("business_value", 0)
                 threshold = arguments.get("threshold", 100)
@@ -179,9 +181,6 @@ class TestRegistryDecorator:
 
         # Test the check works
         check_instance = check_class()
-        from flex_evals.schemas import TestCase, Output
-        from flex_evals.checks.base import EvaluationContext
-
         test_case = TestCase(id="test", input="test")
         output = Output(value="test")
         context = EvaluationContext(test_case, output)
@@ -196,7 +195,7 @@ class TestRegistryDecorator:
         """Test global registry access functions."""
         @register("func_test_check")
         class FuncTestCheck(BaseCheck):
-            def __call__(self, arguments, context):
+            def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 return {"passed": True}
 
         # Test global functions work
@@ -208,28 +207,28 @@ class TestRegistryDecorator:
 
         # Test clear function
         clear_registry()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError):  # noqa: PT011
             get_check_class("func_test_check")
 
     def test_version_conflict_in_decorator(self):
         """Test version conflict handling with decorator."""
         @register("conflict_test", version="1.0.0")
         class FirstCheck(BaseCheck):
-            def __call__(self, arguments, context):
+            def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 return {"passed": True}
 
         # Attempt to register same type with different version should fail
         with pytest.raises(ValueError, match="already registered with version 1.0.0"):
             @register("conflict_test", version="2.0.0")
             class SecondCheck(BaseCheck):
-                def __call__(self, arguments, context):
+                def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                     return {"passed": False}
 
     def test_decorator_preserves_class(self):
         """Test decorator returns the original class unchanged."""
         @register("preserve_test")
         class PreserveTest(BaseCheck):
-            def __call__(self, arguments, context):
+            def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 return {"test": "value"}
 
             def custom_method(self) -> str:

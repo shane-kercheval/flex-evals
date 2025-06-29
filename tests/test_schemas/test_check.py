@@ -1,5 +1,6 @@
 """Tests for Check and CheckResult schema implementations."""
 
+import dataclasses
 import pytest
 from datetime import datetime, UTC
 from flex_evals.schemas import Check, CheckResult, CheckError, CheckResultMetadata
@@ -18,24 +19,11 @@ class TestCheck:
         assert check.type == "exact_match"
         assert check.arguments == {"actual": "$.output.value", "expected": "Paris"}
         assert check.version is None
-        assert check.weight == 1.0
 
-    def test_check_weight_default(self):
-        """Test weight defaults to 1.0."""
-        check = Check(type="exact_match", arguments={})
-        assert check.weight == 1.0
-
-    def test_check_weight_custom(self):
-        """Test custom weight values."""
-        check = Check(type="exact_match", arguments={}, weight=2.5)
-        assert check.weight == 2.5
-
-        check2 = Check(type="contains", arguments={}, weight=0.5)
-        assert check2.weight == 0.5
 
     def test_check_version_semver(self):
         """Test valid semver versions."""
-        valid_versions = ["1.0.0", "2.1.3", "0.0.1", "1.0.0-alpha", "2.1.3-beta.1", "1.0.0+build.1"]
+        valid_versions = ["1.0.0", "2.1.3", "0.0.1", "1.0.0-alpha", "2.1.3-beta.1", "1.0.0+build.1"]  # noqa: E501
 
         for version in valid_versions:
             check = Check(type="exact_match", arguments={}, version=version)
@@ -57,13 +45,6 @@ class TestCheck:
         with pytest.raises(ValueError, match="Check.type must be a non-empty string"):
             Check(type=None, arguments={})
 
-    def test_check_negative_weight_error(self):
-        """Test negative weight raises error."""
-        with pytest.raises(ValueError, match="Check.weight must be a positive number"):
-            Check(type="exact_match", arguments={}, weight=-1.0)
-
-        with pytest.raises(ValueError, match="Check.weight must be a positive number"):
-            Check(type="exact_match", arguments={}, weight=0.0)
 
     def test_check_arguments_dict(self):
         """Test arguments must be Dict."""
@@ -83,7 +64,7 @@ class TestCheckResult:
             test_case_id="test_001",
             test_case_metadata={"version": "1.0"},
             output_metadata={"execution_time_ms": 245},
-            check_metadata={"version": "1.0.0", "weight": 1.0},
+            check_version="1.0.0",
         )
 
         result = CheckResult(
@@ -218,7 +199,7 @@ class TestCheckResult:
     def test_check_result_error_types(self):
         """Test all valid error.type enum values."""
         metadata = CheckResultMetadata(test_case_id="test_001")
-        error_types = ["jsonpath_error", "validation_error", "llm_error", "timeout_error", "unknown_error"]
+        error_types = ["jsonpath_error", "validation_error", "llm_error", "timeout_error", "unknown_error"]  # noqa: E501
 
         for error_type in error_types:
             error = CheckError(type=error_type, message="Test error")
@@ -249,7 +230,7 @@ class TestCheckResult:
         assert result1.error is None
 
         # Error required when status is error
-        with pytest.raises(ValueError, match="CheckResult.error is required when status is 'error'"):
+        with pytest.raises(ValueError, match="CheckResult.error is required when status is 'error'"):  # noqa: E501
             CheckResult(
                 check_type="exact_match",
                 status="error",
@@ -272,8 +253,6 @@ class TestCheckResult:
 
     def test_check_result_serialization(self):
         """Test full CheckResult JSON serialization."""
-        import dataclasses
-
         metadata = CheckResultMetadata(
             test_case_id="test_001",
             test_case_metadata={"version": "1.0"},

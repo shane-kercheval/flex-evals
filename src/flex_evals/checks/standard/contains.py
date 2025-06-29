@@ -27,7 +27,13 @@ class ContainsCheck(BaseCheck):
     - passed: boolean - Whether the contains check passed
     """
 
-    def __call__(self, text: str, phrases: list[str], case_sensitive: bool = True, negate: bool = False) -> dict[str, Any]:
+    def __call__(  # noqa: D102
+            self,
+            text: str,
+            phrases: list[str],
+            case_sensitive: bool = True,
+            negate: bool = False,
+        ) -> dict[str, Any]:
         # Validate phrases is a list
         if not isinstance(phrases, list):
             raise ValidationError("Contains check 'phrases' argument must be a list")
@@ -51,7 +57,7 @@ class ContainsCheck(BaseCheck):
             if phrase in text_str:
                 found_count += 1
 
-        if negate:
+        if negate:  # noqa: SIM108
             # Pass if NONE of the phrases are found
             passed = found_count == 0
         else:

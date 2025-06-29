@@ -30,7 +30,13 @@ class RegexCheck(BaseCheck):
     - passed: boolean - Whether the regex check passed
     """
 
-    def __call__(self, text: str, pattern: str, negate: bool = False, flags: dict | None = None) -> dict[str, Any]:
+    def __call__(  # noqa: D102
+            self,
+            text: str,
+            pattern: str,
+            negate: bool = False,
+            flags: dict | None = None,
+        ) -> dict[str, Any]:
         # Validate pattern is a string
         if not isinstance(pattern, str):
             raise ValidationError("Regex check 'pattern' argument must be a string")

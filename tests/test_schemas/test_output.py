@@ -1,5 +1,6 @@
 """Tests for Output schema implementation."""
 
+import dataclasses
 import pytest
 from flex_evals.schemas import Output
 
@@ -109,8 +110,6 @@ class TestOutput:
 
     def test_output_serialization(self):
         """Test Output can be converted to dict for JSON serialization."""
-        import dataclasses
-
         output = Output(
             value={
                 "answer": "Paris",

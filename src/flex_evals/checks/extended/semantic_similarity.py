@@ -59,10 +59,14 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
         try:
             # Get embeddings for both texts
             text_embedding = await self._call_embedding_function(embedding_function, text_str)
-            reference_embedding = await self._call_embedding_function(embedding_function, reference_str)
+            reference_embedding = await self._call_embedding_function(
+                embedding_function, reference_str,
+            )
 
             # Calculate similarity score
-            score = self._calculate_similarity(text_embedding, reference_embedding, similarity_metric)
+            score = self._calculate_similarity(
+                text_embedding, reference_embedding, similarity_metric,
+            )
 
             # Ensure score is in valid range [0, 1]
             score = max(0.0, min(1.0, score))
@@ -82,7 +86,11 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
                 f"Error in semantic similarity computation: {e!s}",
             ) from e
 
-    async def _call_embedding_function(self, embedding_function: Callable, text: str) -> list[float]:
+    async def _call_embedding_function(
+            self,
+            embedding_function: Callable,
+            text: str,
+        ) -> list[float]:
         """Call the user-provided embedding function with error handling."""
         try:
             # Handle both sync and async embedding functions

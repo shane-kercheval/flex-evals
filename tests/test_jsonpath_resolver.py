@@ -74,7 +74,7 @@ class TestJSONPathResolver:
         ]
 
         for value in escaped_values:
-            assert not self.resolver.is_jsonpath(value), f"Should not detect escaped '{value}' as JSONPath"
+            assert not self.resolver.is_jsonpath(value), f"Should not detect escaped '{value}' as JSONPath"  # noqa: E501
 
             # Test resolution returns literal value without escape
             result = self.resolver.resolve_argument(value, self.context)
@@ -301,7 +301,7 @@ class TestJSONPathResolver:
             },
         )
 
-        complex_context = self.resolver.create_evaluation_context(complex_test_case, complex_output)
+        complex_context = self.resolver.create_evaluation_context(complex_test_case, complex_output)  # noqa: E501
 
         # Test complex nested access patterns
         test_cases = [

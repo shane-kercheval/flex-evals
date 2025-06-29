@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Any
+from ..schemas.check import Check
 
 
 @dataclass
@@ -16,14 +17,14 @@ class TestCase:
     Optional Fields:
     - expected: Reference output for comparison or validation
     - metadata: Descriptive information about the test case
-    - checks: Convenience extension for per-test-case checks
+    - checks: Convenience extension of protocol for per-test-case pattern of checks
     """
 
     id: str
     input: str | dict[str, Any]
     expected: str | dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
-    checks: list["Check"] | None = None  # Forward reference, convenience extension
+    checks: list[Check] | None = None  # Forward reference, convenience extension
 
     def __post_init__(self):
         """Validate required fields and constraints."""
@@ -35,9 +36,3 @@ class TestCase:
 
         if not isinstance(self.input, str | dict):
             raise ValueError("TestCase.input must be a string or dictionary")
-
-
-# Import at the end to avoid circular imports
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from .check import Check

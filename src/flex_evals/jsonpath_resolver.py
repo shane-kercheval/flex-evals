@@ -49,7 +49,7 @@ class JSONPathResolver:
 
         return value.startswith("$.")
 
-    def resolve_argument(self, value: Any, context: dict[str, Any]) -> dict[str, Any]:
+    def resolve_argument(self, value: object, context: dict[str, Any]) -> dict[str, Any]:
         """
         Resolve a single argument value against the evaluation context.
 
@@ -78,7 +78,7 @@ class JSONPathResolver:
                 matches = jsonpath_expr.find(context)
                 if not matches:
                     raise JSONPathError(
-                        f"JSONPath expression '{value}' did not match any data in evaluation context",
+                        f"JSONPath expression '{value}' did not match any data in evaluation context",  # noqa: E501
                         jsonpath_expression=value,
                     )
 
@@ -141,7 +141,11 @@ class JSONPathResolver:
             },
         }
 
-    def resolve_arguments(self, arguments: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    def resolve_arguments(
+            self,
+            arguments: dict[str, Any],
+            context: dict[str, Any],
+        ) -> dict[str, Any]:
         """
         Resolve all arguments in a check's argument dictionary.
 

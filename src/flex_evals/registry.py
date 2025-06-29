@@ -43,7 +43,7 @@ class CheckRegistry:
             existing_version = self._checks[check_type]["version"]
             if existing_version != version:
                 raise ValueError(
-                    f"Check type '{check_type}' already registered with version {existing_version}, "
+                    f"Check type '{check_type}' already registered with version {existing_version}, "  # noqa: E501
                     f"cannot register with version {version}",
                 )
             # Same version - allow re-registration (useful for testing)
@@ -136,7 +136,7 @@ class CheckRegistry:
 _global_registry = CheckRegistry()
 
 
-def register(check_type: str, version: str = "1.0.0"):
+def register(check_type: str, version: str = "1.0.0") -> callable:
     """
     Decorator for registering check implementations.
 

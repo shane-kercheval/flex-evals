@@ -1,7 +1,9 @@
 """Tests for TestCase schema implementation."""
 
+import dataclasses
 import pytest
 from flex_evals.schemas import TestCase
+from flex_evals.schemas.check import Check
 
 
 class TestTestCase:
@@ -93,9 +95,6 @@ class TestTestCase:
 
     def test_test_case_checks_extension(self):
         """Test convenience checks field."""
-        # Import here to avoid circular import
-        from flex_evals.schemas import Check
-
         checks = [
             Check(type="exact_match", arguments={"actual": "$.output.value", "expected": "Paris"}),
             Check(type="contains", arguments={"text": "$.output.value", "phrases": ["France"]}),
@@ -139,8 +138,6 @@ class TestTestCase:
 
     def test_test_case_serialization(self):
         """Test TestCase can be converted to dict for JSON serialization."""
-        import dataclasses
-
         test_case = TestCase(
             id="test_001",
             input={"question": "What is the capital of France?"},
