@@ -2,6 +2,7 @@
 
 A Python implementation of the [**Flexible Evaluation Protocol (FEP)**](https://docs.google.com/document/d/1-vRugkj7E50v1wd1ftZxqS-wJtRfIFwwF2din7e0Iuw/edit?tab=t.0) - a vendor-neutral, schema-driven standard for evaluating any system that produces complex or variable outputs, from deterministic APIs to non-deterministic LLMs and agentic workflows.
 
+[![Tests](https://github.com/shane-kercheval/flex-evals/actions/workflows/tests.yaml/badge.svg)](https://github.com/shane-kercheval/flex-evals/actions/workflows/tests.yaml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
