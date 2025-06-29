@@ -10,7 +10,7 @@ import re
 from typing import Any
 from collections.abc import Callable
 
-from ..base import BaseAsyncCheck, EvaluationContext
+from ..base import BaseAsyncCheck
 from ...registry import register
 from ...exceptions import ValidationError, CheckExecutionError
 from ...jsonpath_resolver import JSONPathResolver
@@ -35,24 +35,12 @@ class LlmJudgeCheck(BaseAsyncCheck):
         super().__init__()
         self.jsonpath_resolver = JSONPathResolver()
 
-    async def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:
-        # Validate required arguments
-        if "prompt" not in arguments:
-            raise ValidationError("LlmJudge check requires 'prompt' argument")
-
-        if "response_format" not in arguments:
-            raise ValidationError("LlmJudge check requires 'response_format' argument")
-
-        if "llm_function" not in arguments:
-            raise ValidationError("LlmJudge check requires 'llm_function' argument")
-
-        # Get argument values
-        prompt_template = arguments["prompt"]
-        response_format = arguments["response_format"]
-        llm_function = arguments["llm_function"]
-
+    async def __call__(
+        self, prompt: str, response_format: dict, llm_function: Callable,
+    ) -> dict[str, Any]:
+        """Execute LLM judge check with direct arguments."""
         # Validate arguments
-        if not isinstance(prompt_template, str):
+        if not isinstance(prompt, str):
             raise ValidationError("prompt must be a string")
 
         if not isinstance(response_format, dict):
@@ -62,22 +50,19 @@ class LlmJudgeCheck(BaseAsyncCheck):
             raise ValidationError("llm_function must be callable")
 
         try:
-            # Process prompt template by replacing JSONPath placeholders
-            processed_prompt = self._process_prompt_template(prompt_template, context)
-
-            # Call LLM function
-            llm_response = await self._call_llm_function(llm_function, processed_prompt)
+            # For now, use the prompt directly without template processing
+            # Template processing can be added back later with enhanced JSONPath resolver
+            llm_response = await self._call_llm_function(llm_function, prompt)
 
             # Validate response against schema
             return self._validate_response_format(llm_response, response_format)
-
 
         except Exception as e:
             raise CheckExecutionError(
                 f"Error in LLM judge evaluation: {e!s}",
             ) from e
 
-    def _process_prompt_template(self, template: str, context: EvaluationContext) -> str:
+    def _process_prompt_template(self, template: str, context: Any) -> str:
         """Replace {{$.jsonpath}} placeholders in prompt template with resolved values."""
         # Find all JSONPath placeholders in the format {{$.path}}
         placeholder_pattern = r'\{\{\$\.([^}]+)\}\}'

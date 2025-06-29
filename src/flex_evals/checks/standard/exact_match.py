@@ -6,9 +6,8 @@ Compares two text values for exact equality with configurable case sensitivity a
 
 from typing import Any
 
-from ..base import BaseCheck, EvaluationContext
+from ..base import BaseCheck
 from ...registry import register
-from ...exceptions import ValidationError
 
 
 @register("exact_match", version="1.0.0")
@@ -26,19 +25,7 @@ class ExactMatchCheck(BaseCheck):
     - passed: boolean - Whether the exact match check passed
     """
 
-    def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:
-        # Validate required arguments
-        if "actual" not in arguments:
-            raise ValidationError("ExactMatch check requires 'actual' argument")
-
-        if "expected" not in arguments:
-            raise ValidationError("ExactMatch check requires 'expected' argument")
-
-        # Get argument values with defaults
-        actual = arguments["actual"]
-        expected = arguments["expected"]
-        case_sensitive = arguments.get("case_sensitive", True)
-        negate = arguments.get("negate", False)
+    def __call__(self, actual: str, expected: str, case_sensitive: bool = True, negate: bool = False) -> dict[str, Any]:
 
         # Convert to strings for comparison
         actual_str = str(actual) if actual is not None else ""

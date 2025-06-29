@@ -1,68 +1,58 @@
-"""
-Tests for base check classes and evaluation context.
-"""
+"""Tests for base check classes and evaluation context."""
 
-import pytest
-from datetime import datetime, timezone
-from typing import Dict, Any
+from datetime import datetime, UTC
+from typing import Any
 
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
 from flex_evals.schemas import TestCase, Output, CheckResult
-from flex_evals.exceptions import CheckExecutionError, ValidationError
 
 
 class TestExampleCheck(BaseCheck):
     """Test implementation of BaseCheck for testing."""
-    
-    def __call__(self, arguments: Dict[str, Any], context: EvaluationContext) -> Dict[str, Any]:
+
+    def __call__(self, value: str, literal: str = "expected") -> dict[str, Any]:
         # Simple test check that validates required arguments
-        if "value" not in arguments:
-            raise ValidationError("Missing required argument: value")
-        
         return {
-            "passed": arguments["value"] == "expected",
-            "actual_value": arguments["value"]
+            "passed": value == literal,
+            "actual_value": value,
         }
 
 
 class TestExampleAsyncCheck(BaseAsyncCheck):
     """Test implementation of BaseAsyncCheck for testing."""
-    
-    async def __call__(self, arguments: Dict[str, Any], context: EvaluationContext) -> Dict[str, Any]:
+
+    async def __call__(self, value: str, literal: str = "expected") -> dict[str, Any]:
         # Simple async test check
-        if "value" not in arguments:
-            raise ValidationError("Missing required argument: value")
-        
         return {
-            "passed": arguments["value"] == "expected",
-            "actual_value": arguments["value"]
+            "passed": value == literal,
+            "actual_value": value,
         }
 
 
 class TestEvaluationContext:
     """Test EvaluationContext functionality."""
-    
+
     def setup_method(self):
         """Set up test fixtures."""
         self.test_case = TestCase(
             id="test_001",
             input={"question": "What is the capital of France?"},
             expected="Paris",
-            metadata={"version": "1.0"}
+            metadata={"version": "1.0"},
         )
-        
+
         self.output = Output(
             value={"answer": "Paris", "confidence": 0.95},
-            metadata={"execution_time_ms": 245}
+            metadata={"execution_time_ms": 245},
         )
-        
+
         self.context = EvaluationContext(self.test_case, self.output)
-    
+
     def test_evaluation_context_creation(self):
         """Test EvaluationContext creation and data access."""
         assert self.context.test_case == self.test_case
         assert self.context.output == self.output
-        
+
         # Test context dict structure
         context_dict = self.context.context_dict
         assert context_dict["test_case"]["id"] == "test_001"
@@ -73,180 +63,180 @@ class TestEvaluationContext:
 
 class TestBaseCheck:
     """Test BaseCheck functionality."""
-    
+
     def setup_method(self):
         """Set up test fixtures."""
         self.test_case = TestCase(
             id="test_001",
             input={"question": "What is the capital of France?"},
-            expected="Paris"
+            expected="Paris",
         )
-        
+
         self.output = Output(
-            value={"answer": "Paris", "confidence": 0.95}
+            value={"answer": "Paris", "confidence": 0.95},
         )
-        
+
         self.context = EvaluationContext(self.test_case, self.output)
         self.check = TestExampleCheck()
-    
+
     def test_successful_check_execution(self):
         """Test successful check execution."""
         arguments = {"value": "expected"}
         result = self.check.execute("test_check", arguments, self.context)
-        
+
         assert isinstance(result, CheckResult)
         assert result.check_type == "test_check"
         assert result.status == "completed"
         assert result.results["passed"] is True
         assert result.results["actual_value"] == "expected"
         assert result.error is None
-        
+
         # Test metadata
         assert result.metadata.test_case_id == "test_001"
         assert result.metadata.test_case_metadata == self.test_case.metadata
         assert result.metadata.output_metadata == self.output.metadata
-    
+
     def test_check_with_jsonpath_arguments(self):
         """Test check execution with JSONPath argument resolution."""
         arguments = {
             "value": "$.output.value.answer",  # Should resolve to "Paris"
-            "literal": "expected"
+            "literal": "expected",
         }
-        
+
         result = self.check.execute("test_check", arguments, self.context)
-        
+
         assert result.status == "completed"
         assert result.results["actual_value"] == "Paris"
-        
+
         # Test resolved arguments format
         assert result.resolved_arguments["value"]["jsonpath"] == "$.output.value.answer"
         assert result.resolved_arguments["value"]["value"] == "Paris"
         assert result.resolved_arguments["literal"]["value"] == "expected"
         assert "jsonpath" not in result.resolved_arguments["literal"]
-    
+
     def test_check_validation_error(self):
         """Test check execution with validation error."""
         arguments = {}  # Missing required "value" argument
         result = self.check.execute("test_check", arguments, self.context)
-        
+
         assert result.status == "error"
         assert result.error is not None
         assert result.error.type == "validation_error"
-        assert "Missing required argument: value" in result.error.message
+        assert "Invalid arguments for check" in result.error.message
         assert result.error.recoverable is False
         assert result.results == {}
-    
+
     def test_check_jsonpath_error(self):
         """Test check execution with JSONPath resolution error."""
         arguments = {"value": "$.nonexistent.path"}
         result = self.check.execute("test_check", arguments, self.context)
-        
+
         assert result.status == "error"
         assert result.error is not None
         assert result.error.type == "jsonpath_error"
         assert "did not match any data" in result.error.message
         assert result.error.recoverable is False
-    
+
     def test_check_execution_error(self):
         """Test check execution with unexpected error."""
         class FailingCheck(BaseCheck):
-            def __call__(self, arguments, context):
+            def __call__(self, **kwargs):
                 raise RuntimeError("Unexpected error")
-        
+
         check = FailingCheck()
         arguments = {"value": "test"}
         result = check.execute("failing_check", arguments, self.context)
-        
+
         assert result.status == "error"
         assert result.error is not None
         assert result.error.type == "unknown_error"
         assert "Unexpected error during check execution" in result.error.message
-    
+
     def test_check_metadata_preservation(self):
         """Test that check metadata is preserved in results."""
         check_metadata = {"version": "1.0.0", "weight": 2.0}
         arguments = {"value": "expected"}
-        
+
         result = self.check.execute("test_check", arguments, self.context, check_metadata)
-        
+
         assert result.metadata.check_metadata == check_metadata
-    
+
     def test_timestamp_format(self):
         """Test that evaluated_at timestamp is in correct format."""
         arguments = {"value": "expected"}
         result = self.check.execute("test_check", arguments, self.context)
-        
+
         assert isinstance(result.evaluated_at, datetime)
-        assert result.evaluated_at.tzinfo == timezone.utc
+        assert result.evaluated_at.tzinfo == UTC
 
 
 class TestBaseAsyncCheck:
     """Test BaseAsyncCheck functionality."""
-    
+
     def setup_method(self):
         """Set up test fixtures."""
         self.test_case = TestCase(
             id="test_001",
             input={"question": "What is the capital of France?"},
-            expected="Paris"
+            expected="Paris",
         )
-        
+
         self.output = Output(
-            value={"answer": "Paris", "confidence": 0.95}
+            value={"answer": "Paris", "confidence": 0.95},
         )
-        
+
         self.context = EvaluationContext(self.test_case, self.output)
         self.check = TestExampleAsyncCheck()
-    
+
     async def test_successful_async_check_execution(self):
         """Test successful async check execution."""
         arguments = {"value": "expected"}
         result = await self.check.execute("test_async_check", arguments, self.context)
-        
+
         assert isinstance(result, CheckResult)
         assert result.check_type == "test_async_check"
         assert result.status == "completed"
         assert result.results["passed"] is True
         assert result.results["actual_value"] == "expected"
         assert result.error is None
-    
+
     async def test_async_check_with_jsonpath_arguments(self):
         """Test async check execution with JSONPath argument resolution."""
         arguments = {
             "value": "$.output.value.answer",  # Should resolve to "Paris"
-            "literal": "expected"
+            "literal": "expected",
         }
-        
+
         result = await self.check.execute("test_async_check", arguments, self.context)
-        
+
         assert result.status == "completed"
         assert result.results["actual_value"] == "Paris"
-        
+
         # Test resolved arguments format
         assert result.resolved_arguments["value"]["jsonpath"] == "$.output.value.answer"
         assert result.resolved_arguments["value"]["value"] == "Paris"
         assert result.resolved_arguments["literal"]["value"] == "expected"
-    
+
     async def test_async_check_validation_error(self):
         """Test async check execution with validation error."""
         arguments = {}  # Missing required "value" argument
         result = await self.check.execute("test_async_check", arguments, self.context)
-        
+
         assert result.status == "error"
         assert result.error is not None
         assert result.error.type == "validation_error"
-        assert "Missing required argument: value" in result.error.message
-    
+        assert "Invalid arguments for check" in result.error.message
+
     async def test_async_check_execution_error(self):
         """Test async check execution with unexpected error."""
         class FailingAsyncCheck(BaseAsyncCheck):
-            async def __call__(self, arguments, context):
+            async def __call__(self, **kwargs):
                 raise RuntimeError("Async error")
-        
+
         check = FailingAsyncCheck()
         arguments = {"value": "test"}
         result = await check.execute("failing_async_check", arguments, self.context)
-        
+
         assert result.status == "error"
         assert result.error is not None
         assert result.error.type == "unknown_error"

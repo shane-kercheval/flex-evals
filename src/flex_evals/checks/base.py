@@ -46,13 +46,12 @@ class BaseCheck(ABC):
         self._resolver = JSONPathResolver()
 
     @abstractmethod
-    def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:
+    def __call__(self, **kwargs: Any) -> dict[str, Any]:
         """
-        Execute the check against the evaluation context.
+        Execute the check with direct arguments.
 
         Args:
-            arguments: Check arguments (already resolved from JSONPath)
-            context: Evaluation context with test case and output data
+            **kwargs: Check arguments passed directly as keyword arguments
 
         Returns:
             Dict containing check-specific results
@@ -101,7 +100,10 @@ class BaseCheck(ABC):
             }
 
             # Execute the check
-            results = self(resolved_values, context)
+            try:
+                results = self(**resolved_values)
+            except TypeError as e:
+                raise ValidationError(f"Invalid arguments for check: {e!s}") from e
 
             # Create successful result
             return CheckResult(
@@ -210,13 +212,12 @@ class BaseAsyncCheck(ABC):
         self._resolver = JSONPathResolver()
 
     @abstractmethod
-    async def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:
+    async def __call__(self, **kwargs: Any) -> dict[str, Any]:
         """
-        Execute the check against the evaluation context asynchronously.
+        Execute the check with direct arguments asynchronously.
 
         Args:
-            arguments: Check arguments (already resolved from JSONPath)
-            context: Evaluation context with test case and output data
+            **kwargs: Check arguments passed directly as keyword arguments
 
         Returns:
             Dict containing check-specific results
@@ -265,7 +266,10 @@ class BaseAsyncCheck(ABC):
             }
 
             # Execute the check asynchronously
-            results = await self(resolved_values, context)
+            try:
+                results = await self(**resolved_values)
+            except TypeError as e:
+                raise ValidationError(f"Invalid arguments for check: {e!s}") from e
 
             # Create successful result
             return CheckResult(

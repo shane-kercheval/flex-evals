@@ -7,7 +7,7 @@ Tests text against regular expression patterns with configurable flags.
 import re
 from typing import Any
 
-from ..base import BaseCheck, EvaluationContext
+from ..base import BaseCheck
 from ...registry import register
 from ...exceptions import ValidationError
 
@@ -30,23 +30,13 @@ class RegexCheck(BaseCheck):
     - passed: boolean - Whether the regex check passed
     """
 
-    def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:
-        # Validate required arguments
-        if "text" not in arguments:
-            raise ValidationError("Regex check requires 'text' argument")
-
-        if "pattern" not in arguments:
-            raise ValidationError("Regex check requires 'pattern' argument")
-
-        # Get argument values with defaults
-        text = arguments["text"]
-        pattern = arguments["pattern"]
-        negate = arguments.get("negate", False)
-        flags_dict = arguments.get("flags", {})
-
+    def __call__(self, text: str, pattern: str, negate: bool = False, flags: dict | None = None) -> dict[str, Any]:
         # Validate pattern is a string
         if not isinstance(pattern, str):
             raise ValidationError("Regex check 'pattern' argument must be a string")
+
+        # Handle default flags
+        flags_dict = flags or {}
 
         # Convert text to string
         text_str = str(text) if text is not None else ""

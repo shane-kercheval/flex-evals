@@ -6,7 +6,7 @@ Checks if a numeric value meets minimum/maximum thresholds with configurable inc
 
 from typing import Any
 
-from ..base import BaseCheck, EvaluationContext
+from ..base import BaseCheck
 from ...registry import register
 from ...exceptions import ValidationError
 
@@ -30,23 +30,10 @@ class ThresholdCheck(BaseCheck):
     - passed: boolean - Whether the threshold check passed
     """
 
-    def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:
-        # Validate required arguments
-        if "value" not in arguments:
-            raise ValidationError("Threshold check requires 'value' argument")
-
+    def __call__(self, value: float, min_value: float | None = None, max_value: float | None = None, min_inclusive: bool = True, max_inclusive: bool = True, negate: bool = False) -> dict[str, Any]:
         # Check that at least one threshold is specified
-        min_value = arguments.get("min_value")
-        max_value = arguments.get("max_value")
-
         if min_value is None and max_value is None:
             raise ValidationError("Threshold check requires at least one of 'min_value' or 'max_value'")
-
-        # Get argument values with defaults
-        value = arguments["value"]
-        min_inclusive = arguments.get("min_inclusive", True)
-        max_inclusive = arguments.get("max_inclusive", True)
-        negate = arguments.get("negate", False)
 
         # Validate value is numeric
         if not isinstance(value, int | float):

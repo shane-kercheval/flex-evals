@@ -8,7 +8,7 @@ import asyncio
 from typing import Any
 from collections.abc import Callable
 
-from ..base import BaseAsyncCheck, EvaluationContext
+from ..base import BaseAsyncCheck
 from ...registry import register
 from ...exceptions import ValidationError, CheckExecutionError
 
@@ -35,25 +35,16 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
     - passed: boolean (optional) - Present only when threshold is provided
     """
 
-    async def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:
-        # Validate required arguments
-        if "text" not in arguments:
-            raise ValidationError("SemanticSimilarity check requires 'text' argument")
-
-        if "reference" not in arguments:
-            raise ValidationError("SemanticSimilarity check requires 'reference' argument")
-
-        if "embedding_function" not in arguments:
-            raise ValidationError("SemanticSimilarity check requires 'embedding_function' argument")
-
-        # Get argument values with defaults
-        text = arguments["text"]
-        reference = arguments["reference"]
-        embedding_function = arguments["embedding_function"]
-        threshold = arguments.get("threshold")
-        similarity_metric = arguments.get("similarity_metric", "cosine")
-
-        # Validate embedding function is callable
+    async def __call__(
+        self,
+        text: str,
+        reference: str,
+        embedding_function: Callable,
+        threshold: dict | None = None,
+        similarity_metric: str = "cosine",
+    ) -> dict[str, Any]:
+        """Execute semantic similarity check with direct arguments."""
+# Validate embedding function is callable
         if not callable(embedding_function):
             raise ValidationError("embedding_function must be callable")
 

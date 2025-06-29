@@ -6,7 +6,7 @@ Checks if text contains all specified phrases or patterns.
 
 from typing import Any
 
-from ..base import BaseCheck, EvaluationContext
+from ..base import BaseCheck
 from ...registry import register
 from ...exceptions import ValidationError
 
@@ -27,20 +27,7 @@ class ContainsCheck(BaseCheck):
     - passed: boolean - Whether the contains check passed
     """
 
-    def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:
-        # Validate required arguments
-        if "text" not in arguments:
-            raise ValidationError("Contains check requires 'text' argument")
-
-        if "phrases" not in arguments:
-            raise ValidationError("Contains check requires 'phrases' argument")
-
-        # Get argument values with defaults
-        text = arguments["text"]
-        phrases = arguments["phrases"]
-        case_sensitive = arguments.get("case_sensitive", True)
-        negate = arguments.get("negate", False)
-
+    def __call__(self, text: str, phrases: list[str], case_sensitive: bool = True, negate: bool = False) -> dict[str, Any]:
         # Validate phrases is a list
         if not isinstance(phrases, list):
             raise ValidationError("Contains check 'phrases' argument must be a list")
