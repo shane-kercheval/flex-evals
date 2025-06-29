@@ -34,16 +34,6 @@ class ValidationError(FlexEvalsError):
     pass
 
 
-class LLMError(FlexEvalsError):
-    """
-    LLM function execution errors.
-
-    Maps to protocol error type: llm_error
-    """
-
-    pass
-
-
 class CheckExecutionError(FlexEvalsError):
     """
     Check execution errors.

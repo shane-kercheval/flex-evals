@@ -9,7 +9,7 @@ A Python implementation of the [**Flexible Evaluation Protocol (FEP)**](https://
 ## Quick Start
 
 ```python
-from flex_evals import evaluate, TestCase, Output, Check
+from flex_evals import evaluate, TestCase, Output, Check, CheckType
 
 # Define your test cases
 test_cases = [
@@ -25,10 +25,10 @@ outputs = [
     Output(value="The capital of France is Paris.")
 ]
 
-# Define evaluation criteria
+# Define evaluation criteria using enums (strings also supported)
 checks = [
     Check(
-        type="exact_match",
+        type=CheckType.EXACT_MATCH,  # Can also use 'exact_match' string
         arguments={
             "actual": "$.output.value",  # JSONPath expression
             "expected": "$.test_case.expected",
@@ -123,8 +123,10 @@ output = Output(
 Define evaluation criteria with flexible argument resolution:
 
 ```python
+from flex_evals import Check, CheckType
+
 check = Check(
-    type="exact_match",
+    type=CheckType.EXACT_MATCH,  # Can also use 'exact_match' string
     arguments={
         "actual": "$.output.value",  # JSONPath to extract data
         "expected": "Paris",         # Literal value
@@ -138,12 +140,12 @@ check = Check(
 ### **Simple Text Comparison**
 
 ```python
-from flex_evals import evaluate, TestCase, Output, Check
+from flex_evals import evaluate, TestCase, Output, Check, CheckType
 
 # Geography quiz evaluation
 test_cases = [TestCase(id="q1", input="Capital of France?", expected="Paris")]
 outputs = [Output(value="Paris")]
-checks = [Check(type="exact_match", arguments={"actual": "$.output.value", "expected": "$.test_case.expected"})]
+checks = [Check(type=CheckType.EXACT_MATCH, arguments={"actual": "$.output.value", "expected": "$.test_case.expected"})]
 
 results = evaluate(test_cases, outputs, checks)
 ```
@@ -151,11 +153,11 @@ results = evaluate(test_cases, outputs, checks)
 ### **Multi-Criteria Evaluation**
 
 ```python
-# Evaluate both correctness and format
+# Evaluate both correctness and format using enums (strings also supported)
 checks = [
     # Check if answer is correct
     Check(
-        type="contains",
+        type=CheckType.CONTAINS,  # Can also use 'contains' string
         arguments={
             "text": "$.output.value",
             "phrases": ["Paris"],
@@ -164,7 +166,7 @@ checks = [
     ),
     # Check if response is properly formatted
     Check(
-        type="regex",
+        type=CheckType.REGEX,  # Can also use 'regex' string
         arguments={
             "text": "$.output.value",
             "pattern": r"The capital of .+ is .+\.",
@@ -179,20 +181,20 @@ results = evaluate(test_cases, outputs, checks)
 ### **Per-Test-Case Checks**
 
 ```python
-# Different evaluation criteria for each test case
+# Different evaluation criteria for each test case using enums (strings also supported)
 test_cases = [
     TestCase(
         id="math_problem",
         input="What is 2+2?",
         checks=[
-            Check(type="exact_match", arguments={"actual": "$.output.value", "expected": "4"})
+            Check(type=CheckType.EXACT_MATCH, arguments={"actual": "$.output.value", "expected": "4"})
         ]
     ),
     TestCase(
         id="creative_writing",
         input="Write a haiku about code",
         checks=[
-            Check(type="regex", arguments={"text": "$.output.value", "pattern": r"(.+\n){2}.+"})
+            Check(type=CheckType.REGEX, arguments={"text": "$.output.value", "pattern": r"(.+\n){2}.+"})
         ]
     )
 ]
@@ -220,14 +222,14 @@ output = Output(
 
 checks = [
     Check(
-        type="exact_match",
+        type=CheckType.EXACT_MATCH,  # Can also use 'exact_match' string
         arguments={
             "actual": "$.output.value.status",
             "expected": "$.test_case.expected.status"
         }
     ),
     Check(
-        type="threshold",
+        type=CheckType.THRESHOLD,  # Can also use 'threshold' string
         arguments={
             "value": "$.output.metadata.response_time",
             "max_value": 500
@@ -249,15 +251,15 @@ async def get_embedding(text):
     )
     return response.data[0].embedding
 
-# Semantic similarity check
+# Semantic similarity check using enums (strings also supported)
 checks = [
     Check(
-        type="semantic_similarity",
+        type=CheckType.SEMANTIC_SIMILARITY,  # Can also use 'semantic_similarity' string
         arguments={
             "text": "$.output.value",
             "reference": "$.test_case.expected",
             "embedding_function": get_embedding,
-            "threshold": {"min_value": 0.8}
+            'threshold': {"min_value": 0.8}
         }
     )
 ]
@@ -272,7 +274,7 @@ results = evaluate(test_cases, outputs, checks)  # Automatically runs async
 #### **`exact_match`**
 Compare two values for exact equality:
 ```python
-Check(type="exact_match", arguments={
+Check(type='exact_match', arguments={
     "actual": "$.output.value",
     "expected": "Paris",
     "case_sensitive": True,  # Default
@@ -283,7 +285,7 @@ Check(type="exact_match", arguments={
 #### **`contains`**  
 Check if text contains all specified phrases:
 ```python
-Check(type="contains", arguments={
+Check(type='contains', arguments={
     "text": "$.output.value",
     "phrases": ["Paris", "France"],
     "case_sensitive": True,  # Default
@@ -294,7 +296,7 @@ Check(type="contains", arguments={
 #### **`regex`**
 Test text against regular expression patterns:
 ```python
-Check(type="regex", arguments={
+Check(type='regex', arguments={
     "text": "$.output.value",
     "pattern": r"^[A-Z][a-z]+$",
     "flags": {
@@ -309,7 +311,7 @@ Check(type="regex", arguments={
 #### **`threshold`**
 Validate numeric values against bounds:
 ```python
-Check(type="threshold", arguments={
+Check(type='threshold', arguments={
     "value": "$.output.confidence",
     "min_value": 0.8,
     "max_value": 1.0,
@@ -324,19 +326,19 @@ Check(type="threshold", arguments={
 #### **`semantic_similarity`**
 Measure semantic similarity using embeddings:
 ```python
-Check(type="semantic_similarity", arguments={
+Check(type='semantic_similarity', arguments={
     "text": "$.output.value",
     "reference": "$.test_case.expected",
     "embedding_function": your_async_embedding_function,
-    "threshold": {"min_value": 0.8},
-    "similarity_metric": "cosine"  # Default
+    'threshold': {"min_value": 0.8},
+    "similarity_metric": 'cosine'  # Default
 })
 ```
 
 #### **`llm_judge`**
 Use LLM for qualitative evaluation:
 ```python
-Check(type="llm_judge", arguments={
+Check(type='llm_judge', arguments={
     "prompt": "Rate this response for helpfulness: {{$.output.value}}",
     "response_format": {
         "type": "object",
@@ -388,8 +390,8 @@ flex-evals automatically detects and optimizes async checks:
 ```python
 # Mix of sync and async checks
 checks = [
-    Check(type="exact_match", arguments={"actual": "$.output.value", "expected": "Paris"}),  # Sync
-    Check(type="semantic_similarity", arguments={...})  # Async
+    Check(type='exact_match', arguments={"actual": "$.output.value", "expected": "Paris"}),  # Sync
+    Check(type='semantic_similarity', arguments={...})  # Async
 ]
 
 # Engine automatically:
@@ -446,7 +448,7 @@ EvaluationRunResult(
     evaluation_id="uuid",
     started_at="2025-01-01T00:00:00Z",
     completed_at="2025-01-01T00:00:05Z", 
-    status="completed",  # completed | error | skip
+    status='completed',  # completed | error | skip
     summary=EvaluationSummary(
         total_test_cases=100,
         completed_test_cases=95,
@@ -529,7 +531,7 @@ from my_package.my_check import MyCheck
 check = Check(type="my_check", arguments={
     "text": "$.output.value",
     "pattern": "success",
-    "threshold": 0.8
+    'threshold': 0.8
 })
 ```
 

@@ -11,9 +11,10 @@ from collections.abc import Callable
 from ..base import BaseAsyncCheck
 from ...registry import register
 from ...exceptions import ValidationError, CheckExecutionError
+from ...constants import CheckType, SimilarityMetric
 
 
-@register("semantic_similarity", version="1.0.0")
+@register(CheckType.SEMANTIC_SIMILARITY, version="1.0.0")
 class SemanticSimilarityCheck(BaseAsyncCheck):
     """
     Computes semantic similarity between two texts using embeddings.
@@ -28,7 +29,7 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
       - max_inclusive: boolean (default: true) - Whether max threshold is inclusive
       - negate: boolean (default: false) - Whether to negate the threshold logic
     - embedding_function: async callable - User-provided function to generate embeddings
-    - similarity_metric: string (default: "cosine") - Similarity calculation method
+    - similarity_metric: string (default: 'cosine') - Similarity calculation method
 
     Results Schema:
     - score: number[0,1] - Similarity score between the texts
@@ -41,7 +42,7 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
         reference: str,
         embedding_function: Callable,
         threshold: dict | None = None,
-        similarity_metric: str = "cosine",
+        similarity_metric: str = 'cosine',
     ) -> dict[str, Any]:
         """Execute semantic similarity check with direct arguments."""
 # Validate embedding function is callable
@@ -49,8 +50,9 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
             raise ValidationError("embedding_function must be callable")
 
         # Validate similarity metric
-        if similarity_metric not in ["cosine", "dot", "euclidean"]:
-            raise ValidationError(f"Unsupported similarity metric: {similarity_metric}")
+        valid_metrics = [member.value for member in SimilarityMetric]
+        if similarity_metric not in valid_metrics:
+            raise ValidationError(f"Unsupported similarity metric: {similarity_metric}. Valid options: {valid_metrics}")  # noqa: E501
 
         # Convert to strings for embedding
         text_str = str(text) if text is not None else ""
@@ -124,11 +126,11 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
         if len(embedding1) != len(embedding2):
             raise ValueError("Embeddings must have the same dimensionality")
 
-        if metric == "cosine":
+        if metric == 'cosine':
             return self._cosine_similarity(embedding1, embedding2)
-        if metric == "dot":
+        if metric == 'dot':
             return self._dot_product_similarity(embedding1, embedding2)
-        if metric == "euclidean":
+        if metric == 'euclidean':
             return self._euclidean_similarity(embedding1, embedding2)
         raise ValueError(f"Unsupported similarity metric: {metric}")
 

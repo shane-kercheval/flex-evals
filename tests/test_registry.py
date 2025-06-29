@@ -8,6 +8,7 @@ from flex_evals.registry import (
     is_async_check, list_registered_checks, clear_registry,
 )
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
+from flex_evals.constants import CheckType
 from flex_evals.schemas.output import Output
 from flex_evals.schemas.test_case import TestCase
 
@@ -168,12 +169,12 @@ class TestRegistryDecorator:
             def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 # Custom business logic
                 business_value = arguments.get("business_value", 0)
-                threshold = arguments.get("threshold", 100)
+                threshold = arguments.get('threshold', 100)
 
                 return {
                     "passed": business_value > threshold,
                     "business_value": business_value,
-                    "threshold": threshold,
+                    'threshold': threshold,
                 }
 
         check_class = get_check_class("custom_business_logic")
@@ -186,10 +187,10 @@ class TestRegistryDecorator:
         context = EvaluationContext(test_case, output)
 
         # Test arguments are properly passed
-        result = check_instance({"business_value": 150, "threshold": 100}, context)
+        result = check_instance({"business_value": 150, 'threshold': 100}, context)
         assert result["passed"] is True
         assert result["business_value"] == 150
-        assert result["threshold"] == 100
+        assert result['threshold'] == 100
 
     def test_global_registry_functions(self):
         """Test global registry access functions."""
@@ -240,3 +241,45 @@ class TestRegistryDecorator:
 
         # But still registered
         assert get_check_class("preserve_test") == PreserveTest
+
+    def test_register_with_check_type_enum(self):
+        """Test registering check with CheckType enum."""
+        @register(CheckType.EXACT_MATCH, version="1.0.0")
+        class TestCheck(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Should be retrievable by string
+        check_class = get_check_class('exact_match')
+        assert check_class == TestCheck
+
+    def test_register_with_string_and_enum_compatibility(self):
+        """Test that enum and string registrations are compatible."""
+        @register(CheckType.EXACT_MATCH, version="1.0.0")
+        class TestCheck1(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # This should work (same version, equivalent types)
+        @register('exact_match', version="1.0.0")
+        class TestCheck2(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": False}
+
+        # Different version should raise error
+        with pytest.raises(ValueError, match="already registered"):
+            @register(CheckType.EXACT_MATCH, version="2.0.0")
+            class TestCheck3(BaseCheck):
+                def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                    return {"passed": True}
+
+    def test_register_async_check_with_enum(self):
+        """Test registering async check with enum."""
+        @register(CheckType.SEMANTIC_SIMILARITY, version="1.0.0")
+        class TestAsyncCheck(BaseAsyncCheck):
+            async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"score": 0.9}
+
+        check_class = get_check_class('semantic_similarity')
+        assert check_class == TestAsyncCheck
+        assert is_async_check('semantic_similarity')

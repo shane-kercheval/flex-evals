@@ -9,9 +9,10 @@ from typing import Any
 from ..base import BaseCheck
 from ...registry import register
 from ...exceptions import ValidationError
+from ...constants import CheckType
 
 
-@register("contains", version="1.0.0")
+@register(CheckType.CONTAINS, version="1.0.0")
 class ContainsCheck(BaseCheck):
     """
     Checks if text contains all specific phrases or patterns.

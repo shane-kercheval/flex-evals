@@ -8,9 +8,10 @@ from typing import Any
 
 from ..base import BaseCheck
 from ...registry import register
+from ...constants import CheckType
 
 
-@register("exact_match", version="1.0.0")
+@register(CheckType.EXACT_MATCH, version="1.0.0")
 class ExactMatchCheck(BaseCheck):
     """
     Compares two text values for exact equality.

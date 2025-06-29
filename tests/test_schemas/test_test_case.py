@@ -96,8 +96,8 @@ class TestTestCase:
     def test_test_case_checks_extension(self):
         """Test convenience checks field."""
         checks = [
-            Check(type="exact_match", arguments={"actual": "$.output.value", "expected": "Paris"}),
-            Check(type="contains", arguments={"text": "$.output.value", "phrases": ["France"]}),
+            Check(type='exact_match', arguments={"actual": "$.output.value", "expected": "Paris"}),
+            Check(type='contains', arguments={"text": "$.output.value", "phrases": ["France"]}),
         ]
 
         test_case = TestCase(
@@ -108,7 +108,7 @@ class TestTestCase:
 
         assert test_case.checks == checks
         assert len(test_case.checks) == 2
-        assert test_case.checks[0].type == "exact_match"
+        assert test_case.checks[0].type == 'exact_match'
 
     def test_test_case_validation_errors(self):
         """Test missing required fields raise ValidationError."""

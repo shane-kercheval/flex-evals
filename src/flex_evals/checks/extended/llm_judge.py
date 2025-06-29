@@ -14,9 +14,10 @@ from ..base import BaseAsyncCheck, EvaluationContext
 from ...registry import register
 from ...exceptions import ValidationError, CheckExecutionError
 from ...jsonpath_resolver import JSONPathResolver
+from ...constants import CheckType
 
 
-@register("llm_judge", version="1.0.0")
+@register(CheckType.LLM_JUDGE, version="1.0.0")
 class LlmJudgeCheck(BaseAsyncCheck):
     """
     Uses an LLM to evaluate outputs against complex criteria.

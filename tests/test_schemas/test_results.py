@@ -9,6 +9,7 @@ from flex_evals.schemas.results import (
     EvaluationSummary,
     EvaluationRunResult,
 )
+from flex_evals.constants import Status
 from flex_evals.schemas.check import CheckResult, CheckResultMetadata, CheckError
 from flex_evals.schemas.experiments import ExperimentMetadata
 
@@ -106,8 +107,8 @@ class TestTestCaseResult:
     def test_valid_test_case_result(self):
         """Test creating valid TestCaseResult."""
         check_results = [
-            self.create_check_result("completed"),
-            self.create_check_result("completed"),
+            self.create_check_result('completed'),
+            self.create_check_result('completed'),
         ]
 
         summary = TestCaseSummary(
@@ -119,24 +120,24 @@ class TestTestCaseResult:
 
         result = TestCaseResult(
             test_case_id="test-1",
-            status="completed",
+            status='completed',
             check_results=check_results,
             summary=summary,
         )
 
         assert result.test_case_id == "test-1"
-        assert result.status == "completed"
+        assert result.status == 'completed'
         assert len(result.check_results) == 2
         assert result.metadata is None
 
     def test_with_metadata(self):
         """Test TestCaseResult with metadata."""
-        check_results = [self.create_check_result("completed")]
+        check_results = [self.create_check_result('completed')]
         summary = TestCaseSummary(total_checks=1, completed_checks=1, error_checks=0, skipped_checks=0)  # noqa: E501
 
         result = TestCaseResult(
             test_case_id="test-1",
-            status="completed",
+            status='completed',
             check_results=check_results,
             summary=summary,
             metadata={"custom": "value"},
@@ -149,19 +150,19 @@ class TestTestCaseResult:
         with pytest.raises(ValueError, match="test_case_id must be non-empty"):
             TestCaseResult(
                 test_case_id="",
-                status="completed",
+                status='completed',
                 check_results=[],
                 summary=TestCaseSummary(0, 0, 0, 0),
             )
 
     def test_summary_mismatch_total(self):
         """Test that summary total mismatch raises ValueError."""
-        check_results = [self.create_check_result("completed")]
+        check_results = [self.create_check_result('completed')]
 
         with pytest.raises(ValueError, match="summary does not match check_results"):
             TestCaseResult(
                 test_case_id="test-1",
-                status="completed",
+                status='completed',
                 check_results=check_results,
                 summary=TestCaseSummary(2, 2, 0, 0),  # Wrong total
             )
@@ -170,7 +171,7 @@ class TestTestCaseResult:
         """Test that summary completed count mismatch raises ValueError."""
         error_check = CheckResult(
             check_type="test_check",
-            status="error",
+            status='error',
             results={},
             resolved_arguments={},
             evaluated_at=datetime.now(UTC),
@@ -178,14 +179,14 @@ class TestTestCaseResult:
             error=CheckError("test_error", "Test error", True),
         )
         check_results = [
-            self.create_check_result("completed"),
+            self.create_check_result('completed'),
             error_check,
         ]
 
         with pytest.raises(ValueError, match="summary does not match check_results"):
             TestCaseResult(
                 test_case_id="test-1",
-                status="error",
+                status='error',
                 check_results=check_results,
                 summary=TestCaseSummary(2, 2, 0, 0),  # Wrong completed count
             )
@@ -194,7 +195,7 @@ class TestTestCaseResult:
         """Test that incorrect status raises ValueError when should be error."""
         error_check = CheckResult(
             check_type="test_check",
-            status="error",
+            status='error',
             results={},
             resolved_arguments={},
             evaluated_at=datetime.now(UTC),
@@ -202,7 +203,7 @@ class TestTestCaseResult:
             error=CheckError("test_error", "Test error", True),
         )
         check_results = [
-            self.create_check_result("completed"),
+            self.create_check_result('completed'),
             error_check,
         ]
         summary = TestCaseSummary(2, 1, 1, 0)
@@ -210,7 +211,7 @@ class TestTestCaseResult:
         with pytest.raises(ValueError, match="status should be 'error'"):
             TestCaseResult(
                 test_case_id="test-1",
-                status="completed",  # Wrong - should be error
+                status='completed',  # Wrong - should be error
                 check_results=check_results,
                 summary=summary,
             )
@@ -218,15 +219,15 @@ class TestTestCaseResult:
     def test_status_mismatch_should_be_skip(self):
         """Test that incorrect status raises ValueError when should be skip."""
         check_results = [
-            self.create_check_result("completed"),
-            self.create_check_result("skip"),
+            self.create_check_result('completed'),
+            self.create_check_result('skip'),
         ]
         summary = TestCaseSummary(2, 1, 0, 1)
 
         with pytest.raises(ValueError, match="status should be 'skip'"):
             TestCaseResult(
                 test_case_id="test-1",
-                status="completed",  # Wrong - should be skip
+                status='completed',  # Wrong - should be skip
                 check_results=check_results,
                 summary=summary,
             )
@@ -235,7 +236,7 @@ class TestTestCaseResult:
         """Test that error status takes priority over skip."""
         error_check = CheckResult(
             check_type="test_check",
-            status="error",
+            status='error',
             results={},
             resolved_arguments={},
             evaluated_at=datetime.now(UTC),
@@ -244,30 +245,30 @@ class TestTestCaseResult:
         )
         check_results = [
             error_check,
-            self.create_check_result("skip"),
+            self.create_check_result('skip'),
         ]
         summary = TestCaseSummary(2, 0, 1, 1)
 
         result = TestCaseResult(
             test_case_id="test-1",
-            status="error",
+            status='error',
             check_results=check_results,
             summary=summary,
         )
 
-        assert result.status == "error"
+        assert result.status == 'error'
 
     def test_empty_check_results(self):
         """Test TestCaseResult with empty check results."""
         result = TestCaseResult(
             test_case_id="test-1",
-            status="completed",
+            status='completed',
             check_results=[],
             summary=TestCaseSummary(0, 0, 0, 0),
         )
 
         assert len(result.check_results) == 0
-        assert result.status == "completed"
+        assert result.status == 'completed'
 
 
 class TestEvaluationSummary:
@@ -324,11 +325,11 @@ class TestEvaluationRunResult:
 
     def create_test_case_result(self, status: str, test_case_id: str = "test-1") -> TestCaseResult:
         """Helper to create TestCaseResult for testing."""
-        if status == "completed":
+        if status == 'completed':
             check_results = [
                 CheckResult(
                     check_type="test_check",
-                    status="completed",
+                    status='completed',
                     results={},
                     resolved_arguments={},
                     evaluated_at=datetime.now(UTC),
@@ -336,16 +337,16 @@ class TestEvaluationRunResult:
                 ),
             ]
             summary = TestCaseSummary(1, 1, 0, 0)
-        elif status == "error":
+        elif status == 'error':
             check_results = [
                 CheckResult(
                     check_type="test_check",
-                    status="error",
+                    status='error',
                     results={},
                     resolved_arguments={},
                     evaluated_at=datetime.now(UTC),
                     metadata=CheckResultMetadata(test_case_id, None, None, {}),
-                    error=CheckError("validation_error", "Test error", True),
+                    error=CheckError('validation_error', "Test error", True),
                 ),
             ]
             summary = TestCaseSummary(1, 0, 1, 0)
@@ -353,7 +354,7 @@ class TestEvaluationRunResult:
             check_results = [
                 CheckResult(
                     check_type="test_check",
-                    status="skip",
+                    status='skip',
                     results={},
                     resolved_arguments={},
                     evaluated_at=datetime.now(UTC),
@@ -375,8 +376,8 @@ class TestEvaluationRunResult:
         completed_at = datetime.now(UTC)
 
         results = [
-            self.create_test_case_result("completed", "test-1"),
-            self.create_test_case_result("completed", "test-2"),
+            self.create_test_case_result('completed', "test-1"),
+            self.create_test_case_result('completed', "test-2"),
         ]
 
         summary = EvaluationSummary(
@@ -390,13 +391,13 @@ class TestEvaluationRunResult:
             evaluation_id="eval-123",
             started_at=started_at,
             completed_at=completed_at,
-            status="completed",
+            status='completed',
             summary=summary,
             results=results,
         )
 
         assert evaluation.evaluation_id == "eval-123"
-        assert evaluation.status == "completed"
+        assert evaluation.status == 'completed'
         assert len(evaluation.results) == 2
         assert evaluation.experiment is None
         assert evaluation.metadata is None
@@ -415,7 +416,7 @@ class TestEvaluationRunResult:
             evaluation_id="eval-123",
             started_at=started_at,
             completed_at=completed_at,
-            status="completed",
+            status='completed',
             summary=EvaluationSummary(0, 0, 0, 0),
             results=[],
             experiment=experiment,
@@ -433,7 +434,7 @@ class TestEvaluationRunResult:
                 evaluation_id="",
                 started_at=datetime.now(UTC),
                 completed_at=datetime.now(UTC),
-                status="completed",
+                status='completed',
                 summary=EvaluationSummary(0, 0, 0, 0),
                 results=[],
             )
@@ -448,7 +449,7 @@ class TestEvaluationRunResult:
                 evaluation_id="eval-123",
                 started_at=started_at,
                 completed_at=completed_at,
-                status="completed",
+                status='completed',
                 summary=EvaluationSummary(0, 0, 0, 0),
                 results=[],
             )
@@ -458,14 +459,14 @@ class TestEvaluationRunResult:
         started_at = datetime.now(UTC)
         completed_at = datetime.now(UTC)
 
-        results = [self.create_test_case_result("completed")]
+        results = [self.create_test_case_result('completed')]
 
         with pytest.raises(ValueError, match="summary does not match results"):
             EvaluationRunResult(
                 evaluation_id="eval-123",
                 started_at=started_at,
                 completed_at=completed_at,
-                status="completed",
+                status='completed',
                 summary=EvaluationSummary(2, 2, 0, 0),  # Wrong total
                 results=results,
             )
@@ -476,8 +477,8 @@ class TestEvaluationRunResult:
         completed_at = datetime.now(UTC)
 
         results = [
-            self.create_test_case_result("completed"),
-            self.create_test_case_result("error"),
+            self.create_test_case_result('completed'),
+            self.create_test_case_result('error'),
         ]
         summary = EvaluationSummary(2, 1, 1, 0)
 
@@ -486,7 +487,7 @@ class TestEvaluationRunResult:
                 evaluation_id="eval-123",
                 started_at=started_at,
                 completed_at=completed_at,
-                status="completed",  # Wrong - should be error
+                status='completed',  # Wrong - should be error
                 summary=summary,
                 results=results,
             )
@@ -497,8 +498,8 @@ class TestEvaluationRunResult:
         completed_at = datetime.now(UTC)
 
         results = [
-            self.create_test_case_result("error"),
-            self.create_test_case_result("skip"),
+            self.create_test_case_result('error'),
+            self.create_test_case_result('skip'),
         ]
         summary = EvaluationSummary(2, 0, 1, 1)
 
@@ -506,12 +507,12 @@ class TestEvaluationRunResult:
             evaluation_id="eval-123",
             started_at=started_at,
             completed_at=completed_at,
-            status="error",
+            status='error',
             summary=summary,
             results=results,
         )
 
-        assert evaluation.status == "error"
+        assert evaluation.status == 'error'
 
     def test_empty_results(self):
         """Test EvaluationRunResult with empty results."""
@@ -522,10 +523,96 @@ class TestEvaluationRunResult:
             evaluation_id="eval-123",
             started_at=started_at,
             completed_at=completed_at,
-            status="completed",
+            status='completed',
             summary=EvaluationSummary(0, 0, 0, 0),
             results=[],
         )
 
         assert len(evaluation.results) == 0
-        assert evaluation.status == "completed"
+        assert evaluation.status == 'completed'
+
+    def test_status_enum_values(self):
+        """Test Status enum values."""
+        assert Status.COMPLETED == 'completed'
+        assert Status.ERROR == 'error'
+        assert Status.SKIP == 'skip'
+
+    def test_check_result_accepts_status_enum(self):
+        """Test CheckResult accepts Status enum."""
+        metadata = CheckResultMetadata(test_case_id="test_001")
+        result = CheckResult(
+            check_type='exact_match',
+            status=Status.COMPLETED,
+            results={"passed": True},
+            resolved_arguments={"actual": "test", "expected": "test"},
+            evaluated_at=datetime.now(UTC),
+            metadata=metadata,
+        )
+        assert result.status == 'completed'
+
+    def test_test_case_result_accepts_status_enum(self):
+        """Test TestCaseResult accepts Status enum."""
+        summary = TestCaseSummary(
+            total_checks=1,
+            completed_checks=1,
+            error_checks=0,
+            skipped_checks=0,
+        )
+        metadata = CheckResultMetadata(test_case_id="test_001")
+        check_result = CheckResult(
+            check_type='exact_match',
+            status='completed',
+            results={"passed": True},
+            resolved_arguments={"actual": "test", "expected": "test"},
+            evaluated_at=datetime.now(UTC),
+            metadata=metadata,
+        )
+
+        result = TestCaseResult(
+            test_case_id="test_001",
+            status=Status.COMPLETED,
+            check_results=[check_result],
+            summary=summary,
+        )
+        assert result.status == 'completed'
+
+    def test_evaluation_run_result_accepts_status_enum(self):
+        """Test EvaluationRunResult accepts Status enum."""
+        summary = EvaluationSummary(
+            total_test_cases=1,
+            completed_test_cases=1,
+            error_test_cases=0,
+            skipped_test_cases=0,
+        )
+        test_case_summary = TestCaseSummary(
+            total_checks=1,
+            completed_checks=1,
+            error_checks=0,
+            skipped_checks=0,
+        )
+        metadata = CheckResultMetadata(test_case_id="test_001")
+        check_result = CheckResult(
+            check_type='exact_match',
+            status='completed',
+            results={"passed": True},
+            resolved_arguments={"actual": "test", "expected": "test"},
+            evaluated_at=datetime.now(UTC),
+            metadata=metadata,
+        )
+        test_case_result = TestCaseResult(
+            test_case_id="test_001",
+            status='completed',
+            check_results=[check_result],
+            summary=test_case_summary,
+        )
+
+        now = datetime.now(UTC)
+        result = EvaluationRunResult(
+            evaluation_id="eval_001",
+            started_at=now,
+            completed_at=now,
+            status=Status.COMPLETED,
+            summary=summary,
+            results=[test_case_result],
+        )
+        assert result.status == 'completed'

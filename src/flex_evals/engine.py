@@ -255,7 +255,7 @@ def _create_error_check_result(
     """Create a CheckResult for unhandled errors during check execution."""
     return CheckResult(
         check_type=check.type,
-        status="error",
+        status='error',
         results={},
         resolved_arguments={},
         evaluated_at=datetime.now(UTC),
@@ -266,7 +266,7 @@ def _create_error_check_result(
             check_version=check.version,
         ),
         error=CheckError(
-            type="unknown_error",
+            type='unknown_error',
             message=f"Unhandled error during check execution: {error_message}",
             recoverable=False,
         ),
@@ -280,9 +280,9 @@ def _create_test_case_result(
     """Create a TestCaseResult from check results."""
     # Compute summary statistics
     total_checks = len(check_results)
-    completed_checks = sum(1 for r in check_results if r.status == "completed")
-    error_checks = sum(1 for r in check_results if r.status == "error")
-    skipped_checks = sum(1 for r in check_results if r.status == "skip")
+    completed_checks = sum(1 for r in check_results if r.status == 'completed')
+    error_checks = sum(1 for r in check_results if r.status == 'error')
+    skipped_checks = sum(1 for r in check_results if r.status == 'skip')
 
     summary = TestCaseSummary(
         total_checks=total_checks,
@@ -293,11 +293,11 @@ def _create_test_case_result(
 
     # Compute overall status
     if error_checks > 0:
-        status = "error"
+        status = 'error'
     elif skipped_checks > 0:
-        status = "skip"
+        status = 'skip'
     else:
-        status = "completed"
+        status = 'completed'
 
     return TestCaseResult(
         test_case_id=test_case_id,
@@ -310,9 +310,9 @@ def _create_test_case_result(
 def _compute_evaluation_summary(test_case_results: list[TestCaseResult]) -> EvaluationSummary:
     """Compute aggregate evaluation summary from test case results."""
     total_test_cases = len(test_case_results)
-    completed_test_cases = sum(1 for r in test_case_results if r.status == "completed")
-    error_test_cases = sum(1 for r in test_case_results if r.status == "error")
-    skipped_test_cases = sum(1 for r in test_case_results if r.status == "skip")
+    completed_test_cases = sum(1 for r in test_case_results if r.status == 'completed')
+    error_test_cases = sum(1 for r in test_case_results if r.status == 'error')
+    skipped_test_cases = sum(1 for r in test_case_results if r.status == 'skip')
 
     return EvaluationSummary(
         total_test_cases=total_test_cases,
@@ -324,8 +324,8 @@ def _compute_evaluation_summary(test_case_results: list[TestCaseResult]) -> Eval
 
 def _compute_evaluation_status(test_case_results: list[TestCaseResult]) -> str:
     """Compute overall evaluation status from test case results."""
-    if any(r.status == "error" for r in test_case_results):
-        return "error"
-    if any(r.status == "skip" for r in test_case_results):
-        return "skip"
-    return "completed"
+    if any(r.status == 'error' for r in test_case_results):
+        return 'error'
+    if any(r.status == 'skip' for r in test_case_results):
+        return 'skip'
+    return 'completed'

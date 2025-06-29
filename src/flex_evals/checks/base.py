@@ -108,7 +108,7 @@ class BaseCheck(ABC):
             # Create successful result
             return CheckResult(
                 check_type=check_type,
-                status="completed",
+                status='completed',
                 results=results,
                 resolved_arguments=resolved_arguments,
                 evaluated_at=evaluated_at,
@@ -123,7 +123,7 @@ class BaseCheck(ABC):
         except JSONPathError as e:
             return self._create_error_result(
                 check_type=check_type,
-                error_type="jsonpath_error",
+                error_type='jsonpath_error',
                 error_message=str(e),
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
@@ -135,7 +135,7 @@ class BaseCheck(ABC):
         except ValidationError as e:
             return self._create_error_result(
                 check_type=check_type,
-                error_type="validation_error",
+                error_type='validation_error',
                 error_message=str(e),
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
@@ -147,7 +147,7 @@ class BaseCheck(ABC):
         except CheckExecutionError as e:
             return self._create_error_result(
                 check_type=check_type,
-                error_type="unknown_error",
+                error_type='unknown_error',
                 error_message=str(e),
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
@@ -159,7 +159,7 @@ class BaseCheck(ABC):
         except Exception as e:
             return self._create_error_result(
                 check_type=check_type,
-                error_type="unknown_error",
+                error_type='unknown_error',
                 error_message=f"Unexpected error during check execution: {e!s}",
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
@@ -182,7 +182,7 @@ class BaseCheck(ABC):
         """Create a CheckResult for error cases."""
         return CheckResult(
             check_type=check_type,
-            status="error",
+            status='error',
             results={},
             resolved_arguments=resolved_arguments,
             evaluated_at=evaluated_at,
@@ -274,7 +274,7 @@ class BaseAsyncCheck(ABC):
             # Create successful result
             return CheckResult(
                 check_type=check_type,
-                status="completed",
+                status='completed',
                 results=results,
                 resolved_arguments=resolved_arguments,
                 evaluated_at=evaluated_at,
@@ -289,7 +289,7 @@ class BaseAsyncCheck(ABC):
         except JSONPathError as e:
             return self._create_error_result(
                 check_type=check_type,
-                error_type="jsonpath_error",
+                error_type='jsonpath_error',
                 error_message=str(e),
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
@@ -301,7 +301,7 @@ class BaseAsyncCheck(ABC):
         except ValidationError as e:
             return self._create_error_result(
                 check_type=check_type,
-                error_type="validation_error",
+                error_type='validation_error',
                 error_message=str(e),
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
@@ -313,7 +313,7 @@ class BaseAsyncCheck(ABC):
         except CheckExecutionError as e:
             return self._create_error_result(
                 check_type=check_type,
-                error_type="unknown_error",
+                error_type='unknown_error',
                 error_message=str(e),
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
@@ -325,7 +325,7 @@ class BaseAsyncCheck(ABC):
         except Exception as e:
             return self._create_error_result(
                 check_type=check_type,
-                error_type="unknown_error",
+                error_type='unknown_error',
                 error_message=f"Unexpected error during async check execution: {e!s}",
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
@@ -348,7 +348,7 @@ class BaseAsyncCheck(ABC):
         """Create a CheckResult for error cases."""
         return CheckResult(
             check_type=check_type,
-            status="error",
+            status='error',
             results={},
             resolved_arguments=resolved_arguments,
             evaluated_at=evaluated_at,

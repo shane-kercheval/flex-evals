@@ -182,14 +182,14 @@ class TestEvaluationEngine:
         """Test pure sync execution path."""
         result = evaluate(self.test_cases, self.outputs, self.shared_checks)
 
-        assert result.status == "completed"
+        assert result.status == 'completed'
         assert len(result.results) == 2
 
         # Verify all checks executed successfully
         for test_result in result.results:
-            assert test_result.status == "completed"
+            assert test_result.status == 'completed'
             for check_result in test_result.check_results:
-                assert check_result.status == "completed"
+                assert check_result.status == 'completed'
 
     def test_evaluate_async_detection(self):
         """Test async checks trigger async execution."""
@@ -199,12 +199,12 @@ class TestEvaluationEngine:
 
         result = evaluate(self.test_cases, self.outputs, async_checks)
 
-        assert result.status == "completed"
+        assert result.status == 'completed'
         assert len(result.results) == 2
 
         # Verify async checks executed successfully
         for test_result in result.results:
-            assert test_result.status == "completed"
+            assert test_result.status == 'completed'
             assert test_result.check_results[0].check_type == "test_async_check"
 
     def test_evaluate_mixed_async_sync(self):
@@ -216,7 +216,7 @@ class TestEvaluationEngine:
 
         result = evaluate(self.test_cases, self.outputs, mixed_checks)
 
-        assert result.status == "completed"
+        assert result.status == 'completed'
 
         # Both check types should execute in async mode
         for test_result in result.results:
@@ -300,13 +300,13 @@ class TestEvaluationEngine:
 
         result = evaluate(self.test_cases, self.outputs, failing_checks)
 
-        assert result.status == "error"  # Overall status should be error
+        assert result.status == 'error'  # Overall status should be error
 
         # All test case results should have errors
         for test_result in result.results:
-            assert test_result.status == "error"
+            assert test_result.status == 'error'
             check_result = test_result.check_results[0]
-            assert check_result.status == "error"
+            assert check_result.status == 'error'
             assert check_result.error is not None
             assert "This check always fails" in check_result.error.message
 
@@ -318,13 +318,13 @@ class TestEvaluationEngine:
 
         result = evaluate(self.test_cases, self.outputs, invalid_checks)
 
-        assert result.status == "error"
+        assert result.status == 'error'
 
         # Should have error results for unregistered check
         for test_result in result.results:
-            assert test_result.status == "error"
+            assert test_result.status == 'error'
             check_result = test_result.check_results[0]
-            assert check_result.status == "error"
+            assert check_result.status == 'error'
             assert "not registered" in check_result.error.message
 
     def test_evaluate_summary_statistics(self):
@@ -349,11 +349,11 @@ class TestEvaluationEngine:
             Check(type="test_check", arguments={"expected": "$.test_case.expected"}),
         ]
         result = evaluate(self.test_cases, self.outputs, passing_checks)
-        assert result.status == "completed"
+        assert result.status == 'completed'
 
         # Some failing
         failing_checks = [
             Check(type="test_failing_check", arguments={}),
         ]
         result = evaluate(self.test_cases, self.outputs, failing_checks)
-        assert result.status == "error"
+        assert result.status == 'error'

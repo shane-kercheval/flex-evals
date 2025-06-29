@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import Any, Literal
 import re
 
+from ..constants import CheckType, ErrorType, Status
+
 
 @dataclass
 class Check:
@@ -19,14 +21,18 @@ class Check:
     - version: Semantic version of the check implementation
     """
 
-    type: str
+    type: str | CheckType
     arguments: dict[str, Any]
     version: str | None = None
 
     def __post_init__(self):
         """Validate required fields and constraints."""
-        if not self.type or not isinstance(self.type, str):
-            raise ValueError("Check.type must be a non-empty string")
+        if not self.type or not isinstance(self.type, str | CheckType):
+            raise ValueError("Check.type must be a non-empty string or CheckType enum")
+
+        # Convert enum to string for consistency
+        if isinstance(self.type, CheckType):
+            self.type = self.type.value
 
         if not isinstance(self.arguments, dict):
             raise ValueError("Check.arguments must be a dictionary")
@@ -44,7 +50,7 @@ class Check:
 class CheckError:
     """Error details for failed check execution."""
 
-    type: Literal["jsonpath_error", "validation_error", "llm_error", "timeout_error", "unknown_error"]  # noqa: E501
+    type: ErrorType | Literal['jsonpath_error', 'validation_error', 'timeout_error', 'unknown_error']  # noqa: E501
     message: str
     recoverable: bool = False
 
@@ -82,11 +88,11 @@ class CheckResult:
     - metadata: Contextual metadata including test_case_id
 
     Optional Fields:
-    - error: Error details (only present when status is "error")
+    - error: Error details (only present when status is 'error')
     """
 
     check_type: str
-    status: Literal["completed", "error", "skip"]
+    status: Status | Literal['completed', 'error', 'skip']
     results: dict[str, Any]
     resolved_arguments: dict[str, Any]
     evaluated_at: datetime
@@ -107,8 +113,8 @@ class CheckResult:
         if not self.metadata.test_case_id:
             raise ValueError("CheckResult.metadata.test_case_id is required")
 
-        if self.status == "error" and self.error is None:
+        if self.status == 'error' and self.error is None:
             raise ValueError("CheckResult.error is required when status is 'error'")
 
-        if self.status != "error" and self.error is not None:
+        if self.status != 'error' and self.error is not None:
             raise ValueError("CheckResult.error should only be present when status is 'error'")

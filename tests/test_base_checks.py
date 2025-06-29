@@ -86,7 +86,7 @@ class TestBaseCheck:
 
         assert isinstance(result, CheckResult)
         assert result.check_type == "test_check"
-        assert result.status == "completed"
+        assert result.status == 'completed'
         assert result.results["passed"] is True
         assert result.results["actual_value"] == "expected"
         assert result.error is None
@@ -105,7 +105,7 @@ class TestBaseCheck:
 
         result = self.check.execute("test_check", arguments, self.context)
 
-        assert result.status == "completed"
+        assert result.status == 'completed'
         assert result.results["actual_value"] == "Paris"
 
         # Test resolved arguments format
@@ -119,9 +119,9 @@ class TestBaseCheck:
         arguments = {}  # Missing required "value" argument
         result = self.check.execute("test_check", arguments, self.context)
 
-        assert result.status == "error"
+        assert result.status == 'error'
         assert result.error is not None
-        assert result.error.type == "validation_error"
+        assert result.error.type == 'validation_error'
         assert "Invalid arguments for check" in result.error.message
         assert result.error.recoverable is False
         assert result.results == {}
@@ -131,9 +131,9 @@ class TestBaseCheck:
         arguments = {"value": "$.nonexistent.path"}
         result = self.check.execute("test_check", arguments, self.context)
 
-        assert result.status == "error"
+        assert result.status == 'error'
         assert result.error is not None
-        assert result.error.type == "jsonpath_error"
+        assert result.error.type == 'jsonpath_error'
         assert "did not match any data" in result.error.message
         assert result.error.recoverable is False
 
@@ -147,9 +147,9 @@ class TestBaseCheck:
         arguments = {"value": "test"}
         result = check.execute("failing_check", arguments, self.context)
 
-        assert result.status == "error"
+        assert result.status == 'error'
         assert result.error is not None
-        assert result.error.type == "unknown_error"
+        assert result.error.type == 'unknown_error'
         assert "Unexpected error during check execution" in result.error.message
 
     def test_check_version_preservation(self):
@@ -195,7 +195,7 @@ class TestBaseAsyncCheck:
 
         assert isinstance(result, CheckResult)
         assert result.check_type == "test_async_check"
-        assert result.status == "completed"
+        assert result.status == 'completed'
         assert result.results["passed"] is True
         assert result.results["actual_value"] == "expected"
         assert result.error is None
@@ -209,7 +209,7 @@ class TestBaseAsyncCheck:
 
         result = await self.check.execute("test_async_check", arguments, self.context)
 
-        assert result.status == "completed"
+        assert result.status == 'completed'
         assert result.results["actual_value"] == "Paris"
 
         # Test resolved arguments format
@@ -222,9 +222,9 @@ class TestBaseAsyncCheck:
         arguments = {}  # Missing required "value" argument
         result = await self.check.execute("test_async_check", arguments, self.context)
 
-        assert result.status == "error"
+        assert result.status == 'error'
         assert result.error is not None
-        assert result.error.type == "validation_error"
+        assert result.error.type == 'validation_error'
         assert "Invalid arguments for check" in result.error.message
 
     async def test_async_check_execution_error(self):
@@ -237,7 +237,7 @@ class TestBaseAsyncCheck:
         arguments = {"value": "test"}
         result = await check.execute("failing_async_check", arguments, self.context)
 
-        assert result.status == "error"
+        assert result.status == 'error'
         assert result.error is not None
-        assert result.error.type == "unknown_error"
+        assert result.error.type == 'unknown_error'
         assert "Unexpected error during async check execution" in result.error.message

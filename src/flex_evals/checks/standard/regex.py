@@ -10,9 +10,10 @@ from typing import Any
 from ..base import BaseCheck
 from ...registry import register
 from ...exceptions import ValidationError
+from ...constants import CheckType
 
 
-@register("regex", version="1.0.0")
+@register(CheckType.REGEX, version="1.0.0")
 class RegexCheck(BaseCheck):
     """
     Tests text against regular expression patterns.

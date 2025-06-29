@@ -2,13 +2,12 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
-from typing import TYPE_CHECKING
+from flex_evals.schemas.check import CheckResult
+from flex_evals.schemas.experiments import ExperimentMetadata
 
-if TYPE_CHECKING:
-    from .check import CheckResult
-    from .experiments import ExperimentMetadata
+from ..constants import Status
 
 
 @dataclass
@@ -46,14 +45,14 @@ class TestCaseResult:
     - metadata: Implementation-specific metadata
 
     Status Logic:
-    - "completed": All checks have status "completed"
-    - "error": At least one check has status "error"
-    - "skip": No errors, but at least one check has status "skip"
+    - 'completed': All checks have status 'completed'
+    - 'error': At least one check has status 'error'
+    - 'skip': No errors, but at least one check has status 'skip'
     """
 
     test_case_id: str
-    status: Literal["completed", "error", "skip"]
-    check_results: list["CheckResult"]
+    status: Status | Literal['completed', 'error', 'skip']
+    check_results: list[CheckResult]
     summary: TestCaseSummary
     metadata: dict[str, Any] | None = None
 
@@ -64,9 +63,9 @@ class TestCaseResult:
 
         # Validate summary matches check_results
         actual_total = len(self.check_results)
-        actual_completed = sum(1 for r in self.check_results if r.status == "completed")
-        actual_error = sum(1 for r in self.check_results if r.status == "error")
-        actual_skipped = sum(1 for r in self.check_results if r.status == "skip")
+        actual_completed = sum(1 for r in self.check_results if r.status == 'completed')
+        actual_error = sum(1 for r in self.check_results if r.status == 'error')
+        actual_skipped = sum(1 for r in self.check_results if r.status == 'skip')
 
         if (self.summary.total_checks != actual_total or
             self.summary.completed_checks != actual_completed or
@@ -79,13 +78,13 @@ class TestCaseResult:
         if self.status != expected_status:
             raise ValueError(f"TestCaseResult.status should be '{expected_status}' based on check results")  # noqa: E501
 
-    def _compute_status(self, check_results: list["CheckResult"]) -> Literal["completed", "error", "skip"]:  # noqa: E501
+    def _compute_status(self, check_results: list[CheckResult]) -> Status | Literal['completed', 'error', 'skip']:  # noqa: E501
         """Compute status based on check result statuses."""
-        if any(r.status == "error" for r in check_results):
-            return "error"
-        if any(r.status == "skip" for r in check_results):
-            return "skip"
-        return "completed"
+        if any(r.status == 'error' for r in check_results):
+            return 'error'
+        if any(r.status == 'skip' for r in check_results):
+            return 'skip'
+        return 'completed'
 
 
 @dataclass
@@ -129,10 +128,10 @@ class EvaluationRunResult:
     evaluation_id: str
     started_at: datetime
     completed_at: datetime
-    status: Literal["completed", "error", "skip"]
+    status: Status | Literal['completed', 'error', 'skip']
     summary: EvaluationSummary
     results: list[TestCaseResult]
-    experiment: Optional["ExperimentMetadata"] = None
+    experiment: ExperimentMetadata | None = None
     metadata: dict[str, Any] | None = None
 
     def __post_init__(self):
@@ -145,9 +144,9 @@ class EvaluationRunResult:
 
         # Validate summary matches results
         actual_total = len(self.results)
-        actual_completed = sum(1 for r in self.results if r.status == "completed")
-        actual_error = sum(1 for r in self.results if r.status == "error")
-        actual_skipped = sum(1 for r in self.results if r.status == "skip")
+        actual_completed = sum(1 for r in self.results if r.status == 'completed')
+        actual_error = sum(1 for r in self.results if r.status == 'error')
+        actual_skipped = sum(1 for r in self.results if r.status == 'skip')
 
         if (self.summary.total_test_cases != actual_total or
             self.summary.completed_test_cases != actual_completed or
@@ -160,10 +159,10 @@ class EvaluationRunResult:
         if self.status != expected_status:
             raise ValueError(f"EvaluationRunResult.status should be '{expected_status}' based on test case results")  # noqa: E501
 
-    def _compute_status(self, results: list[TestCaseResult]) -> Literal["completed", "error", "skip"]:  # noqa: E501
+    def _compute_status(self, results: list[TestCaseResult]) -> Status | Literal['completed', 'error', 'skip']:  # noqa: E501
         """Compute status based on test case result statuses."""
-        if any(r.status == "error" for r in results):
-            return "error"
-        if any(r.status == "skip" for r in results):
-            return "skip"
-        return "completed"
+        if any(r.status == 'error' for r in results):
+            return 'error'
+        if any(r.status == 'skip' for r in results):
+            return 'skip'
+        return 'completed'

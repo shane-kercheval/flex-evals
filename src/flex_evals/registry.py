@@ -9,6 +9,7 @@ from typing import Any
 import inspect
 
 from .checks.base import BaseCheck, BaseAsyncCheck
+from .constants import CheckType
 
 
 class CheckRegistry:
@@ -24,7 +25,7 @@ class CheckRegistry:
 
     def register(
         self,
-        check_type: str,
+        check_type: str | CheckType,
         check_class: type[BaseCheck | BaseAsyncCheck],
         version: str = "1.0.0",
     ) -> None:
@@ -32,23 +33,26 @@ class CheckRegistry:
         Register a check implementation.
 
         Args:
-            check_type: String identifier for the check type
+            check_type: String or CheckType enum identifier for the check type
             check_class: Check implementation class
             version: Semantic version of the check implementation
 
         Raises:
             ValueError: If check_type already registered with different version
         """
-        if check_type in self._checks:
-            existing_version = self._checks[check_type]["version"]
+        # Convert enum to string for internal storage
+        check_type_str = str(check_type)
+
+        if check_type_str in self._checks:
+            existing_version = self._checks[check_type_str]["version"]
             if existing_version != version:
                 raise ValueError(
-                    f"Check type '{check_type}' already registered with version {existing_version}, "  # noqa: E501
+                    f"Check type '{check_type_str}' already registered with version {existing_version}, "  # noqa: E501
                     f"cannot register with version {version}",
                 )
             # Same version - allow re-registration (useful for testing)
 
-        self._checks[check_type] = {
+        self._checks[check_type_str] = {
             "class": check_class,
             "version": version,
             "is_async": self._is_async_check(check_class),
@@ -136,23 +140,28 @@ class CheckRegistry:
 _global_registry = CheckRegistry()
 
 
-def register(check_type: str, version: str = "1.0.0") -> callable:
+def register(check_type: str | CheckType, version: str = "1.0.0") -> callable:
     """
     Decorator for registering check implementations.
 
     Args:
-        check_type: String identifier for the check type
+        check_type: String or CheckType enum identifier for the check type
         version: Semantic version of the check implementation
 
     Returns:
         Decorator function
 
     Example:
-        @register("exact_match", version="1.0.0")
+        @register(CheckType.EXACT_MATCH, version="1.0.0")
         class ExactMatchCheck(BaseCheck):
             def __call__(self, arguments, context):
                 # Implementation
                 return {"passed": True}
+
+        # Strings are also supported:
+        @register('exact_match', version="1.0.0")
+        class ExactMatchCheck(BaseCheck):
+            # ...
     """
     def decorator(cls: type[BaseCheck | BaseAsyncCheck]) -> type[BaseCheck | BaseAsyncCheck]:
         _global_registry.register(check_type, cls, version)

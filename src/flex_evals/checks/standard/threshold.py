@@ -9,9 +9,10 @@ from typing import Any
 from ..base import BaseCheck
 from ...registry import register
 from ...exceptions import ValidationError
+from ...constants import CheckType
 
 
-@register("threshold", version="1.0.0")
+@register(CheckType.THRESHOLD, version="1.0.0")
 class ThresholdCheck(BaseCheck):
     """
     Checks if a numeric value meets minimum/maximum thresholds.
