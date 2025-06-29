@@ -1,0 +1,169 @@
+---
+# FEP Test Cases Configuration
+# This YAML file demonstrates how to define test cases and checks
+# using the Flexible Evaluation Protocol (FEP)
+
+experiment:
+  name: "advanced_llm_evaluation"
+  description: "Comprehensive evaluation of LLM responses across multiple domains"
+  version: "1.0.0"
+  metadata:
+    dataset: "custom_evaluation_suite"
+    model_under_test: "gpt-4"
+    evaluation_date: "2024-01-15"
+
+# Test cases with embedded checks (per-test-case pattern)
+test_cases:
+  - id: "qa_geography_001"
+    input: "What is the capital of France and what is its population?"
+    expected:
+      city: "Paris"
+      has_population: true
+    metadata:
+      category: "geography"
+      difficulty: "easy"
+      source: "knowledge_base"
+    checks:
+      - type: "contains"
+        arguments:
+          text: "$.output.value"
+          phrases: ["Paris"]
+          case_sensitive: false
+      - type: "regex"
+        arguments:
+          text: "$.output.value"
+          pattern: "\\d{1,2}[.,]?\\d{0,3}[.,]?\\d{3,}"  # Population numbers
+          flags:
+            case_insensitive: true
+
+  - id: "qa_math_001"
+    input: "Calculate 15% of 240 and explain your reasoning"
+    expected:
+      result: 36
+      has_explanation: true
+    metadata:
+      category: "mathematics"
+      difficulty: "medium"
+      source: "calculation_tasks"
+    checks:
+      - type: "contains"
+        arguments:
+          text: "$.output.value"
+          phrases: ["36"]
+      - type: "regex"
+        arguments:
+          text: "$.output.value"
+          pattern: "(15%|fifteen percent).*(240|two hundred forty)"
+          flags:
+            case_insensitive: true
+      - type: "contains"
+        arguments:
+          text: "$.output.value"
+          phrases: ["multiply", "calculate", "percent"]
+          case_sensitive: false
+
+  - id: "code_generation_001"
+    input: "Write a Python function that finds the maximum element in a list"
+    expected:
+      language: "python"
+      function_name: "find_max"
+    metadata:
+      category: "coding"
+      difficulty: "easy"
+      language: "python"
+    checks:
+      - type: "contains"
+        arguments:
+          text: "$.output.value"
+          phrases: ["def", "max"]
+          case_sensitive: false
+      - type: "regex"
+        arguments:
+          text: "$.output.value"
+          pattern: "def\\s+\\w+\\s*\\([^)]*\\):"
+          flags:
+            case_insensitive: false
+      - type: "contains"
+        arguments:
+          text: "$.output.value"
+          phrases: ["return"]
+          case_sensitive: false
+
+  - id: "structured_response_001"
+    input: 
+      role: "system"
+      content: "Analyze the sentiment of this text and provide a structured response"
+      user_text: "I absolutely love this new restaurant! The food was amazing and the service was exceptional."
+    expected:
+      sentiment: "positive"
+      confidence_min: 0.8
+    metadata:
+      category: "sentiment_analysis"
+      difficulty: "medium"
+      expected_format: "structured"
+    checks:
+      - type: "contains"
+        arguments:
+          text: "$.output.value"
+          phrases: ["positive", "sentiment"]
+          case_sensitive: false
+      - type: "regex"
+        arguments:
+          text: "$.output.value"
+          pattern: "(confidence|score|probability).*[0-9]\\.[0-9]+"
+          flags:
+            case_insensitive: true
+
+  - id: "reasoning_chain_001"
+    input: "A train travels 120 miles in 2 hours. At this rate, how long will it take to travel 300 miles? Show your work."
+    expected:
+      answer: 5
+      unit: "hours"
+      shows_work: true
+    metadata:
+      category: "word_problems"
+      difficulty: "medium"
+      requires_reasoning: true
+    checks:
+      - type: "contains"
+        arguments:
+          text: "$.output.value"
+          phrases: ["5", "hours"]
+      - type: "regex"
+        arguments:
+          text: "$.output.value"
+          pattern: "(120.*2|60.*mile)"  # Shows rate calculation
+          flags:
+            case_insensitive: true
+      - type: "contains"
+        arguments:
+          text: "$.output.value"
+          phrases: ["rate", "speed", "divide", "300"]
+          case_sensitive: false
+
+# Global checks that apply to all test cases
+global_checks:
+  - type: "threshold"
+    description: "Response should not be too short"
+    arguments:
+      value: "$.output.value.length"
+      min_value: 10
+  
+  - type: "regex"
+    description: "Response should not contain error messages"
+    arguments:
+      text: "$.output.value"
+      pattern: "(error|failed|exception|invalid)"
+      negate: true
+      flags:
+        case_insensitive: true
+
+# Quality thresholds for evaluation
+quality_thresholds:
+  minimum_pass_rate: 0.8
+  critical_checks:
+    - "contains"
+    - "exact_match"
+  warning_thresholds:
+    response_time_ms: 5000
+    token_usage: 1000

@@ -22,6 +22,7 @@ package: package-build package-publish
 linting:
 	uv run ruff check src/flex_evals/ --fix --unsafe-fixes
 	uv run ruff check tests/ --fix --unsafe-fixes
+	uv run ruff check examples/ --fix --unsafe-fixes
 
 unittests:
 	# pytest tests

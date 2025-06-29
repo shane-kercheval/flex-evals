@@ -1,0 +1,14 @@
+test_case_id,category,difficulty,check_type,status,passed,evaluation_time
+qa_geography_001,geography,easy,contains,completed,True,2025-06-29 16:50:49.744672+00:00
+qa_geography_001,geography,easy,regex,completed,False,2025-06-29 16:50:49.750171+00:00
+qa_math_001,mathematics,medium,contains,completed,True,2025-06-29 16:50:49.752348+00:00
+qa_math_001,mathematics,medium,regex,completed,True,2025-06-29 16:50:49.754124+00:00
+qa_math_001,mathematics,medium,contains,completed,False,2025-06-29 16:50:49.755927+00:00
+code_generation_001,coding,easy,contains,completed,True,2025-06-29 16:50:49.758120+00:00
+code_generation_001,coding,easy,regex,completed,True,2025-06-29 16:50:49.759771+00:00
+code_generation_001,coding,easy,contains,completed,True,2025-06-29 16:50:49.761659+00:00
+structured_response_001,sentiment_analysis,medium,contains,completed,True,2025-06-29 16:50:49.763443+00:00
+structured_response_001,sentiment_analysis,medium,regex,completed,True,2025-06-29 16:50:49.765098+00:00
+reasoning_chain_001,word_problems,medium,contains,completed,True,2025-06-29 16:50:49.768830+00:00
+reasoning_chain_001,word_problems,medium,regex,completed,True,2025-06-29 16:50:49.770958+00:00
+reasoning_chain_001,word_problems,medium,contains,completed,False,2025-06-29 16:50:49.773475+00:00

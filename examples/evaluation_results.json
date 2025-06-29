@@ -1,0 +1,370 @@
+{
+  "evaluation_id": "ad5eb689-ff4f-4c35-85a0-4b43d6600a97",
+  "started_at": "2025-06-29T16:50:49.744493+00:00",
+  "completed_at": "2025-06-29T16:50:49.775201+00:00",
+  "status": "completed",
+  "summary": {
+    "total_test_cases": 5,
+    "completed_test_cases": 5,
+    "error_test_cases": 0,
+    "skipped_test_cases": 0
+  },
+  "experiment": {
+    "name": "advanced_llm_evaluation",
+    "metadata": {
+      "dataset": "custom_evaluation_suite",
+      "model_under_test": "gpt-4",
+      "evaluation_date": "2024-01-15"
+    }
+  },
+  "results": [
+    {
+      "test_case_id": "qa_geography_001",
+      "status": "completed",
+      "summary": {
+        "total_checks": 2,
+        "completed_checks": 2,
+        "error_checks": 0,
+        "skipped_checks": 0
+      },
+      "check_results": [
+        {
+          "check_type": "contains",
+          "status": "completed",
+          "results": {
+            "passed": true
+          },
+          "evaluated_at": "2025-06-29T16:50:49.744672+00:00",
+          "resolved_arguments": {
+            "text": {
+              "jsonpath": "$.output.value",
+              "value": "Paris is the capital of France, with a population of approximately 2.1 million people in the city proper and about 12 million in the metropolitan area."
+            },
+            "phrases": {
+              "value": [
+                "Paris"
+              ]
+            },
+            "case_sensitive": {
+              "value": false
+            }
+          }
+        },
+        {
+          "check_type": "regex",
+          "status": "completed",
+          "results": {
+            "passed": false
+          },
+          "evaluated_at": "2025-06-29T16:50:49.750171+00:00",
+          "resolved_arguments": {
+            "text": {
+              "jsonpath": "$.output.value",
+              "value": "Paris is the capital of France, with a population of approximately 2.1 million people in the city proper and about 12 million in the metropolitan area."
+            },
+            "pattern": {
+              "value": "\\d{1,2}[.,]?\\d{0,3}[.,]?\\d{3,}"
+            },
+            "flags": {
+              "value": {
+                "case_insensitive": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "test_case_id": "qa_math_001",
+      "status": "completed",
+      "summary": {
+        "total_checks": 3,
+        "completed_checks": 3,
+        "error_checks": 0,
+        "skipped_checks": 0
+      },
+      "check_results": [
+        {
+          "check_type": "contains",
+          "status": "completed",
+          "results": {
+            "passed": true
+          },
+          "evaluated_at": "2025-06-29T16:50:49.752348+00:00",
+          "resolved_arguments": {
+            "text": {
+              "jsonpath": "$.output.value",
+              "value": "To calculate 15% of 240, I'll multiply 240 by 0.15. 240 \u00d7 0.15 = 36. So 15% of 240 equals 36."
+            },
+            "phrases": {
+              "value": [
+                "36"
+              ]
+            }
+          }
+        },
+        {
+          "check_type": "regex",
+          "status": "completed",
+          "results": {
+            "passed": true
+          },
+          "evaluated_at": "2025-06-29T16:50:49.754124+00:00",
+          "resolved_arguments": {
+            "text": {
+              "jsonpath": "$.output.value",
+              "value": "To calculate 15% of 240, I'll multiply 240 by 0.15. 240 \u00d7 0.15 = 36. So 15% of 240 equals 36."
+            },
+            "pattern": {
+              "value": "(15%|fifteen percent).*(240|two hundred forty)"
+            },
+            "flags": {
+              "value": {
+                "case_insensitive": true
+              }
+            }
+          }
+        },
+        {
+          "check_type": "contains",
+          "status": "completed",
+          "results": {
+            "passed": false
+          },
+          "evaluated_at": "2025-06-29T16:50:49.755927+00:00",
+          "resolved_arguments": {
+            "text": {
+              "jsonpath": "$.output.value",
+              "value": "To calculate 15% of 240, I'll multiply 240 by 0.15. 240 \u00d7 0.15 = 36. So 15% of 240 equals 36."
+            },
+            "phrases": {
+              "value": [
+                "multiply",
+                "calculate",
+                "percent"
+              ]
+            },
+            "case_sensitive": {
+              "value": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "test_case_id": "code_generation_001",
+      "status": "completed",
+      "summary": {
+        "total_checks": 3,
+        "completed_checks": 3,
+        "error_checks": 0,
+        "skipped_checks": 0
+      },
+      "check_results": [
+        {
+          "check_type": "contains",
+          "status": "completed",
+          "results": {
+            "passed": true
+          },
+          "evaluated_at": "2025-06-29T16:50:49.758120+00:00",
+          "resolved_arguments": {
+            "text": {
+              "jsonpath": "$.output.value",
+              "value": "def find_max(numbers):\n    \"\"\"Find the maximum element in a list.\n\n    Args:\n        numbers: List of numbers\n\n    Returns:\n        The maximum value in the list\n    \"\"\"\n    if not numbers:\n        return None\n\n    max_val = numbers[0]\n    for num in numbers:\n        if num > max_val:\n            max_val = num\n\n    return max_val"
+            },
+            "phrases": {
+              "value": [
+                "def",
+                "max"
+              ]
+            },
+            "case_sensitive": {
+              "value": false
+            }
+          }
+        },
+        {
+          "check_type": "regex",
+          "status": "completed",
+          "results": {
+            "passed": true
+          },
+          "evaluated_at": "2025-06-29T16:50:49.759771+00:00",
+          "resolved_arguments": {
+            "text": {
+              "jsonpath": "$.output.value",
+              "value": "def find_max(numbers):\n    \"\"\"Find the maximum element in a list.\n\n    Args:\n        numbers: List of numbers\n\n    Returns:\n        The maximum value in the list\n    \"\"\"\n    if not numbers:\n        return None\n\n    max_val = numbers[0]\n    for num in numbers:\n        if num > max_val:\n            max_val = num\n\n    return max_val"
+            },
+            "pattern": {
+              "value": "def\\s+\\w+\\s*\\([^)]*\\):"
+            },
+            "flags": {
+              "value": {
+                "case_insensitive": false
+              }
+            }
+          }
+        },
+        {
+          "check_type": "contains",
+          "status": "completed",
+          "results": {
+            "passed": true
+          },
+          "evaluated_at": "2025-06-29T16:50:49.761659+00:00",
+          "resolved_arguments": {
+            "text": {
+              "jsonpath": "$.output.value",
+              "value": "def find_max(numbers):\n    \"\"\"Find the maximum element in a list.\n\n    Args:\n        numbers: List of numbers\n\n    Returns:\n        The maximum value in the list\n    \"\"\"\n    if not numbers:\n        return None\n\n    max_val = numbers[0]\n    for num in numbers:\n        if num > max_val:\n            max_val = num\n\n    return max_val"
+            },
+            "phrases": {
+              "value": [
+                "return"
+              ]
+            },
+            "case_sensitive": {
+              "value": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "test_case_id": "structured_response_001",
+      "status": "completed",
+      "summary": {
+        "total_checks": 2,
+        "completed_checks": 2,
+        "error_checks": 0,
+        "skipped_checks": 0
+      },
+      "check_results": [
+        {
+          "check_type": "contains",
+          "status": "completed",
+          "results": {
+            "passed": true
+          },
+          "evaluated_at": "2025-06-29T16:50:49.763443+00:00",
+          "resolved_arguments": {
+            "text": {
+              "jsonpath": "$.output.value",
+              "value": "Based on my analysis of the text \"I absolutely love this new restaurant! The food was amazing and the service was exceptional.\", here is the sentiment assessment:\n\n**Sentiment: Positive**\n**Confidence Score: 0.95**\n\nThe text contains multiple strong positive indicators:\n- \"absolutely love\" - strong positive emotion\n- \"amazing\" - highly positive descriptor\n- \"exceptional\" - superlative positive term\n- Exclamation mark indicating enthusiasm\n\nThis is clearly a very positive review with high confidence."
+            },
+            "phrases": {
+              "value": [
+                "positive",
+                "sentiment"
+              ]
+            },
+            "case_sensitive": {
+              "value": false
+            }
+          }
+        },
+        {
+          "check_type": "regex",
+          "status": "completed",
+          "results": {
+            "passed": true
+          },
+          "evaluated_at": "2025-06-29T16:50:49.765098+00:00",
+          "resolved_arguments": {
+            "text": {
+              "jsonpath": "$.output.value",
+              "value": "Based on my analysis of the text \"I absolutely love this new restaurant! The food was amazing and the service was exceptional.\", here is the sentiment assessment:\n\n**Sentiment: Positive**\n**Confidence Score: 0.95**\n\nThe text contains multiple strong positive indicators:\n- \"absolutely love\" - strong positive emotion\n- \"amazing\" - highly positive descriptor\n- \"exceptional\" - superlative positive term\n- Exclamation mark indicating enthusiasm\n\nThis is clearly a very positive review with high confidence."
+            },
+            "pattern": {
+              "value": "(confidence|score|probability).*[0-9]\\.[0-9]+"
+            },
+            "flags": {
+              "value": {
+                "case_insensitive": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "test_case_id": "reasoning_chain_001",
+      "status": "completed",
+      "summary": {
+        "total_checks": 3,
+        "completed_checks": 3,
+        "error_checks": 0,
+        "skipped_checks": 0
+      },
+      "check_results": [
+        {
+          "check_type": "contains",
+          "status": "completed",
+          "results": {
+            "passed": true
+          },
+          "evaluated_at": "2025-06-29T16:50:49.768830+00:00",
+          "resolved_arguments": {
+            "text": {
+              "jsonpath": "$.output.value",
+              "value": "To solve this problem, I need to find the rate and then calculate the time for 300 miles.\n\nStep 1: Find the rate\nRate = Distance \u00f7 Time = 120 miles \u00f7 2 hours = 60 miles per hour\n\nStep 2: Calculate time for 300 miles\nTime = Distance \u00f7 Rate = 300 miles \u00f7 60 mph = 5 hours\n\nTherefore, it will take 5 hours to travel 300 miles at this rate."
+            },
+            "phrases": {
+              "value": [
+                "5",
+                "hours"
+              ]
+            }
+          }
+        },
+        {
+          "check_type": "regex",
+          "status": "completed",
+          "results": {
+            "passed": true
+          },
+          "evaluated_at": "2025-06-29T16:50:49.770958+00:00",
+          "resolved_arguments": {
+            "text": {
+              "jsonpath": "$.output.value",
+              "value": "To solve this problem, I need to find the rate and then calculate the time for 300 miles.\n\nStep 1: Find the rate\nRate = Distance \u00f7 Time = 120 miles \u00f7 2 hours = 60 miles per hour\n\nStep 2: Calculate time for 300 miles\nTime = Distance \u00f7 Rate = 300 miles \u00f7 60 mph = 5 hours\n\nTherefore, it will take 5 hours to travel 300 miles at this rate."
+            },
+            "pattern": {
+              "value": "(120.*2|60.*mile)"
+            },
+            "flags": {
+              "value": {
+                "case_insensitive": true
+              }
+            }
+          }
+        },
+        {
+          "check_type": "contains",
+          "status": "completed",
+          "results": {
+            "passed": false
+          },
+          "evaluated_at": "2025-06-29T16:50:49.773475+00:00",
+          "resolved_arguments": {
+            "text": {
+              "jsonpath": "$.output.value",
+              "value": "To solve this problem, I need to find the rate and then calculate the time for 300 miles.\n\nStep 1: Find the rate\nRate = Distance \u00f7 Time = 120 miles \u00f7 2 hours = 60 miles per hour\n\nStep 2: Calculate time for 300 miles\nTime = Distance \u00f7 Rate = 300 miles \u00f7 60 mph = 5 hours\n\nTherefore, it will take 5 hours to travel 300 miles at this rate."
+            },
+            "phrases": {
+              "value": [
+                "rate",
+                "speed",
+                "divide",
+                "300"
+              ]
+            },
+            "case_sensitive": {
+              "value": false
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
