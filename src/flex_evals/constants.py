@@ -64,4 +64,3 @@ class SimilarityMetric(str, Enum):
     def __str__(self) -> str:
         """Return the enum value as string."""
         return str(self.value)
-

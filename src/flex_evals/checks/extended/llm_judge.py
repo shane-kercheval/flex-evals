@@ -1,211 +1,557 @@
 """
 LLM Judge check implementation for FEP.
 
-Uses LLM to evaluate outputs against complex criteria with structured responses.
-"""
+This module implements the `llm_judge` check type, which uses Large Language Models (LLMs)
+to evaluate system outputs against complex, nuanced criteria that cannot be easily
+expressed with traditional programmatic checks.
+
+EXECUTION FLOW AND DESIGN:
+==========================
+
+This check implementation uses a two-stage execution process to handle the complex
+requirement of processing prompt templates containing JSONPath expressions:
+
+1. TEMPLATE PROCESSING (execute() method):
+   - Receives raw arguments that may contain prompt templates like:
+     "User Input: {{$.test_case.input.message}}"
+   - Processes {{$.jsonpath}} placeholders by resolving them against evaluation context
+   - Produces a fully substituted prompt with actual values
+
+2. STANDARD EXECUTION (__call__ method):
+   - Receives fully processed arguments (no templates, no JSONPath expressions)
+   - Executes the LLM evaluation with the processed prompt
+   - Returns structured results according to the specified response format
+
+This separation ensures:
+- Clean separation of concerns between template processing and LLM execution
+- Reuse of existing JSONPath resolution infrastructure
+- Proper error handling at each stage
+- Maintainable and testable code
+
+TEMPLATE FORMAT:
+===============
+
+Prompt templates use the format {{$.jsonpath}} for dynamic substitution:
+
+Example:
+    prompt: |
+        Evaluate the following interaction:
+
+        User Input: {{$.test_case.input.user_message}}
+        AI Response: {{$.output.value.response}}
+        Expected Quality: {{$.test_case.expected.quality_level}}
+
+        Rate the response quality from 1-10.
+
+The JSONPath expressions will be resolved against the evaluation context and substituted
+with actual values before the prompt is sent to the LLM.
+
+USAGE EXAMPLE:
+=============
+
+    check = {
+        "type": "llm_judge",
+        "arguments": {
+            "prompt": "Evaluate: User asked '{{$.test_case.input}}', AI responded '{{$.output.value}}'",
+            "response_format": QualityAssessment,  # Pydantic model
+            "llm_function": my_llm_function
+        }
+    }
+
+Where QualityAssessment might be:
+    class QualityAssessment(BaseModel):
+        score: int = Field(ge=1, le=10)
+        reasoning: str
+        is_helpful: bool
+"""  # noqa: E501
 
 import asyncio
 import json
 import re
-from typing import Any
-from collections.abc import Callable
+from datetime import datetime, UTC
+from typing import Any, TypeVar
+from collections.abc import Awaitable, Callable
+
+from pydantic import BaseModel
 
 from ..base import BaseAsyncCheck, EvaluationContext
 from ...registry import register
-from ...exceptions import ValidationError, CheckExecutionError
-from ...jsonpath_resolver import JSONPathResolver
+from ...exceptions import ValidationError, CheckExecutionError, JSONPathError
 from ...constants import CheckType
+from ...schemas import CheckResult
+
+# Type variable for the response format model
+T = TypeVar('T', bound=BaseModel)
 
 
 @register(CheckType.LLM_JUDGE, version="1.0.0")
 class LlmJudgeCheck(BaseAsyncCheck):
     """
-    Uses an LLM to evaluate outputs against complex criteria.
+    Uses an LLM to evaluate outputs against complex, nuanced criteria.
 
-    Arguments Schema:
-    - prompt: string - Prompt template with {{$.jsonpath}} placeholders for dynamic substitution
-    - response_format: object - JSON Schema defining expected LLM response structure
-    - llm_function: async callable - User-provided function to call LLM
+    This check allows for sophisticated evaluation of system outputs using Large Language
+    Models, enabling assessment of qualities like helpfulness, accuracy, tone, coherence,
+    and other subjective criteria that are difficult to capture with programmatic checks.
 
-    Results Schema:
-    Dynamic structure matching response_format exactly. The LLM response is validated
-    against the schema and returned as-is without additional wrapper fields.
-    """
+    EXECUTION ARCHITECTURE:
+    =======================
 
-    def __init__(self):
-        super().__init__()
-        self.jsonpath_resolver = JSONPathResolver()
+    This implementation overrides the base class execution flow to handle prompt template
+    processing. The execution happens in two distinct phases:
+
+    Phase 1 - Template Processing (execute() method):
+        - Receives raw check arguments including prompt templates
+        - Processes {{$.jsonpath}} placeholders in the prompt
+        - Resolves JSONPath expressions against evaluation context
+        - Substitutes placeholders with actual values
+        - Passes processed arguments to base class execution
+
+    Phase 2 - LLM Execution (__call__ method):
+        - Receives fully processed, concrete arguments
+        - NO template processing occurs here
+        - NO JSONPath resolution occurs here
+        - Executes LLM evaluation with processed prompt
+        - Returns structured results
+
+    This design ensures clean separation between template processing logic and LLM
+    execution logic, making the code more maintainable and testable.
+
+    ARGUMENTS SCHEMA:
+    ================
+
+    Required Arguments:
+    - prompt (str): Prompt template with optional {{$.jsonpath}} placeholders
+    - response_format (type[BaseModel]): Pydantic model defining expected LLM response structure
+    - llm_function (callable): Function to call LLM with signature: (prompt: str, response_format: type[BaseModel]) -> BaseModel
+
+    Optional Arguments:
+    - Any additional arguments will be passed through to __call__ after standard processing
+
+    TEMPLATE SYNTAX:
+    ===============
+
+    Prompt templates support dynamic value substitution using {{$.jsonpath}} syntax:
+
+    - {{$.test_case.input}} - Access the test case input
+    - {{$.output.value}} - Access the system output value
+    - {{$.test_case.expected}} - Access expected output
+    - {{$.output.metadata.execution_time}} - Access nested metadata
+
+    Complex values (objects/arrays) are JSON-serialized for substitution.
+
+    RESULTS SCHEMA:
+    ==============
+
+    The results structure is entirely determined by the response_format argument.
+    The LLM response is validated against the provided Pydantic model and returned
+    as a dictionary matching that model's structure.
+
+    Example Response Format:
+        class EvaluationResult(BaseModel):
+            quality_score: int = Field(ge=1, le=5)
+            is_helpful: bool
+            reasoning: str
+            detected_issues: list[str] = []
+
+    Would produce results like:
+        {
+            "quality_score": 4,
+            "is_helpful": true,
+            "reasoning": "Response directly answers the question with accurate information",
+            "detected_issues": []
+        }
+
+    ERROR HANDLING:
+    ==============
+
+    Template Processing Errors:
+    - Invalid JSONPath expressions in templates result in jsonpath_error
+    - Missing context data for placeholders results in jsonpath_error
+
+    LLM Execution Errors:
+    - LLM function failures result in unknown_error
+    - Invalid response format validation results in validation_error
+    - Malformed JSON responses result in validation_error
+
+    IMPLEMENTATION NOTES:
+    ====================
+
+    1. Template processing happens BEFORE standard JSONPath argument resolution
+    2. The __call__ method expects fully processed arguments with no templates
+    3. LLM functions can be either synchronous or asynchronous
+    4. Response validation ensures type safety and protocol compliance
+    5. Complex objects in templates are JSON-serialized for string substitution
+    """  # noqa: E501
+
+    async def execute(
+        self,
+        check_type: str,
+        arguments: dict[str, Any],
+        context: EvaluationContext,
+        check_version: str | None = None,
+    ) -> CheckResult:
+        """
+        Execute LLM judge check with template processing.
+
+        This method overrides the base class execute() to implement the two-phase
+        execution model required for prompt template processing:
+
+        PHASE 1 - TEMPLATE PROCESSING:
+        ==============================
+
+        1. Checks if the prompt argument contains template placeholders
+        2. If templates exist, processes {{$.jsonpath}} placeholders:
+           - Extracts JSONPath expressions from template syntax
+           - Resolves each expression against the evaluation context
+           - Substitutes placeholders with resolved values
+           - Handles JSON serialization for complex objects
+        3. Creates modified arguments with processed prompt
+
+        PHASE 2 - STANDARD EXECUTION:
+        =============================
+
+        4. Delegates to parent class execute() with processed arguments
+        5. Parent handles standard JSONPath resolution for other arguments
+        6. Parent calls __call__ with fully resolved arguments
+        7. __call__ executes LLM evaluation and returns results
+
+        ERROR HANDLING:
+        ==============
+
+        Template processing errors (invalid JSONPath, missing data) are caught
+        and returned as proper CheckResult error objects with jsonpath_error type.
+        This ensures protocol compliance and proper error reporting.
+
+        Args:
+            check_type: The check type identifier ("llm_judge")
+            arguments: Raw check arguments, may contain prompt templates
+            context: Evaluation context with test case and output data
+            check_version: Optional version string for the check definition
+
+        Returns:
+            CheckResult: Complete result object with execution status, results,
+                        resolved arguments, and metadata
+
+        Raises:
+            No exceptions - all errors are captured and returned as CheckResult
+            objects with appropriate error status and details
+        """
+        # PHASE 1: Template processing (if needed)
+        if "prompt" in arguments and isinstance(arguments["prompt"], str):
+            try:
+                # Process prompt template by resolving {{$.jsonpath}} placeholders
+                processed_prompt = self._process_prompt_template(
+                    arguments["prompt"],
+                    context,
+                )
+
+                # Create modified arguments with processed prompt
+                modified_arguments = arguments.copy()
+                modified_arguments["prompt"] = processed_prompt
+
+            except JSONPathError as e:
+                # Template processing failed - return error result
+                return self._create_error_result(
+                    check_type=check_type,
+                    error_type='jsonpath_error',
+                    error_message=f"Error processing prompt template: {e}",
+                    resolved_arguments={},
+                    evaluated_at=datetime.now(UTC),
+                    context=context,
+                    check_version=check_version,
+                    recoverable=False,
+                )
+        else:
+            # No template processing needed
+            modified_arguments = arguments
+
+        # PHASE 2: Standard execution with processed arguments
+        # Delegate to parent class for standard JSONPath resolution and execution
+        return await super().execute(
+            check_type,
+            modified_arguments,
+            context,
+            check_version,
+        )
 
     async def __call__(
-        self, prompt: str, response_format: dict, llm_function: Callable,
+        self,
+        prompt: str,
+        response_format: type[T],
+        llm_function: Callable[[str, type[T]], T | Awaitable[T]],
     ) -> dict[str, Any]:
-        """Execute LLM judge check with direct arguments."""
-        # Validate arguments
+        """
+        Execute LLM evaluation with fully processed arguments.
+
+        IMPORTANT: This method expects FULLY PROCESSED arguments with NO templates
+        or JSONPath expressions. All template processing and JSONPath resolution
+        should have been completed by the execute() method before this is called.
+
+        EXECUTION FLOW:
+        ==============
+
+        1. Validates argument types and constraints
+        2. Calls the provided LLM function with the processed prompt
+        3. Validates the LLM response against the expected format
+        4. Returns structured results as a dictionary
+
+        ARGUMENT EXPECTATIONS:
+        =====================
+
+        prompt (str):
+            - Must be a fully processed string with no template placeholders
+            - Should contain the final prompt text to send to the LLM
+            - All {{$.jsonpath}} expressions should already be resolved
+
+        response_format (type[BaseModel]):
+            - Must be a Pydantic BaseModel class (not instance)
+            - Defines the expected structure of the LLM response
+            - Used for response validation and type safety
+
+        llm_function (callable):
+            - Function or method to call for LLM evaluation
+            - Must accept (prompt: str, response_format: type[BaseModel])
+            - Can be synchronous or asynchronous
+            - Should return BaseModel instance or compatible data
+
+        **kwargs:
+            - Additional arguments are accepted but not used
+            - Allows for extensibility without breaking the interface
+
+        RESPONSE PROCESSING:
+        ===================
+
+        The LLM response is processed and validated as follows:
+        1. If response is BaseModel instance: convert to dict via model_dump()
+        2. If response is string: parse as JSON and validate against response_format
+        3. If response is dict: validate against response_format and convert
+        4. Any other type: raise ValidationError
+
+        Args:
+            prompt: Fully processed prompt string (no templates)
+            response_format: Pydantic model class defining expected response structure
+            llm_function: Callable to invoke LLM with the prompt
+            **kwargs: Additional arguments (passed through but not used)
+
+        Returns:
+            dict[str, Any]: Structured results matching the response_format schema
+
+        Raises:
+            ValidationError: If arguments are invalid or response format validation fails
+            CheckExecutionError: If LLM function execution fails
+
+        Example:
+            # This is what __call__ receives after execute() processes templates:
+            results = await check(
+                prompt="Evaluate: User asked 'What is Python?', AI responded 'Python is a programming language'",
+                response_format=QualityAssessment,
+                llm_function=my_llm_function
+            )
+            # Returns: {"score": 5, "reasoning": "Accurate and helpful response"}
+        """  # noqa: E501
+        # Validate argument types
         if not isinstance(prompt, str):
             raise ValidationError("prompt must be a string")
 
-        if not isinstance(response_format, dict):
-            raise ValidationError("response_format must be a dictionary (JSON Schema)")
+        if not (isinstance(response_format, type) and issubclass(response_format, BaseModel)):
+            raise ValidationError("response_format must be a Pydantic BaseModel class")
 
         if not callable(llm_function):
             raise ValidationError("llm_function must be callable")
 
         try:
-            # For now, use the prompt directly without template processing
-            # Template processing can be added back later with enhanced JSONPath resolver
-            llm_response = await self._call_llm_function(llm_function, prompt)
+            # Execute LLM evaluation with the fully processed prompt
+            llm_response = await self._call_llm_function(llm_function, prompt, response_format)
 
-            # Validate response against schema
+            # Validate and convert response to dict format
             return self._validate_response_format(llm_response, response_format)
 
         except Exception as e:
-            raise CheckExecutionError(
-                f"Error in LLM judge evaluation: {e!s}",
-            ) from e
+            raise CheckExecutionError(f"Error in LLM judge evaluation: {e!s}") from e
 
     def _process_prompt_template(self, template: str, context: EvaluationContext) -> str:
-        """Replace {{$.jsonpath}} placeholders in prompt template with resolved values."""
-        # Find all JSONPath placeholders in the format {{$.path}}
+        """
+        Process prompt template by resolving {{$.jsonpath}} placeholders.
+
+        This method handles the template processing phase of LLM judge execution.
+        It finds all template placeholders in the format {{$.jsonpath}} and replaces
+        them with values resolved from the evaluation context.
+
+        TEMPLATE SYNTAX:
+        ===============
+
+        Placeholders use the format: {{$.jsonpath.expression}}
+
+        Examples:
+        - {{$.test_case.input}} -> Resolves to the test case input value
+        - {{$.output.value.score}} -> Resolves to nested score in output
+        - {{$.test_case.metadata.source}} -> Resolves to metadata field
+
+        VALUE CONVERSION:
+        ================
+
+        Resolved values are converted to strings for template substitution:
+        - Strings: Used as-is
+        - Numbers/Booleans: Converted to string representation
+        - Objects/Arrays: JSON-serialized with ensure_ascii=False
+        - None/null: Converted to empty string
+
+        ERROR HANDLING:
+        ==============
+
+        If a JSONPath expression cannot be resolved:
+        - JSONPathError is raised with details about the failed expression
+        - The error includes the original JSONPath for debugging
+        - Template processing stops and error is propagated to execute()
+
+        Args:
+            template: Raw prompt template with {{$.jsonpath}} placeholders
+            context: Evaluation context containing test case and output data
+
+        Returns:
+            str: Processed prompt with all placeholders substituted with actual values
+
+        Raises:
+            JSONPathError: If any JSONPath expression cannot be resolved
+
+        Example:
+            template = "User asked: {{$.test_case.input}}, AI said: {{$.output.value}}"
+            context = EvaluationContext(
+                test_case=TestCase(input="What is AI?", ...),
+                output=Output(value="AI is artificial intelligence", ...)
+            )
+            result = self._process_prompt_template(template, context)
+            # result = "User asked: What is AI?, AI said: AI is artificial intelligence"
+        """
+        # Find all JSONPath placeholders using regex
         placeholder_pattern = r'\{\{\$\.([^}]+)\}\}'
         placeholders = re.findall(placeholder_pattern, template)
 
+        if not placeholders:
+            # No placeholders to process
+            return template
+
         processed_prompt = template
+
         for placeholder in placeholders:
             jsonpath_expr = f"$.{placeholder}"
             try:
-                # Convert EvaluationContext to dict for resolution
-                context_dict = {
-                    "test_case": {
-                        "id": context.test_case.id,
-                        "input": context.test_case.input,
-                        "expected": context.test_case.expected,
-                        "metadata": context.test_case.metadata,
-                    },
-                    "output": {
-                        "value": context.output.value,
-                        "metadata": context.output.metadata,
-                    },
-                }
-
-                # Resolve JSONPath expression
-                resolved_result = self.jsonpath_resolver.resolve_argument(
-                    jsonpath_expr, context_dict,
+                # Use the existing JSONPath resolver from base class
+                resolved_result = self._resolver.resolve_argument(
+                    jsonpath_expr,
+                    context.context_dict,
                 )
                 resolved_value = resolved_result.get("value")
 
-                # Convert to string for substitution
+                # Convert resolved value to string for substitution
                 if isinstance(resolved_value, dict | list):
+                    # JSON-serialize complex objects
                     value_str = json.dumps(resolved_value, ensure_ascii=False)
+                elif resolved_value is None:
+                    # Convert null to empty string
+                    value_str = ""
                 else:
-                    value_str = str(resolved_value) if resolved_value is not None else ""
+                    # Convert primitive types to string
+                    value_str = str(resolved_value)
 
-                # Replace the placeholder
+                # Replace the placeholder with the resolved value
                 placeholder_full = f"{{{{$.{placeholder}}}}}"
                 processed_prompt = processed_prompt.replace(placeholder_full, value_str)
 
-            except Exception:
-                # If JSONPath resolution fails, leave placeholder as-is for now
-                # This allows for more graceful degradation
-                continue
+            except Exception as e:
+                raise JSONPathError(
+                    f"Failed to resolve template placeholder '{{{{$.{placeholder}}}}}': {e}",
+                    jsonpath_expression=jsonpath_expr,
+                ) from e
 
         return processed_prompt
 
-    async def _call_llm_function(self, llm_function: Callable, prompt: str) -> object:
-        """Call the user-provided LLM function with error handling."""
+    async def _call_llm_function(
+        self,
+        llm_function: Callable[[str, type[T]], T | Awaitable[T]],
+        prompt: str,
+        response_format: type[T],
+    ) -> T:
+        """
+        Call the user-provided LLM function with proper error handling.
+
+        This method handles both synchronous and asynchronous LLM functions,
+        providing a consistent interface for LLM execution regardless of the
+        underlying implementation.
+
+        Args:
+            llm_function: User-provided function to call for LLM evaluation
+            prompt: Processed prompt string to send to LLM
+            response_format: Expected response format (Pydantic model class)
+
+        Returns:
+            T: Response from LLM function (typically BaseModel instance)
+
+        Raises:
+            CheckExecutionError: If LLM function execution fails
+        """
         try:
             # Handle both sync and async LLM functions
             if asyncio.iscoroutinefunction(llm_function):
-                result = await llm_function(prompt)
+                result = await llm_function(prompt, response_format)
             else:
-                result = llm_function(prompt)
+                result = llm_function(prompt, response_format)
             return result
 
         except Exception as e:
-            raise CheckExecutionError(
-                f"LLM function failed: {e!s}",
-            ) from e
+            raise CheckExecutionError(f"LLM function failed: {e!s}") from e
 
     def _validate_response_format(
-            self,
-            response: object,
-            schema: dict[str, Any],
-        ) -> dict[str, Any]:
-        """Validate LLM response against the provided JSON schema."""
-        # First, try to parse response as JSON if it's a string
+        self,
+        response: T,
+        response_format: type[T],
+    ) -> dict[str, Any]:
+        """
+        Validate LLM response and convert to standardized dict format.
+
+        This method ensures that the LLM response conforms to the expected format
+        and converts it to a dictionary for consistent result handling.
+
+        SUPPORTED RESPONSE TYPES:
+        ========================
+
+        1. BaseModel instance: Converted via model_dump()
+        2. JSON string: Parsed and validated against response_format
+        3. Dictionary: Validated against response_format
+        4. Other types: Rejected with ValidationError
+
+        Args:
+            response: Response from LLM function
+            response_format: Expected Pydantic model class
+
+        Returns:
+            dict[str, Any]: Validated response as dictionary
+
+        Raises:
+            ValidationError: If response cannot be validated or converted
+        """
+        # Handle BaseModel instances
+        if isinstance(response, BaseModel):
+            return response.model_dump()
+
+        # Handle JSON string responses
         if isinstance(response, str):
             try:
                 parsed_response = json.loads(response)
+                model_instance = response_format(**parsed_response)
+                return model_instance.model_dump()
             except json.JSONDecodeError as e:
                 raise ValidationError(f"LLM response is not valid JSON: {e!s}")
-        else:
-            parsed_response = response
+            except Exception as e:
+                raise ValidationError(f"Failed to create model from response: {e!s}")
 
-        # Basic schema validation
-        return self._validate_schema(parsed_response, schema)
+        # Handle dictionary responses
+        if isinstance(response, dict):
+            try:
+                model_instance = response_format(**response)
+                return model_instance.model_dump()
+            except Exception as e:
+                raise ValidationError(f"Failed to create model from response dict: {e!s}")
 
-
-    def _validate_schema(self, data: object, schema: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0911, PLR0912
-        """
-        Basic JSON Schema validation.
-
-        This is a simplified implementation that handles common schema patterns.
-        For production use, consider using a full JSON Schema validation library.
-        """
-        schema_type = schema.get("type")
-
-        if schema_type == "object":
-            if not isinstance(data, dict):
-                raise ValidationError(f"Expected object, got {type(data).__name__}")
-
-            # Validate required properties
-            required = schema.get("required", [])
-            for prop in required:
-                if prop not in data:
-                    raise ValidationError(f"Missing required property: {prop}")
-
-            # Validate properties
-            properties = schema.get("properties", {})
-            validated_data = {}
-            for key, value in data.items():
-                if key in properties:
-                    validated_data[key] = self._validate_schema(value, properties[key])
-                else:
-                    # Allow additional properties by default
-                    validated_data[key] = value
-
-            return validated_data
-
-        if schema_type == "string":
-            if not isinstance(data, str):
-                raise ValidationError(f"Expected string, got {type(data).__name__}")
-            return data
-
-        if schema_type == "number":
-            if not isinstance(data, int | float):
-                raise ValidationError(f"Expected number, got {type(data).__name__}")
-            return data
-
-        if schema_type == "integer":
-            if not isinstance(data, int):
-                raise ValidationError(f"Expected integer, got {type(data).__name__}")
-            return data
-
-        if schema_type == "boolean":
-            if not isinstance(data, bool):
-                raise ValidationError(f"Expected boolean, got {type(data).__name__}")
-            return data
-
-        if schema_type == "array":
-            if not isinstance(data, list):
-                raise ValidationError(f"Expected array, got {type(data).__name__}")
-
-            items_schema = schema.get("items")
-            if items_schema:
-                validated_items = []
-                for item in data:
-                    validated_items.append(self._validate_schema(item, items_schema))
-                return validated_items
-            return data
-
-        # If no type specified or unknown type, return as-is
-        return data
+        # Reject unsupported response types
+        raise ValidationError(f"Unexpected response type: {type(response)}")
