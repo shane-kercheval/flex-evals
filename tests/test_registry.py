@@ -1,11 +1,12 @@
 """Tests for check registry system."""
 
 import pytest
+import asyncio
 from typing import Any
-
 from flex_evals.registry import (
     CheckRegistry, register, get_check_class, get_check_info,
     is_async_check, list_registered_checks, clear_registry,
+    get_registry_state, restore_registry_state,
 )
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
 from flex_evals.constants import CheckType
@@ -286,3 +287,252 @@ class TestRegistryDecorator:
         check_class = get_check_class('semantic_similarity')
         assert check_class == TestAsyncCheck
         assert is_async_check('semantic_similarity')
+
+
+class TestRegistryStateSerialization:
+    """Test registry state serialization/deserialization functionality."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        # Clear global registry for clean tests
+        clear_registry()
+
+    def teardown_method(self):
+        """Clean up after tests."""
+        clear_registry()
+        # Restore standard checks for other tests
+        restore_standard_checks()
+
+    def test_get_registry_state_empty(self):
+        """Test getting state from empty registry."""
+        state = get_registry_state()
+        assert isinstance(state, dict)
+        assert len(state) == 0
+
+    def test_get_registry_state_with_checks(self):
+        """Test getting state with registered checks."""
+        @register("test_sync", version="1.0.0")
+        class TestSyncCheck(BaseCheck):
+            def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        @register("test_async", version="2.0.0")
+        class TestAsyncCheck(BaseAsyncCheck):
+            async def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        state = get_registry_state()
+
+        # Verify structure
+        assert isinstance(state, dict)
+        assert len(state) == 2
+        assert "test_sync" in state
+        assert "test_async" in state
+
+        # Verify sync check state
+        sync_state = state["test_sync"]
+        assert sync_state["class"] == TestSyncCheck
+        assert sync_state["version"] == "1.0.0"
+        assert sync_state["is_async"] is False
+
+        # Verify async check state
+        async_state = state["test_async"]
+        assert async_state["class"] == TestAsyncCheck
+        assert async_state["version"] == "2.0.0"
+        assert async_state["is_async"] is True
+
+    def test_restore_registry_state_empty(self):
+        """Test restoring empty registry state."""
+        # Register some checks first
+        @register("temp_check")
+        class TempCheck(BaseCheck):
+            def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Verify check is registered
+        assert len(list_registered_checks()) == 1
+
+        # Restore empty state
+        restore_registry_state({})
+
+        # Registry should be empty
+        assert len(list_registered_checks()) == 0
+        with pytest.raises(ValueError, match="is not registered"):
+            get_check_class("temp_check")
+
+    def test_restore_registry_state_with_checks(self):
+        """Test restoring registry state with checks."""
+        # Create test check classes
+        class RestoredSyncCheck(BaseCheck):
+            def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
+                return {"passed": True, "type": "sync"}
+
+        class RestoredAsyncCheck(BaseAsyncCheck):
+            async def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
+                return {"passed": True, "type": "async"}
+
+        # Create state to restore
+        state_to_restore = {
+            "restored_sync": {
+                "class": RestoredSyncCheck,
+                "version": "1.5.0",
+                "is_async": False,
+            },
+            "restored_async": {
+                "class": RestoredAsyncCheck,
+                "version": "2.5.0",
+                "is_async": True,
+            },
+        }
+
+        # Restore the state
+        restore_registry_state(state_to_restore)
+
+        # Verify checks are registered correctly
+        assert len(list_registered_checks()) == 2
+
+        # Test sync check
+        sync_class = get_check_class("restored_sync")
+        assert sync_class == RestoredSyncCheck
+        assert is_async_check("restored_sync") is False
+
+        sync_info = get_check_info("restored_sync")
+        assert sync_info["version"] == "1.5.0"
+        assert sync_info["is_async"] is False
+
+        # Test async check
+        async_class = get_check_class("restored_async")
+        assert async_class == RestoredAsyncCheck
+        assert is_async_check("restored_async") is True
+
+        async_info = get_check_info("restored_async")
+        assert async_info["version"] == "2.5.0"
+        assert async_info["is_async"] is True
+
+    def test_get_and_restore_registry_state_roundtrip(self):
+        """Test complete roundtrip: get state, clear, restore state."""
+        # Register original checks
+        @register("original_sync", version="1.0.0")
+        class OriginalSyncCheck(BaseCheck):
+            def __call__(self, test_value: str = "default", **kwargs) -> dict[str, Any]:  # noqa
+                return {"passed": True, "test_value": test_value}
+
+        @register("original_async", version="2.0.0")
+        class OriginalAsyncCheck(BaseAsyncCheck):
+            async def __call__(self, delay: float = 0.01, **kwargs) -> dict[str, Any]:  # noqa
+                await asyncio.sleep(delay)
+                return {"passed": True, "delay": delay}
+
+        # Capture original state
+        original_state = get_registry_state()
+        assert len(original_state) == 2
+
+        # Clear registry
+        clear_registry()
+        assert len(list_registered_checks()) == 0
+
+        # Restore original state
+        restore_registry_state(original_state)
+
+        # Verify everything is restored correctly
+        assert len(list_registered_checks()) == 2
+
+        # Test sync check functionality
+        sync_class = get_check_class("original_sync")
+        assert sync_class == OriginalSyncCheck
+
+        sync_instance = sync_class()
+        sync_result = sync_instance(test_value="custom_value")
+        assert sync_result["passed"] is True
+        assert sync_result["test_value"] == "custom_value"
+
+        # Test async check functionality
+        async_class = get_check_class("original_async")
+        assert async_class == OriginalAsyncCheck
+
+        # Verify metadata is preserved
+        sync_info = get_check_info("original_sync")
+        assert sync_info["version"] == "1.0.0"
+        assert sync_info["is_async"] is False
+
+        async_info = get_check_info("original_async")
+        assert async_info["version"] == "2.0.0"
+        assert async_info["is_async"] is True
+
+    def test_restore_registry_state_clears_existing(self):
+        """Test that restore_registry_state clears existing registrations."""
+        # Register initial checks
+        @register("initial_check")
+        class InitialCheck(BaseCheck):
+            def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        assert len(list_registered_checks()) == 1
+        assert "initial_check" in list_registered_checks()
+
+        # Create new state with different checks
+        class NewCheck(BaseCheck):
+            def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
+                return {"passed": False}
+
+        new_state = {
+            "new_check": {
+                "class": NewCheck,
+                "version": "3.0.0",
+                "is_async": False,
+            },
+        }
+
+        # Restore new state
+        restore_registry_state(new_state)
+
+        # Old check should be gone, new check should be present
+        assert len(list_registered_checks()) == 1
+        assert "new_check" in list_registered_checks()
+        assert "initial_check" not in list_registered_checks()
+
+        with pytest.raises(ValueError, match="is not registered"):
+            get_check_class("initial_check")
+
+        # New check should work
+        new_class = get_check_class("new_check")
+        assert new_class == NewCheck
+
+    def test_registry_state_serialization_types(self):
+        """Test that registry state contains proper types for serialization."""
+        @register("type_test", version="1.2.3")
+        class TypeTestCheck(BaseCheck):
+            def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        state = get_registry_state()
+
+        # Verify all values are serializable types
+        assert isinstance(state, dict)
+        assert isinstance(state["type_test"], dict)
+        assert isinstance(state["type_test"]["version"], str)
+        assert isinstance(state["type_test"]["is_async"], bool)
+
+        # Class should be the actual class object (this is what gets serialized)
+        assert state["type_test"]["class"] == TypeTestCheck
+
+    def test_restore_registry_state_with_enum_types(self):
+        """Test restoring state with CheckType enum compatibility."""
+        class EnumTestCheck(BaseCheck):
+            def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Create state using string key (how it's stored internally)
+        state_with_enum = {
+            "exact_match": {  # CheckType.EXACT_MATCH string value
+                "class": EnumTestCheck,
+                "version": "1.0.0",
+                "is_async": False,
+            },
+        }
+
+        restore_registry_state(state_with_enum)
+
+        # Should be retrievable by string
+        check_class = get_check_class("exact_match")
+        assert check_class == EnumTestCheck

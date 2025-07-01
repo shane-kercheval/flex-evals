@@ -49,6 +49,18 @@ class SlowAsyncCheck(BaseAsyncCheck):
         return {"passed": True, "delay_used": delay}
 
 
+class CustomUserCheck(BaseCheck):
+    """Custom check to verify parallel worker registry transfer."""
+
+    def __call__(self, test_value: str = "expected", **kwargs) -> dict[str, Any]:  # noqa
+        # Return a unique identifier to prove this exact check was executed
+        return {
+            "passed": True,
+            "check_identifier": "custom_user_check_v2",
+            "test_value": test_value,
+        }
+
+
 class TestEvaluationEngine:
     """Test evaluation engine functionality."""
 
@@ -184,14 +196,38 @@ class TestEvaluationEngine:
                 input="test",
                 checks=[Check(type="test_check", arguments={"expected": "Paris"})],
             ),
-            TestCase(id="test_002", input="test"),  # No checks
+            TestCase(
+                id="test_002",
+                input="test",
+                checks=[
+                    Check(type="test_check", arguments={"expected": "Richland"}),
+                    Check(type="test_check", arguments={"expected": "Seattle"}),
+                ],
+            ),
         ]
 
         result = evaluate(test_cases_mixed, self.outputs, checks=None)
 
         assert len(result.results) == 2
-        assert len(result.results[0].check_results) == 1  # Has check
-        assert len(result.results[1].check_results) == 0  # No checks
+        assert len(result.results[0].check_results) == 1
+        assert result.results[0].check_results[0].resolved_arguments["expected"]["value"] == "Paris"  # noqa: E501
+        assert len(result.results[1].check_results) == 2
+        assert result.results[1].check_results[0].resolved_arguments["expected"]["value"] == "Richland"  # noqa: E501
+        assert result.results[1].check_results[1].resolved_arguments["expected"]["value"] == "Seattle"  # noqa: E501
+
+    def test_evaluate_mixed_checks_none__missing_check_raises_error(self):
+        """Test some test cases have checks, others don't."""
+        test_cases_mixed = [
+            TestCase(
+                id="test_001",
+                input="test",
+                checks=[Check(type="test_check", arguments={"expected": "Paris"})],
+            ),
+            TestCase(id="test_002", input="test"),  # No checks
+        ]
+
+        with pytest.raises(ValidationError):
+            _ = evaluate(test_cases_mixed, self.outputs, checks=None)
 
     def test_evaluate_sync_only(self):
         """Test pure sync execution path."""
@@ -766,3 +802,301 @@ class TestEvaluationEngine:
         final_results = _reconstruct_check_order(sync_results, async_results, order_map)
 
         assert len(final_results) == 0
+
+    def test_evaluate_with_async_concurrency_limit(self):
+        """Test async concurrency control with max_async_concurrent parameter."""
+        # Create 10 async checks with delay
+        num_checks = 10
+        delay_per_check = 0.05
+        max_concurrent = 3
+
+        concurrent_checks = [
+            Check(
+                type="slow_async_check",
+                arguments={"delay": delay_per_check, "expected": "test"},
+            )
+            for _ in range(num_checks)
+        ]
+
+        start_time = time.time()
+        result = evaluate(
+            test_cases=[TestCase(id="test_1", input="test input", expected="test")],
+            outputs=[Output(value="test")],
+            checks=concurrent_checks,
+            max_async_concurrent=max_concurrent,
+        )
+        duration = time.time() - start_time
+
+        # Verify the evaluation completed successfully
+        assert result.status == 'completed'
+        assert len(result.results) == 1
+        test_result = result.results[0]
+        assert len(test_result.check_results) == num_checks
+
+        # All checks should pass
+        for check_result in test_result.check_results:
+            assert check_result.results["passed"] is True
+
+        # Duration should be roughly (num_checks / max_concurrent) * delay_per_check
+        # With max_concurrent=3 and 10 checks, we expect ~4 batches: 10/3 = 3.33 -> 4 batches
+        # So duration should be around 4 * 0.05 = 0.2s
+        expected_duration = (num_checks / max_concurrent) * delay_per_check
+        max_allowed_time = expected_duration + 0.15  # Buffer for overhead
+
+        assert duration < max_allowed_time, (
+            f"Async concurrency limit not working properly "
+            f"(took {duration:.3f}s, expected < {max_allowed_time:.3f}s)"
+        )
+
+    def test_evaluate_with_parallel_workers(self):
+        """Test parallel test case processing with max_parallel_workers parameter."""
+        # Create multiple test cases to distribute across workers
+        num_test_cases = 8
+        max_workers = 4
+
+        test_cases = [
+            TestCase(id=f"test_{i}", input=f"input_{i}", expected=f"output_{i}")
+            for i in range(num_test_cases)
+        ]
+
+        outputs = [
+            Output(value=f"output_{i}")
+            for i in range(num_test_cases)
+        ]
+
+        # Use sync checks to make timing more predictable
+        checks = [
+            Check(
+                type="test_check",
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            ),
+        ]
+
+        start_time = time.time()
+        result = evaluate(
+            test_cases=test_cases,
+            outputs=outputs,
+            checks=checks,
+            max_parallel_workers=max_workers,
+        )
+        time.time() - start_time
+
+        # Debug: print result details if there are errors
+        if result.status == 'error':
+            for test_result in result.results:
+                if test_result.status == 'error':
+                    for check_result in test_result.check_results:
+                        if check_result.status == 'error' and check_result.error:
+                            print(f"Error in {test_result.test_case_id}: {check_result.error.message}")  # noqa: E501
+
+        # Verify the evaluation completed successfully
+        assert result.status == 'completed'
+        assert len(result.results) == num_test_cases
+
+        # All test cases should pass (matching expected values)
+        for i, test_result in enumerate(result.results):
+            assert test_result.test_case_id == f"test_{i}"
+            assert test_result.status == 'completed'
+            assert len(test_result.check_results) == 1
+            assert test_result.check_results[0].results["passed"] is True
+
+        # Results should be in the same order as input
+        for i, test_result in enumerate(result.results):
+            assert test_result.test_case_id == f"test_{i}"
+
+    def test_evaluate_mixed_parallelization_and_async_concurrency(self):
+        """Test combination of parallel workers and async concurrency control."""
+        # Create test cases with async checks
+        num_test_cases = 6
+        num_async_checks_per_case = 4
+        max_workers = 3
+        max_async_concurrent = 2
+        delay_per_check = 0.03
+
+        test_cases = [
+            TestCase(id=f"test_{i}", input=f"input_{i}", expected="test")
+            for i in range(num_test_cases)
+        ]
+
+        outputs = [Output(value="test") for _ in range(num_test_cases)]
+
+        # Each test case gets multiple async checks
+        checks = [
+            Check(
+                type="slow_async_check",
+                arguments={"delay": delay_per_check, "expected": "test"},
+            )
+            for _ in range(num_async_checks_per_case)
+        ]
+
+        start_time = time.time()
+        result = evaluate(
+            test_cases=test_cases,
+            outputs=outputs,
+            checks=checks,
+            max_async_concurrent=max_async_concurrent,
+            max_parallel_workers=max_workers,
+        )
+        duration = time.time() - start_time
+
+        # Verify the evaluation completed successfully
+        assert result.status == 'completed'
+        assert len(result.results) == num_test_cases
+
+        # All checks should pass
+        for test_result in result.results:
+            assert test_result.status == 'completed'
+            assert len(test_result.check_results) == num_async_checks_per_case
+            for check_result in test_result.check_results:
+                assert check_result.results["passed"] is True
+
+        # Verify reasonable performance with both parallelization features
+        # This should be significantly faster than serial execution
+        max_allowed_time = 0.5  # Should be much faster than serial
+        assert duration < max_allowed_time, (
+            f"Combined parallelization too slow "
+            f"(took {duration:.3f}s, expected < {max_allowed_time:.1f}s)"
+        )
+
+    def test_evaluate_default_parameters_unchanged(self):
+        """Test that default behavior is unchanged when new parameters not specified."""
+        # This test ensures backward compatibility
+        result1 = evaluate(self.test_cases, self.outputs, self.shared_checks)
+
+        # Same call with explicit defaults
+        result2 = evaluate(
+            self.test_cases,
+            self.outputs,
+            self.shared_checks,
+            max_async_concurrent=None,
+            max_parallel_workers=1,
+        )
+
+        # Results should be identical (except for evaluation_id and timestamps)
+        assert result1.status == result2.status
+        assert len(result1.results) == len(result2.results)
+
+        for r1, r2 in zip(result1.results, result2.results):
+            assert r1.test_case_id == r2.test_case_id
+            assert r1.status == r2.status
+            assert len(r1.check_results) == len(r2.check_results)
+
+    def test_evaluate_single_worker_same_as_serial(self):
+        """Test that max_parallel_workers=1 produces same results as serial execution."""
+        # Test with both sync and async checks
+        mixed_checks = [
+            Check(type="test_check", arguments={"expected": "$.test_case.expected", "actual": "$.output.value"}),  # noqa: E501
+            Check(type="test_async_check", arguments={"expected": "$.test_case.expected", "actual": "$.output.value"}),  # noqa: E501
+        ]
+
+        # Serial execution (default)
+        result_serial = evaluate(self.test_cases, self.outputs, mixed_checks)
+
+        # Parallel with 1 worker (should be equivalent)
+        result_parallel = evaluate(
+            self.test_cases,
+            self.outputs,
+            mixed_checks,
+            max_parallel_workers=1,
+        )
+
+        # Results should be functionally identical
+        assert result_serial.status == result_parallel.status
+        assert len(result_serial.results) == len(result_parallel.results)
+
+        for r1, r2 in zip(result_serial.results, result_parallel.results):
+            assert r1.test_case_id == r2.test_case_id
+            assert r1.status == r2.status
+            assert len(r1.check_results) == len(r2.check_results)
+
+            # Check results should have same pass/fail status
+            for c1, c2 in zip(r1.check_results, r2.check_results):
+                assert c1.check_type == c2.check_type
+                assert c1.status == c2.status
+                assert c1.results.get("passed") == c2.results.get("passed")
+
+    def test_evaluate_async_concurrency_no_limit(self):
+        """Test that max_async_concurrent=None allows unlimited concurrency."""
+        # Create many async checks that should all run concurrently
+        num_checks = 20
+        delay_per_check = 0.05
+
+        concurrent_checks = [
+            Check(
+                type="slow_async_check",
+                arguments={"delay": delay_per_check, "expected": "test"},
+            )
+            for _ in range(num_checks)
+        ]
+
+        start_time = time.time()
+        result = evaluate(
+            test_cases=[TestCase(id="test_1", input="test", expected="test")],
+            outputs=[Output(value="test")],
+            checks=concurrent_checks,
+            max_async_concurrent=None,  # No limit
+        )
+        duration = time.time() - start_time
+
+        # Verify success
+        assert result.status == 'completed'
+
+        # Should complete in roughly delay_per_check time (all concurrent)
+        max_allowed_time = delay_per_check + 0.2  # Buffer
+        assert duration < max_allowed_time, (
+            f"Unlimited async concurrency not working "
+            f"(took {duration:.3f}s, expected < {max_allowed_time:.1f}s)"
+        )
+
+    def test_evaluate_custom_checks_available_in_parallel_workers(self):
+        """
+        Test that custom user-registered checks work correctly in parallel workers.
+
+        Note: Custom checks must be defined at module level (not locally) to be
+        serializable for multiprocessing. This is a limitation of Python's pickle module.
+        """
+        # Register the module-level custom check
+        register("custom_user_check", version="2.0.0")(CustomUserCheck)
+
+        # Create test cases that use the custom check
+        test_cases = [
+            TestCase(id=f"test_{i}", input=f"input_{i}", expected="test")
+            for i in range(4)
+        ]
+
+        outputs = [Output(value="test") for _ in range(4)]
+
+        # Use per-test-case checks with unique arguments per test case
+        per_test_case_checks = [
+            [Check(
+                type="custom_user_check",
+                arguments={"test_value": f"custom_value_{i}"},
+            )]
+            for i in range(4)
+        ]
+
+        # Execute with parallel workers
+        result = evaluate(
+            test_cases=test_cases,
+            outputs=outputs,
+            checks=per_test_case_checks,
+            max_parallel_workers=2,  # Force parallel execution
+        )
+
+        # Verify the evaluation completed successfully
+        assert result.status == 'completed'
+        assert len(result.results) == 4
+
+        # Verify each test case used the custom check correctly
+        for i, test_result in enumerate(result.results):
+            assert test_result.status == 'completed'
+            assert len(test_result.check_results) == 1
+
+            check_result = test_result.check_results[0]
+            assert check_result.check_type == "custom_user_check"
+            assert check_result.status == 'completed'
+
+            # Verify the custom check actually executed (not an error fallback)
+            assert check_result.results["passed"] is True
+            assert check_result.results["check_identifier"] == "custom_user_check_v2"
+            assert check_result.results["test_value"] == f"custom_value_{i}"

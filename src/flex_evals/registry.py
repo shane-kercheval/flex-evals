@@ -231,3 +231,28 @@ def list_registered_checks() -> dict[str, dict[str, Any]]:
 def clear_registry() -> None:
     """Clear all registered checks (useful for testing)."""
     _global_registry.clear()
+
+
+def get_registry_state() -> dict[str, dict[str, Any]]:
+    """
+    Get the current state of the registry for serialization.
+
+    Returns:
+        Dict containing all registered checks and their information
+    """
+    return _global_registry.list_registered_checks()
+
+
+def restore_registry_state(registry_state: dict[str, dict[str, Any]]) -> None:
+    """
+    Restore the registry state from serialized data.
+
+    Args:
+        registry_state: Dict containing check registrations to restore
+    """
+    # Clear current registry
+    _global_registry.clear()
+
+    # Restore each check registration
+    for check_type, info in registry_state.items():
+        _global_registry.register(check_type, info["class"], info["version"])

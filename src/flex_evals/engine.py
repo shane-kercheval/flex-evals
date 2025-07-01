@@ -8,6 +8,7 @@ outputs, and checks to produce evaluation results.
 import asyncio
 import uuid
 from datetime import datetime, UTC
+from concurrent.futures import ProcessPoolExecutor
 
 from .schemas import (
     TestCase, Output, Check, CheckResult, TestCaseResult, TestCaseSummary,
@@ -15,21 +16,28 @@ from .schemas import (
 )
 from .schemas.check import CheckError, CheckResultMetadata
 from .checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
-from .registry import get_check_class, is_async_check
+from .registry import get_check_class, is_async_check, get_registry_state, restore_registry_state
 from .exceptions import ValidationError
 
 
 def evaluate(
-    test_cases: list[TestCase],
-    outputs: list[Output],
-    checks: list[Check] | list[list[Check]] | None = None,
-    experiment_metadata: ExperimentMetadata | None = None,
-) -> EvaluationRunResult:
+        test_cases: list[TestCase],
+        outputs: list[Output],
+        checks: list[Check] | list[list[Check]] | None = None,
+        experiment_metadata: ExperimentMetadata | None = None,
+        max_async_concurrent: int | None = None,
+        max_parallel_workers: int = 1,
+    ) -> EvaluationRunResult:
     """
     Execute checks against test cases and their corresponding outputs.
 
     This is the main evaluation function that processes test cases, outputs, and checks
     to produce comprehensive evaluation results according to the FEP protocol.
+
+    Asynchronous checks are automatically detected and executed concurrently, while synchronous
+    checks are executed directly without event loop overhead. The `max_async_concurrent`
+    parameter allows limiting the number of concurrent async checks to prevent overwhelming any
+    external systems or APIs.
 
     Args:
         test_cases: List of test cases to evaluate
@@ -39,6 +47,8 @@ def evaluate(
             - List[List[Check]]: checks[i] applies to test_cases[i] (per-test-case pattern)
             - None: Extract checks from TestCase.checks field (convenience pattern)
         experiment_metadata: Optional experiment context information
+        max_async_concurrent: Maximum number of concurrent async "check" executions (default: no limit)
+        max_parallel_workers: Number of parallel worker processes (default: 1, no parallelization)
 
     Returns:
         Complete evaluation results with all test case results and summary statistics
@@ -50,18 +60,24 @@ def evaluate(
         - test_cases.length == outputs.length
         - test_cases[i] is associated with outputs[i]
         - Automatic async/sync detection based on check types
-    """
+    """  # noqa: E501
     started_at = datetime.now(UTC)
     evaluation_id = str(uuid.uuid4())
 
-    # Validate input constraints
+    # Validate input constraints according to FEP protocol
     _validate_inputs(test_cases, outputs, checks)
 
-    # Resolve checks for each test case
+    # checks are either shared across all test cases or per-test-case
     resolved_checks = _resolve_checks(test_cases, checks)
 
-    # Execute evaluation with optimal sync/async separation
-    test_case_results = _evaluate(test_cases, outputs, resolved_checks)
+    # Execute evaluation with optimal sync/async separation and parallelization
+    if max_parallel_workers > 1:
+        test_case_results = _evaluate_parallel(
+            test_cases, outputs, resolved_checks, max_async_concurrent, max_parallel_workers,
+        )
+    else:
+        work_items = list(zip(test_cases, outputs, resolved_checks))
+        test_case_results = _evaluate(work_items, max_async_concurrent)
 
     completed_at = datetime.now(UTC)
 
@@ -81,10 +97,10 @@ def evaluate(
 
 
 def _validate_inputs(
-    test_cases: list[TestCase],
-    outputs: list[Output],
-    checks: list[Check] | list[list[Check]] | None,
-) -> None:
+        test_cases: list[TestCase],
+        outputs: list[Output],
+        checks: list[Check] | list[list[Check]] | None,
+    ) -> None:
     """Validate evaluation inputs according to FEP protocol."""
     if len(test_cases) != len(outputs):
         raise ValidationError(
@@ -95,19 +111,32 @@ def _validate_inputs(
     if len(test_cases) == 0:
         raise ValidationError("At least one test case is required for evaluation")
 
-    # Validate per-test-case checks pattern
-    if isinstance(checks, list) and len(checks) > 0 and isinstance(checks[0], list):  # noqa: SIM102
+    # if checks is None, checks are expected to be defined in TestCase.checks
+    if not checks:
+        for test_case in test_cases:
+            if test_case.checks is None:
+                raise ValidationError(
+                    "When checks is None, each TestCase must define its own checks",
+                )
+    # if checks is a list of lists, then the outer list must match test_cases length
+    elif isinstance(checks, list) and len(checks) > 0 and isinstance(checks[0], list):
         if len(checks) != len(test_cases):
             raise ValidationError(
                 f"When using per-test-case checks pattern, checks list must have same length as test_cases. "  # noqa: E501
                 f"Got {len(checks)} check lists and {len(test_cases)} test cases",
             )
+    # otherwise, checks must be a single list of Check objects
+    else:  # noqa: PLR5501
+        if not all(isinstance(check, Check) for check in checks):
+            raise ValidationError(
+                "When using shared checks pattern, checks must be a list of Check objects",
+            )
 
 
 def _resolve_checks(
-    test_cases: list[TestCase],
-    checks: list[Check] | list[list[Check]] | None,
-) -> list[list[Check]]:
+        test_cases: list[TestCase],
+        checks: list[Check] | list[list[Check]] | None,
+    ) -> list[list[Check]]:
     """
     Resolve checks for each test case according to FEP patterns.
 
@@ -137,14 +166,13 @@ def _resolve_checks(
 
 
 def _evaluate(
-    test_cases: list[TestCase],
-    outputs: list[Output],
-    resolved_checks: list[list[Check]],
-) -> list[TestCaseResult]:
+        work_items: list[tuple[TestCase, Output, list[Check]]],
+        max_async_concurrent: int | None = None,
+    ) -> list[TestCaseResult]:
     """Execute evaluation with optimal sync/async separation."""
     results = []
 
-    for (test_case, output, checks) in zip(test_cases, outputs, resolved_checks):
+    for (test_case, output, checks) in work_items:
         context = EvaluationContext(test_case, output)
 
         # Separate checks by type and track original order
@@ -155,7 +183,9 @@ def _evaluate(
 
         # Execute async checks concurrently (only if needed)
         if async_checks:
-            async_results = asyncio.run(_execute_async_checks_concurrent(async_checks, context))
+            async_results = asyncio.run(
+                _execute_async_checks_concurrent(async_checks, context, max_async_concurrent),
+            )
         else:
             async_results = []
 
@@ -169,9 +199,62 @@ def _evaluate(
     return results
 
 
+def _evaluate_parallel(
+        test_cases: list[TestCase],
+        outputs: list[Output],
+        resolved_checks: list[list[Check]],
+        max_async_concurrent: int | None = None,
+        max_parallel_workers: int = 2,
+    ) -> list[TestCaseResult]:
+    """Execute evaluation with parallel processing across test cases."""
+    # Get current registry state to pass to workers; registered checks are not available in
+    # worker processes, so we need to restore the registry state in each worker.
+    registry_state = get_registry_state()
+
+    # Prepare data for multiprocessing - group test cases with their data
+    work_items = list(zip(test_cases, outputs, resolved_checks))
+
+    # Split work items across workers
+    chunk_size = max(1, len(work_items) // max_parallel_workers)
+    work_chunks = [
+        work_items[i:i + chunk_size]
+        for i in range(0, len(work_items), chunk_size)
+    ]
+
+    # Execute in parallel using ProcessPoolExecutor
+    with ProcessPoolExecutor(max_workers=max_parallel_workers) as executor:
+        futures = []
+        for chunk in work_chunks:
+            future = executor.submit(
+                _evaluate_with_registry, chunk, max_async_concurrent, registry_state,
+            )
+            futures.append(future)
+
+        # Collect results maintaining order
+        all_results = []
+        for future in futures:
+            chunk_results = future.result()
+            all_results.extend(chunk_results)
+
+    return all_results
+
+
+def _evaluate_with_registry(
+        work_items: list[tuple[TestCase, Output, list[Check]]],
+        max_async_concurrent: int | None = None,
+        registry_state: dict | None = None,
+    ) -> list[TestCaseResult]:
+    """Evaluate work items in a separate process with registry restoration."""
+    # Restore registry state in the worker process
+    if registry_state:
+        restore_registry_state(registry_state)
+
+    return _evaluate(work_items, max_async_concurrent)
+
+
 def _separate_checks_by_type(
-    checks: list[Check],
-) -> tuple[list[Check], list[Check], list[tuple[str, int]]]:
+        checks: list[Check],
+    ) -> tuple[list[Check], list[Check], list[tuple[str, int]]]:
     """
     Separate checks into sync and async lists, tracking original order.
 
@@ -226,47 +309,64 @@ def _execute_sync_check(check: Check, context: EvaluationContext) -> CheckResult
 
 
 async def _execute_async_checks_concurrent(
-    async_checks: list[Check], context: EvaluationContext,
-) -> list[CheckResult]:
+        async_checks: list[Check],
+        context: EvaluationContext,
+        max_async_concurrent: int | None = None,
+    ) -> list[CheckResult]:
     """Execute multiple async checks concurrently."""
+    # Create semaphore if concurrency limit is specified
+    semaphore = asyncio.Semaphore(max_async_concurrent) if max_async_concurrent else None
+
     tasks = []
     for check in async_checks:
-        task = asyncio.create_task(_execute_async_check(check, context))
+        task = asyncio.create_task(_execute_async_check(check, context, semaphore))
         tasks.append(task)
 
     return await asyncio.gather(*tasks)
 
 
-async def _execute_async_check(check: Check, context: EvaluationContext) -> CheckResult:
+async def _execute_async_check(
+        check: Check,
+        context: EvaluationContext,
+        semaphore: asyncio.Semaphore | None = None,
+    ) -> CheckResult:
     """Execute a single asynchronous check and return the result."""
-    try:
-        check_class = get_check_class(check.type)
-        check_instance = check_class()
+    async def _run_check() -> CheckResult:
+        try:
+            check_class = get_check_class(check.type)
+            check_instance = check_class()
 
-        # Ensure this is an async check
-        if not isinstance(check_instance, BaseAsyncCheck):
-            raise ValidationError(
-                f"Check type '{check.type}' is sync but was categorized as async",
+            # Ensure this is an async check
+            if not isinstance(check_instance, BaseAsyncCheck):
+                raise ValidationError(
+                    f"Check type '{check.type}' is sync but was categorized as async",
+                )
+
+            # Execute the check
+            return await check_instance.execute(
+                check_type=check.type,
+                arguments=check.arguments,
+                context=context,
+                check_version=check.version,
             )
 
-        # Execute the check
-        return await check_instance.execute(
-            check_type=check.type,
-            arguments=check.arguments,
-            context=context,
-            check_version=check.version,
-        )
+        except Exception as e:
+            # Create error result for unhandled exceptions
+            return _create_error_check_result(check, context, str(e))
 
-    except Exception as e:
-        # Create error result for unhandled exceptions
-        return _create_error_check_result(check, context, str(e))
+    # Use semaphore if provided, otherwise run directly
+    if semaphore:
+        async with semaphore:
+            return await _run_check()
+    else:
+        return await _run_check()
 
 
 def _reconstruct_check_order(
-    sync_results: list[CheckResult],
-    async_results: list[CheckResult],
-    order_map: list[tuple[str, int]],
-) -> list[CheckResult]:
+        sync_results: list[CheckResult],
+        async_results: list[CheckResult],
+        order_map: list[tuple[str, int]],
+    ) -> list[CheckResult]:
     """Reconstruct check results in their original order."""
     final_results = []
     sync_idx = 0
@@ -286,7 +386,8 @@ def _reconstruct_check_order(
 def _create_error_check_result(
         check: Check,
         context: EvaluationContext,
-        error_message: str) -> CheckResult:
+        error_message: str,
+    ) -> CheckResult:
     """Create a CheckResult for unhandled errors during check execution."""
     return CheckResult(
         check_type=check.type,
