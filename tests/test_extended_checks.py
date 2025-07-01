@@ -3,11 +3,12 @@
 import pytest
 import json
 from datetime import datetime, UTC
-from typing import Any
+from typing import Any, Never
 
 from pydantic import BaseModel, Field
 
 from flex_evals.checks.extended.llm_judge import LlmJudgeCheck
+from flex_evals.checks.extended.custom_function import CustomFunctionCheck
 from flex_evals.checks.base import EvaluationContext
 from flex_evals.constants import CheckType, Status
 from flex_evals.engine import evaluate
@@ -989,3 +990,354 @@ class TestLlmJudgeCheck:
             "Good",
             "Poor",
         ]
+
+
+class TestCustomFunctionCheck:
+    """Test Custom Function check implementation."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.check = CustomFunctionCheck()
+        self.test_case = TestCase(
+            id="test_001",
+            input="What is the capital of France?",
+            expected="Paris",
+            metadata={"category": "geography"},
+        )
+        self.output = Output(
+            value="The capital of France is Paris.",
+            metadata={"model": "gpt-4"},
+        )
+        self.context = EvaluationContext(self.test_case, self.output)
+
+    @pytest.mark.asyncio
+    async def test_call_with_direct_callable(self):
+        """Test with direct Python function."""
+        def validator(text):  # noqa: ANN001, ANN202
+            return "Paris" in text
+
+        result = await self.check(
+            validation_function=validator,
+            function_args={"text": "The capital of France is Paris."},
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_call_with_lambda_string(self):
+        """Test with lambda as string."""
+        result = await self.check(
+            validation_function="lambda text: 'Paris' in text",
+            function_args={"text": "The capital of France is Paris."},
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_call_with_function_string(self):
+        """Test with function definition as string."""
+        func_str = """def validate(text, city):
+    return city.lower() in text.lower()"""
+
+        result = await self.check(
+            validation_function=func_str,
+            function_args={"text": "The capital of France is Paris.", "city": "Paris"},
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_call_with_async_function(self):
+        """Test with async function."""
+        async def async_validator(text):  # noqa: ANN001, ANN202
+            import asyncio  # noqa: PLC0415
+            await asyncio.sleep(0.001)
+            return {"passed": "capital" in text.lower(), "async": True}
+
+        result = await self.check(
+            validation_function=async_validator,
+            function_args={"text": "The capital of France is Paris."},
+        )
+        assert result["passed"] is True
+        assert result["async"] is True
+
+    @pytest.mark.asyncio
+    async def test_call_with_async_function_string(self):
+        """Test with async function definition as string."""
+        func_str = """async def validate_async(text):
+    import asyncio
+    await asyncio.sleep(0.001)
+    return {"passed": "Paris" in text, "async_string": True}"""
+
+        result = await self.check(
+            validation_function=func_str,
+            function_args={"text": "The capital of France is Paris."},
+        )
+        assert result["passed"] is True
+        assert result["async_string"] is True
+
+    @pytest.mark.asyncio
+    async def test_call_various_return_types(self):
+        """Test functions returning different types."""
+        # Boolean
+        result = await self.check(
+            validation_function=lambda _: True,
+            function_args={"_": "dummy"},
+        )
+        assert result is True
+
+        # Number
+        result = await self.check(
+            validation_function=lambda _: 0.85,
+            function_args={"_": "dummy"},
+        )
+        assert result == 0.85
+
+        # Dict
+        result = await self.check(
+            validation_function=lambda _: {"score": 42},
+            function_args={"_": "dummy"},
+        )
+        assert result == {"score": 42}
+
+        # None
+        result = await self.check(
+            validation_function=lambda _: None,
+            function_args={"_": "dummy"},
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_call_with_imports(self):
+        """Test string function using imports."""
+        func_str = """def validate(text):
+    import re
+    return bool(re.search(r'[Pp]aris', text))"""
+
+        result = await self.check(
+            validation_function=func_str,
+            function_args={"text": "The capital of France is Paris."},
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_call_with_provided_imports(self):
+        """Test string function using pre-provided imports."""
+        func_str = """def validate(data):
+    return json.loads(data)['valid']"""
+
+        result = await self.check(
+            validation_function=func_str,
+            function_args={"data": '{"valid": true}'},
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_call_error_handling(self):
+        """Test error handling."""
+        # Invalid function type
+        with pytest.raises(ValidationError, match="validation_function must be callable or string"):  # noqa: E501
+            await self.check(validation_function=123, function_args={"x": "test"})
+
+        # Invalid function_args type
+        with pytest.raises(ValidationError, match="function_args must be a dictionary"):
+            await self.check(validation_function=lambda _: True, function_args="not a dict")
+
+        # Function execution error
+        def failing_func(x) -> Never:  # noqa: ANN001, ARG001
+            raise ValueError("Test error")
+
+        with pytest.raises(CheckExecutionError, match="Error executing validation function.*Test error"):  # noqa: E501
+            await self.check(validation_function=failing_func, function_args={"x": "test"})
+
+        # Invalid string function
+        with pytest.raises(ValidationError, match="Failed to create function from string"):
+            await self.check(validation_function="invalid syntax (", function_args={"x": "test"})
+
+    @pytest.mark.asyncio
+    async def test_execute_missing_function_args(self):
+        """Test execute method with missing function_args."""
+        result = await self.check.execute(
+            check_type="custom_function",
+            arguments={
+                "validation_function": lambda x: {"passed": True},  # noqa: ARG005
+                # Missing function_args
+            },
+            context=self.context,
+        )
+
+        assert result.status == Status.ERROR
+        assert result.error.type == "validation_error"
+        assert "function_args is required" in result.error.message
+
+    @pytest.mark.asyncio
+    async def test_execute_invalid_function_args_type(self):
+        """Test execute method with invalid function_args type."""
+        result = await self.check.execute(
+            check_type="custom_function",
+            arguments={
+                "validation_function": lambda x: {"passed": True},  # noqa: ARG005
+                "function_args": "not a dict",  # Invalid type
+            },
+            context=self.context,
+        )
+
+        assert result.status == Status.ERROR
+        assert result.error.type == "validation_error"
+        assert "function_args must be a dictionary" in result.error.message
+
+    @pytest.mark.asyncio
+    async def test_execute_with_jsonpath(self):
+        """Test execute method with JSONPath resolution."""
+        def validator(actual, expected, test_id):  # noqa: ANN001, ANN202
+            return {
+                "passed": expected.lower() in actual.lower(),
+                "test_id": test_id,
+            }
+
+        result = await self.check.execute(
+            check_type="custom_function",
+            arguments={
+                "validation_function": validator,
+                "function_args": {
+                    "actual": "$.output.value",
+                    "expected": "$.test_case.expected",
+                    "test_id": "$.test_case.id",
+                },
+            },
+            context=self.context,
+        )
+
+        assert result.status == Status.COMPLETED
+        assert result.results["passed"] is True
+        assert result.results["test_id"] == "test_001"
+
+    def test_custom_function_via_evaluate(self):
+        """Test end-to-end via evaluate function."""
+        def keyword_checker(text, keywords):  # noqa: ANN001, ANN202
+            found = [kw for kw in keywords if kw.lower() in text.lower()]
+            return {
+                "passed": len(found) >= len(keywords) // 2,
+                "found": found,
+                "coverage": len(found) / len(keywords),
+            }
+
+        test_cases = [
+            TestCase(
+                id="test_keywords",
+                input="Explain machine learning",
+                expected={"keywords": ["machine", "learning", "data"]},
+                checks=[
+                    Check(
+                        type="custom_function",
+                        arguments={
+                            "validation_function": keyword_checker,
+                            "function_args": {
+                                "text": "$.output.value",
+                                "keywords": "$.test_case.expected.keywords",
+                            },
+                        },
+                    ),
+                ],
+            ),
+        ]
+
+        outputs = [
+            Output(value="Machine learning uses data and algorithms to learn patterns."),
+        ]
+
+        results = evaluate(test_cases, outputs)
+
+        assert results.summary.total_test_cases == 1
+        assert results.summary.completed_test_cases == 1
+        assert results.results[0].check_results[0].results["passed"] is True
+        assert results.results[0].check_results[0].results["coverage"] == 1.0
+
+    def test_custom_function_parallel_execution_with_lambdas(self):
+        """Test parallel execution with lambda functions to ensure no pickling issues."""
+        # Test both lambda strings and direct lambdas in parallel execution
+        test_cases = [
+            TestCase(
+                id=f"test_{i}",
+                input=f"Test input {i}",
+                expected=f"expected_{i}",
+                checks=[
+                    Check(
+                        type="custom_function",
+                        arguments={
+                            # Lambda as string - should work in parallel
+                            "validation_function": f"lambda x, expected: {{'passed': expected == 'expected_{i}' and '{i}' in x}}",  # noqa: E501
+                            "function_args": {
+                                "x": "$.test_case.input",
+                                "expected": "$.test_case.expected",
+                            },
+                        },
+                    ),
+                ],
+            )
+            for i in range(5)
+        ]
+
+        outputs = [
+            Output(value=f"Output for test {i}")
+            for i in range(5)
+        ]
+
+        # This will use parallel execution for multiple test cases
+        results = evaluate(test_cases, outputs)
+
+        assert results.summary.total_test_cases == 5
+        assert results.summary.completed_test_cases == 5
+        assert results.summary.error_test_cases == 0
+
+        # All should pass since the lambda checks that the index matches
+        for i, result in enumerate(results.results):
+            assert result.status == Status.COMPLETED
+            assert result.check_results[0].status == Status.COMPLETED
+            assert result.check_results[0].results["passed"] is True
+
+    def test_custom_function_parallel_with_direct_lambdas(self):
+        """Test parallel execution with direct Python lambdas (potential pickling issues)."""
+        # Direct Python lambdas can have pickling issues in multiprocessing
+        # Let's test if they work or if we need to document this limitation
+
+        # Create lambdas that capture variables from scope
+        validators = [
+            lambda text: {"passed": "test 0" in text.lower()},
+            lambda text: {"passed": "test 1" in text.lower()},
+            lambda text: {"passed": "test 2" in text.lower()},
+        ]
+
+        test_cases = [
+            TestCase(
+                id=f"test_{i}",
+                input=f"This is test {i}",
+                expected=True,
+                checks=[
+                    Check(
+                        type="custom_function",
+                        arguments={
+                            "validation_function": validators[i],
+                            "function_args": {
+                                "text": "$.test_case.input",
+                            },
+                        },
+                    ),
+                ],
+            )
+            for i in range(3)
+        ]
+
+        outputs = [
+            Output(value=f"Output {i}")
+            for i in range(3)
+        ]
+
+        # Direct lambdas work fine in parallel execution (no pickling issues)
+        results = evaluate(test_cases, outputs)
+
+        assert results.summary.total_test_cases == 3
+        assert results.summary.completed_test_cases == 3
+        assert results.summary.error_test_cases == 0
+
+        for result in results.results:
+            assert result.status == Status.COMPLETED
+            assert result.check_results[0].status == Status.COMPLETED
+            assert result.check_results[0].results["passed"] is True
