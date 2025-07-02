@@ -325,31 +325,41 @@ Check(type='threshold', arguments={
 ### **Extended Checks (Async)**
 
 #### **`semantic_similarity`**
+
 Measure semantic similarity using embeddings:
+
 ```python
-Check(type='semantic_similarity', arguments={
-    "text": "$.output.value",
-    "reference": "$.test_case.expected",
-    "embedding_function": your_async_embedding_function,
-    'threshold': {"min_value": 0.8},
-    "similarity_metric": 'cosine'  # Default
-})
+TBD
 ```
 
 #### **`llm_judge`**
-Use LLM for qualitative evaluation:
+
+Use an LLM for qualitative evaluation:
+
 ```python
-Check(type='llm_judge', arguments={
-    "prompt": "Rate this response for helpfulness: {{$.output.value}}",
-    "response_format": {
-        "type": "object",
-        "properties": {
-            "score": {"type": "number"},
-            "reasoning": {"type": "string"}
-        }
+class HelpfulnessScore(BaseModel):  # Pydantic model for Judge format.
+    score: int = Field(description="Rate the response on a scale of 1-5h.")
+    reasoning: str = Field(description="Brief explanation of the score.")
+
+async def llm_judge(prompt: str, response_format: type[BaseModel]):
+    response = ...
+    metadata = {
+        "cost_usd": ...,
+        "response_time_ms": ...,
+        "model_name": ...,
+        "model_version": ...,
+    }
+    return response, metadata
+
+Check(
+    type=CheckType.LLM_JUDGE,  # Can also use 'llm_judge' string
+    arguments={
+        # use JSONPath to access nested output value
+        "prompt": "Rate this response for helpfulness: {{$.output.value.parsed}}",
+        "response_format": HelpfulnessScore,
+        "llm_function": llm_judge
     },
-    "llm_function": your_async_llm_function
-})
+)
 ```
 
 ## JSONPath Support
@@ -391,7 +401,7 @@ flex-evals automatically detects and optimizes async checks:
 ```python
 # Mix of sync and async checks
 checks = [
-    Check(type='exact_match', arguments={"actual": "$.output.value", "expected": "Paris"}),  # Sync
+    Check(type='exact_match', arguments={...}),  # Sync
     Check(type='semantic_similarity', arguments={...})  # Async
 ]
 
