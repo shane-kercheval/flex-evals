@@ -352,7 +352,7 @@ Check(type='llm_judge', arguments={
 })
 ```
 
-## 🔍 JSONPath Support
+## JSONPath Support
 
 Access data anywhere in the evaluation context using JSONPath expressions:
 
@@ -384,7 +384,7 @@ Access data anywhere in the evaluation context using JSONPath expressions:
 - Use `\\$.` to escape literal strings that start with `$.`
 - All other values are treated as literals
 
-## ⚡ Async Evaluation
+## Async Evaluation
 
 flex-evals automatically detects and optimizes async checks:
 
