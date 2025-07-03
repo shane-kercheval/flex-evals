@@ -567,17 +567,15 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes with tests
-4. Run quality checks (`make tests`)
+4. Run linting and unit tests (`make tests`)
 5. Commit changes (`git commit -m 'Add amazing feature'`)
 6. Push to branch (`git push origin feature/amazing-feature`)
 7. Open a Pull Request
 
 ### **Development Principles**
 
-- **Test-driven development** - Write tests first, run frequently
-- **Protocol compliance** - Maintain full FEP specification adherence
-- **Clean interfaces** - Pythonic, type-safe APIs
-- **Performance** - Optimize for large-scale evaluations
+- **Comphensive Unit Tests** - Ensure all new features have tests
+- **Consistent Style** - Follow PEP 8 and use `ruff` for linting
 - **Documentation** - Clear examples and comprehensive docs
 
 ## License
