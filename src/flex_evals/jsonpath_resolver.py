@@ -6,6 +6,7 @@ and proper formatting of resolved arguments according to FEP protocol.
 """
 
 from typing import Any
+from dataclasses import asdict
 from jsonpath_ng import parse as jsonpath_parse
 from jsonpath_ng.exceptions import JSONPathError as JSONPathNGError
 
@@ -129,16 +130,8 @@ class JSONPathResolver:
             }
         """
         return {
-            "test_case": {
-                "id": test_case.id,
-                "input": test_case.input,
-                "expected": test_case.expected,
-                "metadata": test_case.metadata,
-            },
-            "output": {
-                "value": output.value,
-                "metadata": output.metadata,
-            },
+            'test_case': asdict(test_case),
+            'output': asdict(output),
         }
 
     def resolve_arguments(
