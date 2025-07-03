@@ -398,8 +398,8 @@ async def llm_judge(prompt: str, response_format: type[BaseModel]):
 Check(
     type=CheckType.LLM_JUDGE,  # Can also use 'llm_judge' string
     arguments={
-        # use JSONPath to access nested output value
-        'prompt': "Rate this response for helpfulness: {{$.output.value.parsed}}",
+        # use JSONPath to access nested output value (e.g. output['value']['response'])
+        'prompt': "Rate this response for helpfulness: {{$.output.value.response}}",
         'response_format': HelpfulnessScore,
         'llm_function': llm_judge
     },
