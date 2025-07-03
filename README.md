@@ -381,7 +381,7 @@ TBD
 Use an LLM for qualitative evaluation:
 
 ```python
-class HelpfulnessScore(BaseModel):  # Pydantic model for Judge format.
+class HelpfulnessScore(BaseModel):  # Pydantic model defining Judge format.
     score: int = Field(description="Rate the response on a scale of 1-5h.")
     reasoning: str = Field(description="Brief explanation of the score.")
 
