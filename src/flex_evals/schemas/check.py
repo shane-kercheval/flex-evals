@@ -57,17 +57,15 @@ class CheckError:
 
 @dataclass
 class CheckResultMetadata:
-    """Contextual metadata for check results."""
+    """Check-specific metadata about execution and configuration."""
 
-    test_case_id: str
-    test_case_metadata: dict[str, Any] | None = None
-    output_metadata: dict[str, Any] | None = None
     check_version: str | None = None
+    execution_time_ms: float | None = None
 
     def __post_init__(self):
-        """Validate required fields."""
-        if not self.test_case_id:
-            raise ValueError("CheckResultMetadata.test_case_id is required")
+        """Validate metadata fields."""
+        if self.execution_time_ms is not None and self.execution_time_ms < 0:
+            raise ValueError("CheckResultMetadata.execution_time_ms must be non-negative")
 
 
 @dataclass
@@ -76,7 +74,7 @@ class CheckResult:
     Represents the complete results of executing a single check against a test case and system
     output.
 
-    This format provides full auditability by capturing the execution context metadata,
+    This format provides full auditability by capturing the execution context,
     resolved arguments, check outcome, and any errors that occurred.
 
     Required Fields:
@@ -85,9 +83,9 @@ class CheckResult:
     - results: Check outcome data (structure defined by check type)
     - resolved_arguments: Arguments after JSONPath resolution
     - evaluated_at: UTC timestamp when check was evaluated
-    - metadata: Contextual metadata including test_case_id
 
     Optional Fields:
+    - metadata: Check-specific metadata about execution and configuration
     - error: Error details (only present when status is 'error')
     """
 
@@ -96,7 +94,7 @@ class CheckResult:
     results: dict[str, Any]
     resolved_arguments: dict[str, Any]
     evaluated_at: datetime
-    metadata: CheckResultMetadata
+    metadata: CheckResultMetadata | None = None
     error: CheckError | None = None
 
     def __post_init__(self):
@@ -109,9 +107,6 @@ class CheckResult:
 
         if not isinstance(self.resolved_arguments, dict):
             raise ValueError("CheckResult.resolved_arguments must be a dictionary")
-
-        if not self.metadata.test_case_id:
-            raise ValueError("CheckResult.metadata.test_case_id is required")
 
         if self.status == 'error' and self.error is None:
             raise ValueError("CheckResult.error is required when status is 'error'")

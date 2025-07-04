@@ -14,6 +14,7 @@ from .schemas import (
     TestCase, Output, Check, CheckResult, TestCaseResult, TestCaseSummary,
     EvaluationRunResult, EvaluationSummary, ExperimentMetadata,
 )
+from .schemas.results import ExecutionContext
 from .schemas.check import CheckError, CheckResultMetadata
 from .checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
 from .registry import get_check_class, is_async_check, get_registry_state, restore_registry_state
@@ -193,7 +194,7 @@ def _evaluate(
         check_results = _reconstruct_check_order(sync_results, async_results, order_map)
 
         # Create test case result
-        test_case_result = _create_test_case_result(test_case.id, check_results)
+        test_case_result = _create_test_case_result(check_results, context)
         results.append(test_case_result)
 
     return results
@@ -305,7 +306,7 @@ def _execute_sync_check(check: Check, context: EvaluationContext) -> CheckResult
 
     except Exception as e:
         # Create error result for unhandled exceptions
-        return _create_error_check_result(check, context, str(e))
+        return _create_error_check_result(check, str(e))
 
 
 async def _execute_async_checks_concurrent(
@@ -352,7 +353,7 @@ async def _execute_async_check(
 
         except Exception as e:
             # Create error result for unhandled exceptions
-            return _create_error_check_result(check, context, str(e))
+            return _create_error_check_result(check, str(e))
 
     # Use semaphore if provided, otherwise run directly
     if semaphore:
@@ -385,7 +386,6 @@ def _reconstruct_check_order(
 
 def _create_error_check_result(
         check: Check,
-        context: EvaluationContext,
         error_message: str,
     ) -> CheckResult:
     """Create a CheckResult for unhandled errors during check execution."""
@@ -396,11 +396,8 @@ def _create_error_check_result(
         resolved_arguments={},
         evaluated_at=datetime.now(UTC),
         metadata=CheckResultMetadata(
-            test_case_id=context.test_case.id,
-            test_case_metadata=context.test_case.metadata,
-            output_metadata=context.output.metadata,
             check_version=check.version,
-        ),
+        ) if check.version else None,
         error=CheckError(
             type='unknown_error',
             message=f"Unhandled error during check execution: {error_message}",
@@ -410,10 +407,16 @@ def _create_error_check_result(
 
 
 def _create_test_case_result(
-        test_case_id: str,
         check_results: list[CheckResult],
+        execution_context: EvaluationContext,
     ) -> TestCaseResult:
     """Create a TestCaseResult from check results."""
+    # Create ExecutionContext for the result
+    exec_context = ExecutionContext(
+        test_case=execution_context.test_case,
+        output=execution_context.output,
+    )
+
     # Compute summary statistics
     total_checks = len(check_results)
     completed_checks = sum(1 for r in check_results if r.status == 'completed')
@@ -436,8 +439,8 @@ def _create_test_case_result(
         status = 'completed'
 
     return TestCaseResult(
-        test_case_id=test_case_id,
         status=status,
+        execution_context=exec_context,
         check_results=check_results,
         summary=summary,
     )

@@ -113,11 +113,8 @@ class BaseCheck(ABC):
                 resolved_arguments=resolved_arguments,
                 evaluated_at=evaluated_at,
                 metadata=CheckResultMetadata(
-                    test_case_id=context.test_case.id,
-                    test_case_metadata=context.test_case.metadata,
-                    output_metadata=context.output.metadata,
                     check_version=check_version,
-                ),
+                ) if check_version else None,
             )
 
         except JSONPathError as e:
@@ -127,7 +124,6 @@ class BaseCheck(ABC):
                 error_message=str(e),
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
-                context=context,
                 check_version=check_version,
                 recoverable=False,
             )
@@ -139,7 +135,6 @@ class BaseCheck(ABC):
                 error_message=str(e),
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
-                context=context,
                 check_version=check_version,
                 recoverable=False,
             )
@@ -151,7 +146,6 @@ class BaseCheck(ABC):
                 error_message=str(e),
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
-                context=context,
                 check_version=check_version,
                 recoverable=False,
             )
@@ -163,7 +157,6 @@ class BaseCheck(ABC):
                 error_message=f"Unexpected error during check execution: {e!s}",
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
-                context=context,
                 check_version=check_version,
                 recoverable=False,
             )
@@ -175,7 +168,6 @@ class BaseCheck(ABC):
         error_message: str,
         resolved_arguments: dict[str, Any],
         evaluated_at: datetime,
-        context: EvaluationContext,
         check_version: str | None,
         recoverable: bool = False,
     ) -> CheckResult:
@@ -187,11 +179,8 @@ class BaseCheck(ABC):
             resolved_arguments=resolved_arguments,
             evaluated_at=evaluated_at,
             metadata=CheckResultMetadata(
-                test_case_id=context.test_case.id,
-                test_case_metadata=context.test_case.metadata,
-                output_metadata=context.output.metadata,
                 check_version=check_version,
-            ),
+            ) if check_version else None,
             error=CheckError(
                 type=error_type,
                 message=error_message,
@@ -279,11 +268,8 @@ class BaseAsyncCheck(ABC):
                 resolved_arguments=resolved_arguments,
                 evaluated_at=evaluated_at,
                 metadata=CheckResultMetadata(
-                    test_case_id=context.test_case.id,
-                    test_case_metadata=context.test_case.metadata,
-                    output_metadata=context.output.metadata,
                     check_version=check_version,
-                ),
+                ) if check_version else None,
             )
 
         except JSONPathError as e:
@@ -293,7 +279,6 @@ class BaseAsyncCheck(ABC):
                 error_message=str(e),
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
-                context=context,
                 check_version=check_version,
                 recoverable=False,
             )
@@ -305,7 +290,6 @@ class BaseAsyncCheck(ABC):
                 error_message=str(e),
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
-                context=context,
                 check_version=check_version,
                 recoverable=False,
             )
@@ -317,7 +301,6 @@ class BaseAsyncCheck(ABC):
                 error_message=str(e),
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
-                context=context,
                 check_version=check_version,
                 recoverable=False,
             )
@@ -329,7 +312,6 @@ class BaseAsyncCheck(ABC):
                 error_message=f"Unexpected error during async check execution: {e!s}",
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
-                context=context,
                 check_version=check_version,
                 recoverable=False,
             )
@@ -341,7 +323,6 @@ class BaseAsyncCheck(ABC):
         error_message: str,
         resolved_arguments: dict[str, Any],
         evaluated_at: datetime,
-        context: EvaluationContext,
         check_version: str | None,
         recoverable: bool = False,
     ) -> CheckResult:
@@ -353,11 +334,8 @@ class BaseAsyncCheck(ABC):
             resolved_arguments=resolved_arguments,
             evaluated_at=evaluated_at,
             metadata=CheckResultMetadata(
-                test_case_id=context.test_case.id,
-                test_case_metadata=context.test_case.metadata,
-                output_metadata=context.output.metadata,
                 check_version=check_version,
-            ),
+            ) if check_version else None,
             error=CheckError(
                 type=error_type,
                 message=error_message,
