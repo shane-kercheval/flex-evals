@@ -147,102 +147,160 @@ def evaluate(  # noqa: PLR0915
         sig = inspect.signature(func)
         expects_test_case = 'test_case' in sig.parameters
 
-        if asyncio.iscoroutinefunction(func):
-            def wrapper(**kwargs) -> None:  # kwargs = pytest fixtures  # noqa: ANN003
-                async def async_execution():  # noqa: ANN202
-                    # Expand test cases: [A, B] * samples = [A,B,A,B,...]
-                    expanded_test_cases = []
-                    for _ in range(samples):
-                        expanded_test_cases.extend(test_cases)
-
-                    # Generate outputs concurrently
-                    tasks = []
-                    for test_case in expanded_test_cases:
-                        if expects_test_case:  # noqa: SIM108
-                            # Call function with test_case as first argument
-                            task = func(test_case, **kwargs)
-                        else:
-                            task = func(**kwargs)
-                        tasks.append(task)
-
-                    # Execute all tasks concurrently
-                    try:
-                        results = await asyncio.gather(*tasks, return_exceptions=True)
-                    except Exception as e:
-                        pytest.fail(f"Function execution failed: {e}")
-
-                    # Process results and exceptions
-                    outputs = []
-                    exceptions = []
-                    for result in results:
-                        if isinstance(result, Exception):
-                            # Create error output for exception
-                            error_output = Output(
-                                value={
-                                    "error": True,
-                                    "exception_type": type(result).__name__,
-                                    "exception_message": str(result),
-                                    "traceback": traceback.format_exception(type(result), result, result.__traceback__),  # noqa: E501
-                                },
-                            )
-                            outputs.append(error_output)
-                            exceptions.append(result)
-                        else:
-                            outputs.append(Output(value=result))
-                            exceptions.append(None)
-
-                    return expanded_test_cases, outputs, exceptions
-
-                # Run async execution
-                expanded_test_cases, outputs, exceptions = asyncio.run(async_execution())
-
-                # Process evaluation results
-                _process_evaluation_results(
-                    expanded_test_cases, outputs, exceptions, checks, samples, success_threshold, func.__name__,  # noqa: E501
-                )
-        else:
-            def wrapper(**kwargs) -> None:  # kwargs = pytest fixtures  # noqa: ANN003
-                # Expand test cases: [A, B] * samples = [A,B,A,B,...]
-                expanded_test_cases = []
-                for _ in range(samples):
-                    expanded_test_cases.extend(test_cases)
-
-                # Generate outputs synchronously
-                outputs = []
-                exceptions = []
-                for test_case in expanded_test_cases:
-                    try:
-                        if expects_test_case:  # noqa: SIM108
-                            # Call function with test_case as first argument
-                            result = func(test_case, **kwargs)
-                        else:
-                            result = func(**kwargs)
-                        outputs.append(Output(value=result))
-                        exceptions.append(None)
-                    except Exception as e:
-                        # Create error output for exception
-                        error_output = Output(
-                            value={
-                                "error": True,
-                                "exception_type": type(e).__name__,
-                                "exception_message": str(e),
-                                "traceback": traceback.format_exc(),
-                            },
-                        )
-                        outputs.append(error_output)
-                        exceptions.append(e)
-
-                # Process evaluation results
-                _process_evaluation_results(
-                    expanded_test_cases, outputs, exceptions, checks, samples, success_threshold, func.__name__,  # noqa: E501
-                )
-
-        # Remove test_case from wrapper signature if present
+        # Create wrapper signature without test_case parameter for pytest
         if expects_test_case:
             wrapper_params = [p for name, p in sig.parameters.items() if name != 'test_case']
-            wrapper.__signature__ = sig.replace(parameters=wrapper_params)
+            wrapper_sig = sig.replace(parameters=wrapper_params)
         else:
-            wrapper.__signature__ = sig
+            wrapper_sig = sig
+
+        # Create execution functions
+        def _execute_sync_expansion():  # noqa: ANN202
+            # Expand test cases: [A, B] * samples = [A,B,A,B,...]
+            expanded_test_cases = []
+            for _ in range(samples):
+                expanded_test_cases.extend(test_cases)
+            return expanded_test_cases
+
+        async def _execute_async_calls(expanded_test_cases, kwargs):  # noqa
+            # Generate outputs concurrently
+            tasks = []
+            for test_case in expanded_test_cases:
+                if expects_test_case:  # noqa: SIM108
+                    # Call function with test_case as first argument
+                    task = func(test_case, **kwargs)
+                else:
+                    task = func(**kwargs)
+                tasks.append(task)
+
+            # Execute all tasks concurrently
+            try:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+            except Exception as e:
+                pytest.fail(f"Function execution failed: {e}")
+
+            # Process results and exceptions
+            outputs = []
+            exceptions = []
+            for result in results:
+                if isinstance(result, Exception):
+                    # Create error output for exception
+                    error_output = Output(
+                        value={
+                            "error": True,
+                            "exception_type": type(result).__name__,
+                            "exception_message": str(result),
+                            "traceback": traceback.format_exception(type(result), result, result.__traceback__),  # noqa: E501
+                        },
+                    )
+                    outputs.append(error_output)
+                    exceptions.append(result)
+                else:
+                    outputs.append(Output(value=result))
+                    exceptions.append(None)
+
+            return outputs, exceptions
+
+        def _execute_sync_calls(expanded_test_cases, kwargs):  # noqa
+            # Generate outputs synchronously
+            outputs = []
+            exceptions = []
+            for test_case in expanded_test_cases:
+                try:
+                    if expects_test_case:  # noqa: SIM108
+                        # Call function with test_case as first argument
+                        result = func(test_case, **kwargs)
+                    else:
+                        result = func(**kwargs)
+                    outputs.append(Output(value=result))
+                    exceptions.append(None)
+                except Exception as e:
+                    # Create error output for exception
+                    error_output = Output(
+                        value={
+                            "error": True,
+                            "exception_type": type(e).__name__,
+                            "exception_message": str(e),
+                            "traceback": traceback.format_exc(),
+                        },
+                    )
+                    outputs.append(error_output)
+                    exceptions.append(e)
+
+            return outputs, exceptions
+
+        # Create wrapper function dynamically with correct signature
+        # We need to create a function that actually has the signature pytest expects
+
+        # Get parameter names for the wrapper (excluding test_case)
+        param_names = list(wrapper_sig.parameters.keys())
+
+        if asyncio.iscoroutinefunction(func):
+            # Create async wrapper with proper signature
+            async def async_wrapper_impl(kwargs_dict) -> None:  # noqa: ANN001
+                expanded_test_cases = _execute_sync_expansion()
+                outputs, exceptions = await _execute_async_calls(expanded_test_cases, kwargs_dict)
+
+                # Process evaluation results
+                _process_evaluation_results(
+                    expanded_test_cases, outputs, exceptions, checks, samples, success_threshold, func.__name__,  # noqa: E501
+                )
+
+            # Create dynamic wrapper function with correct parameter names
+            if param_names:
+                # Create function string with actual parameter names
+                param_str = ', '.join(param_names)
+                kwargs_str = ', '.join(f"'{name}': {name}" for name in param_names)
+                func_code = f"""
+def wrapper({param_str}) -> None:
+    import asyncio
+    kwargs_dict = {{{kwargs_str}}}
+    asyncio.run(async_wrapper_impl(kwargs_dict))
+"""
+            else:
+                func_code = """
+def wrapper() -> None:
+    import asyncio
+    asyncio.run(async_wrapper_impl({}))
+"""
+
+            # Execute the dynamic function code
+            namespace = {'async_wrapper_impl': async_wrapper_impl, 'asyncio': asyncio}
+            exec(func_code, namespace, namespace)
+            wrapper = namespace['wrapper']
+        else:
+            # Sync wrapper
+            def sync_wrapper_impl(kwargs_dict) -> None:  # noqa
+                expanded_test_cases = _execute_sync_expansion()
+                outputs, exceptions = _execute_sync_calls(expanded_test_cases, kwargs_dict)
+
+                # Process evaluation results
+                _process_evaluation_results(
+                    expanded_test_cases, outputs, exceptions, checks, samples, success_threshold, func.__name__,  # noqa: E501
+                )
+
+            # Create dynamic wrapper function with correct parameter names
+            if param_names:
+                # Create function string with actual parameter names
+                param_str = ', '.join(param_names)
+                kwargs_str = ', '.join(f"'{name}': {name}" for name in param_names)
+                func_code = f"""
+def wrapper({param_str}) -> None:
+    kwargs_dict = {{{kwargs_str}}}
+    sync_wrapper_impl(kwargs_dict)
+"""
+            else:
+                func_code = """
+def wrapper() -> None:
+    sync_wrapper_impl({})
+"""
+
+            # Execute the dynamic function code
+            namespace = {'sync_wrapper_impl': sync_wrapper_impl}
+            exec(func_code, namespace, namespace)
+            wrapper = namespace['wrapper']
+
+        # The wrapper function now has the correct signature naturally
 
         return wrapper
     return decorator

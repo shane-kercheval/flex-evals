@@ -7,6 +7,7 @@ deterministic examples that will always pass when run as tests.
 To run: pytest examples/pytest_decorator_example.py -v
 """
 
+import pytest
 from pydantic import BaseModel, Field
 
 from flex_evals import TestCase, Check, CheckType
@@ -160,31 +161,47 @@ def test_statistical_threshold(test_case: TestCase) -> str:  # noqa: ARG001
     return "pass" if test_statistical_threshold._counter <= 3 else "fail"
 
 
-# Example 6: Multiple test cases cycling
+# Simple fixtures for demonstration
+@pytest.fixture
+def simple_fixture() -> str:
+    """Simple string fixture for basic testing."""
+    return "fixture_value"
+
+
+@pytest.fixture
+def user_data_fixture() -> str:
+    """Another simple string fixture."""
+    return "user_data_123"
+
+
+# Example 7: Pytest fixture integration
 @evaluate(
-    test_cases=[
-        TestCase(id="math", input="2+2", expected="4"),
-        TestCase(id="string", input="hello", expected="HELLO"),
-    ],
+    test_cases=[TestCase(id="fixture_test", input="user_data")],
     checks=[Check(
         type=CheckType.EXACT_MATCH,
-        arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+        arguments={"expected": "fixture_value:user_data", "actual": "$.output.value"},
     )],
-    samples=4,  # Will cycle: math, string, math, string
+    samples=2,
     success_threshold=1.0,
 )
-def test_cycling_test_cases(test_case: TestCase) -> str:
-    """Demonstrate cycling through multiple test cases."""
-    # Use test_case to determine appropriate response
-    if test_case.id == "math":
-        # For math test case: evaluate the input expression
-        if test_case.input == "2+2":
-            return "4"
-        return str(eval(test_case.input))  # Simple evaluation for demo
-    if test_case.id == "string":
-        # For string test case: uppercase the input
-        return test_case.input.upper()
-    return test_case.expected  # Fallback to expected value
+def test_with_simple_fixture(test_case: TestCase, simple_fixture) -> str:  # noqa: ANN001
+    """Demonstrate basic fixture integration with simple string values."""
+    return f"{simple_fixture}:{test_case.input}"
+
+
+# Example 8: Multiple fixtures
+@evaluate(
+    test_cases=[TestCase(id="multi_fixture", input="combined")],
+    checks=[Check(
+        type=CheckType.EXACT_MATCH,
+        arguments={"expected": "fixture_value+user_data_123+combined", "actual": "$.output.value"},
+    )],
+    samples=2,
+    success_threshold=1.0,
+)
+def test_with_multiple_fixtures(test_case: TestCase, simple_fixture, user_data_fixture) -> str:  # noqa: ANN001
+    """Demonstrate multiple fixture integration with simple string concatenation."""
+    return f"{simple_fixture}+{user_data_fixture}+{test_case.input}"
 
 
 if __name__ == "__main__":
@@ -198,3 +215,5 @@ if __name__ == "__main__":
     print("  test_llm_quality_assessment: LLM judge integration")
     print("  test_statistical_threshold: Statistical evaluation")
     print("  test_cycling_test_cases: Multiple test cases")
+    print("  test_with_simple_fixture: Pytest fixture integration")
+    print("  test_with_multiple_fixtures: Multiple fixtures integration")

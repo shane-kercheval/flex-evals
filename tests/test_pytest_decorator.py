@@ -1,5 +1,6 @@
 """Tests for pytest decorator implementation using real checks (no mocks)."""
 
+import inspect
 import pytest
 import time
 import _pytest.outcomes
@@ -10,6 +11,7 @@ import threading
 from flex_evals.pytest_decorator import evaluate
 from flex_evals.schemas import TestCase, Check
 from flex_evals.constants import CheckType
+
 from typing import Never
 
 
@@ -1122,6 +1124,169 @@ class TestEvaluateDecoratorAsync:
             return f"processed {test_case.input}"
 
         test_async_simple()
+
+
+class TestEvaluateDecoratorPytestFixtures:
+    """Test integration with pytest fixtures."""
+
+    def test_fixture_signature_handling(self):
+        """Test that decorator correctly handles function signatures with fixtures."""
+        @evaluate(
+            test_cases=[TestCase(id="test", input="data")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["result"]},
+            )],
+            samples=1,
+            success_threshold=1.0,
+        )
+        def test_with_fixture(test_case: TestCase, tmp_path) -> str:  # noqa
+            return f"result for {test_case.input}"
+        # Verify the decorator created the correct signature
+        sig = inspect.signature(test_with_fixture)
+        param_names = list(sig.parameters.keys())
+        # Should have tmp_path but not test_case (test_case is handled internally)
+        assert param_names == ["tmp_path"]
+        # Verify parameter has correct annotation
+        tmp_path_param = sig.parameters["tmp_path"]
+        assert tmp_path_param.annotation == inspect.Parameter.empty  # No annotation in original
+
+    def test_multiple_fixtures_signature_handling(self):
+        """Test signature handling with multiple fixtures."""
+        @evaluate(
+            test_cases=[TestCase(id="test", input="data")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["result"]},
+            )],
+            samples=1,
+            success_threshold=1.0,
+        )
+        def test_with_multiple_fixtures(test_case: TestCase, tmp_path, monkeypatch) -> str:  # noqa
+            return f"result for {test_case.input}"
+        # Verify the decorator created the correct signature
+        sig = inspect.signature(test_with_multiple_fixtures)
+        param_names = list(sig.parameters.keys())
+        # Should have both fixtures but not test_case
+        assert param_names == ["tmp_path", "monkeypatch"]
+
+    def test_function_without_test_case_param_with_fixtures(self):
+        """Test functions without test_case parameter still work with fixtures."""
+        @evaluate(
+            test_cases=[TestCase(id="test", input="data")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["result"]},
+            )],
+            samples=1,
+            success_threshold=1.0,
+        )
+        def test_no_test_case_with_fixture(tmp_path) -> str:  # noqa
+            return "static result"
+
+        # Verify the decorator preserved the original signature
+        sig = inspect.signature(test_no_test_case_with_fixture)
+        param_names = list(sig.parameters.keys())
+
+        # Should have tmp_path exactly as original
+        assert param_names == ["tmp_path"]
+
+
+class TestEvaluateDecoratorEdgeCasesAdvanced:
+    """Test advanced edge cases and error conditions."""
+
+    def test_function_without_test_case_parameter(self):
+        """Test functions that don't expect test_case parameter."""
+
+        @evaluate(
+            test_cases=[TestCase(id="no_param", input="ignored")],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "static_result", "actual": "$.output.value"},
+            )],
+            samples=3,
+            success_threshold=1.0,
+        )
+        def test_no_test_case_param() -> str:
+            # Function doesn't take test_case parameter
+            return "static_result"
+
+        test_no_test_case_param()  # Should work without issues
+
+    def test_function_with_mixed_parameters(self, tmp_path):  # noqa
+        """Test function with test_case in different positions."""
+        @evaluate(
+            test_cases=[TestCase(id="mixed_params", input="data")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["data", "tmp"]},
+            )],
+            samples=2,
+            success_threshold=1.0,
+        )
+        def test_mixed_param_order(tmp_path, test_case: TestCase) -> str:  # noqa
+            # test_case comes after fixture parameter
+            return f"processed {test_case.input} in {tmp_path}"
+
+        # Verify that parameter order is preserved (except test_case is removed)
+        sig = inspect.signature(test_mixed_param_order)
+        param_names = list(sig.parameters.keys())
+        assert param_names == ["tmp_path"]  # test_case should be removed, tmp_path preserved
+
+    def test_very_large_test_case_expansion(self):
+        """Test performance with large test case expansion."""
+        execution_count = 0
+
+        @evaluate(
+            test_cases=[
+                TestCase(id=f"large_{i}", input=f"input_{i}")
+                for i in range(5)  # 5 test cases
+            ],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["processed"]},
+            )],
+            samples=10,  # 5 test cases * 10 samples = 50 total calls
+            success_threshold=0.9,
+        )
+        def test_large_expansion(test_case: TestCase) -> str:
+            nonlocal execution_count
+            execution_count += 1
+            return f"processed {test_case.input}"
+
+        test_large_expansion()
+
+        # Verify all 50 calls were made
+        assert execution_count == 50
+
+    def test_concurrent_async_with_shared_state(self):
+        """Test async functions with shared state don't interfere."""
+        results = []
+
+        @evaluate(
+            test_cases=[
+                TestCase(id="concurrent_1", input="data_1"),
+                TestCase(id="concurrent_2", input="data_2"),
+            ],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["result"]},
+            )],
+            samples=5,  # 2 test cases * 5 samples = 10 concurrent calls
+            success_threshold=1.0,
+        )
+        async def test_concurrent_state(test_case: TestCase) -> str:
+            # Simulate some async work with shared data structure
+            await asyncio.sleep(0.01)
+            results.append(test_case.input)
+            return f"result for {test_case.input}"
+
+        test_concurrent_state()
+
+        # Verify all 10 calls completed and no data was lost
+        assert len(results) == 10
+        assert results.count("data_1") == 5
+        assert results.count("data_2") == 5
 
 
 class TestEvaluateDecoratorFailureReporting:
