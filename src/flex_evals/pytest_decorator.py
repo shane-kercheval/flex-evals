@@ -474,11 +474,17 @@ def _generate_failure_report(
                     report_lines.append(f"    Test case {i} check '{check_result.check_type}': {check_result.status}")  # noqa: E501
                     if check_result.error:
                         report_lines.append(f"      Error: {check_result.error.message}")
+                    # Add resolved arguments for debugging error cases too
+                    if check_result.resolved_arguments:
+                        report_lines.append(f"      Resolved arguments: {check_result.resolved_arguments}")  # noqa: E501
                 elif not check_result.results.get('passed', False):
                     report_lines.append(f"    Test case {i} check '{check_result.check_type}': failed")  # noqa: E501
                     # Add additional details if available
                     if 'reasoning' in check_result.results:
                         report_lines.append(f"      Reasoning: {check_result.results['reasoning']}")  # noqa: E501
+                    # Add resolved arguments for debugging
+                    if check_result.resolved_arguments:
+                        report_lines.append(f"      Resolved arguments: {check_result.resolved_arguments}")  # noqa: E501
 
     if len(failed_samples) > 5:
         report_lines.append(f"  ... and {len(failed_samples) - 5} more failures")

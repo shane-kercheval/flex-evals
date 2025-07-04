@@ -194,7 +194,10 @@ def test_with_simple_fixture(test_case: TestCase, simple_fixture) -> str:  # noq
     test_cases=[TestCase(id="multi_fixture", input="combined")],
     checks=[Check(
         type=CheckType.EXACT_MATCH,
-        arguments={"expected": "fixture_value+user_data_123+combined", "actual": "$.output.value"},
+        arguments={
+            "expected": "fixture_value+user_data_123+combined",
+            "actual": "$.output.value",
+        },
     )],
     samples=2,
     success_threshold=1.0,
