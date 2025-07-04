@@ -9,9 +9,8 @@ To run: pytest examples/pytest_decorator_example.py -v
 
 from pydantic import BaseModel, Field
 
-from flex_evals.constants import CheckType
+from flex_evals import TestCase, Check, CheckType
 from flex_evals.pytest_decorator import evaluate
-from flex_evals.schemas import TestCase, Check
 
 
 # Simple response format for LLM judge demo
