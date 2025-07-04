@@ -39,7 +39,31 @@ print(f"Evaluation completed: {results.status}")
 print(f"Passed: {results.results[0].check_results[0].results}")
 ```
 
+## Pytest Integration
+
+Use the `@evaluate` decorator to test functions with automatic evaluation:
+
+```python
+from flex_evals import TestCase, Check, CheckType
+from flex_evals.pytest_decorator import evaluate
+
+@evaluate(
+    test_cases=[TestCase(input="What is Python?")],
+    checks=[
+        Check(
+            type=CheckType.CONTAINS,
+            arguments={"text": "$.output.value", "phrases": ["Python", "programming"]},
+        ),
+    ],
+    samples=10,
+    success_threshold=0.8,  # Expect 80% success
+)
+def test_python_explanation(test_case: TestCase) -> str:
+    return my_llm(test_case.input)  # Call your LLM or system here
+```
+
 **See `examples` directory for more detailed usage examples**:
+- **[Pytest Decorator Examples](examples/pytest_decorator_example.py)** - Complete pytest integration examples
 - **[Quickstart Notebook](examples/quickstart.ipynb)** - Introduction to FEP concepts
 - **[Advanced Examples](examples/example_yaml_test_cases.ipynb)** - Using YAML for defining test cases
 - **[LLM-as-a-Judge](examples/llm-as-a-judge.ipynb)** - Using YAML for defining test cases

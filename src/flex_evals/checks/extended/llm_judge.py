@@ -149,9 +149,10 @@ class LlmJudgeCheck(BaseAsyncCheck):
     RESULTS SCHEMA:
     ==============
 
-    The results structure includes both the judge's response and metadata:
-    - response: Dictionary matching the response_format model structure
-    - metadata: Dictionary with LLM call metadata (if provided by llm_function)
+    The results structure preserves the judge's response fields with metadata in a separate field:
+    - Response fields from the BaseModel are preserved as-is in the root result object
+    - Metadata from the LLM function is added as a separate "judge_metadata" field
+    - This ensures response structure integrity and clear separation of concerns
 
     Example Response Format:
         class EvaluationResult(BaseModel):
@@ -162,18 +163,24 @@ class LlmJudgeCheck(BaseAsyncCheck):
 
     Would produce results like:
         {
-            "response": {
-                "quality_score": 4,
-                "is_helpful": true,
-                "reasoning": "Response directly answers the question with accurate information",
-                "detected_issues": []
-            },
-            "metadata": {
+            "quality_score": 4,
+            "is_helpful": true,
+            "reasoning": "Response directly answers the question with accurate information",
+            "detected_issues": [],
+            "judge_metadata": {
                 "cost_usd": 0.0023,
                 "tokens_used": 150,
                 "response_time_ms": 842,
                 "model_version": "gpt-4o-mini-2024-07-02"
             }
+        }
+
+    If the response format itself contains a metadata field, it is preserved:
+        {
+            "passed": true,
+            "score": 8,
+            "metadata": {"internal_data": "value"},  # from response format
+            "judge_metadata": {"cost_usd": 0.002}    # from LLM function
         }
 
     ERROR HANDLING:
@@ -353,8 +360,8 @@ class LlmJudgeCheck(BaseAsyncCheck):
 
         Returns:
             dict[str, Any]: Structured results with:
-                - response: dict matching the response_format schema
-                - metadata: dict with LLM call metadata (if provided)
+                - Response fields preserved as-is in root
+                - Metadata fields added as separate "judge_metadata" field
 
         Raises:
             ValidationError: If arguments are invalid or response format validation fails
@@ -368,8 +375,13 @@ class LlmJudgeCheck(BaseAsyncCheck):
                 llm_function=my_llm_function
             )
             # Returns: {
-            #     "response": {"score": 5, "reasoning": "Accurate and helpful response"},
-            #     "metadata": {"cost_usd": 0.002, "tokens_used": 150, ...}
+            #     "score": 5,
+            #     "reasoning": "Accurate and helpful response",
+            #     "judge_metadata": {
+            #         "cost_usd": 0.002,
+            #         "tokens_used": 150,
+            #         ...
+            #     }
             # }
         """  # noqa: E501
         # Validate argument types
@@ -395,10 +407,10 @@ class LlmJudgeCheck(BaseAsyncCheck):
             model_response, metadata = llm_response
             validated_response = self._validate_response_format(model_response, response_format)
 
-            return {
-                "response": validated_response,
-                "metadata": metadata if isinstance(metadata, dict) else {},
-            }
+            # Preserve response structure and add judge_metadata field
+            result = validated_response.copy()
+            result["judge_metadata"] = metadata or {}
+            return result
 
         except Exception as e:
             raise CheckExecutionError(f"Error in LLM judge evaluation: {e!s}") from e
@@ -592,3 +604,4 @@ class LlmJudgeCheck(BaseAsyncCheck):
 
         # Reject unsupported response types
         raise ValidationError(f"Unexpected response type: {type(response)}")
+

@@ -29,4 +29,8 @@ unittests:
 	uv run coverage run -m pytest --durations=0 tests
 	uv run coverage html
 
-tests: linting unittests
+decorator-examples:
+	# Run pytest decorator examples to validate functionality
+	uv run pytest examples/pytest_decorator_example.py --timeout=30
+
+tests: linting unittests decorator-examples
