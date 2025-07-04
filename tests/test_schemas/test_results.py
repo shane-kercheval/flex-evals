@@ -8,7 +8,10 @@ from flex_evals.schemas.results import (
     TestCaseResult,
     EvaluationSummary,
     EvaluationRunResult,
+    ExecutionContext,
 )
+from flex_evals.schemas.test_case import TestCase
+from flex_evals.schemas.output import Output
 from flex_evals.constants import Status
 from flex_evals.schemas.check import CheckResult, CheckResultMetadata, CheckError
 from flex_evals.schemas.experiments import ExperimentMetadata
@@ -96,12 +99,22 @@ class TestTestCaseResult:
             results={},
             resolved_arguments={},
             evaluated_at=datetime.now(UTC),
-            metadata=CheckResultMetadata(
-                test_case_id="test-1",
-                test_case_metadata=None,
-                output_metadata=None,
-                check_version=None,
-            ),
+            metadata=None,
+        )
+
+    def create_test_case(self, test_id: str = "test-1") -> TestCase:
+        """Helper to create TestCase for testing."""
+        return TestCase(id=test_id, input="test input", expected="test expected")
+
+    def create_output(self, value: str = "test output") -> Output:
+        """Helper to create Output for testing."""
+        return Output(value=value)
+
+    def create_execution_context(self, test_id: str = "test-1") -> ExecutionContext:
+        """Helper to create ExecutionContext for testing."""
+        return ExecutionContext(
+            test_case=self.create_test_case(test_id),
+            output=self.create_output(),
         )
 
     def test_valid_test_case_result(self):
@@ -119,13 +132,13 @@ class TestTestCaseResult:
         )
 
         result = TestCaseResult(
-            test_case_id="test-1",
             status='completed',
+            execution_context=self.create_execution_context("test-1"),
             check_results=check_results,
             summary=summary,
         )
 
-        assert result.test_case_id == "test-1"
+        assert result.execution_context.test_case.id == "test-1"
         assert result.status == 'completed'
         assert len(result.check_results) == 2
         assert result.metadata is None
@@ -136,8 +149,8 @@ class TestTestCaseResult:
         summary = TestCaseSummary(total_checks=1, completed_checks=1, error_checks=0, skipped_checks=0)  # noqa: E501
 
         result = TestCaseResult(
-            test_case_id="test-1",
             status='completed',
+            execution_context=self.create_execution_context("test-1"),
             check_results=check_results,
             summary=summary,
             metadata={"custom": "value"},
@@ -147,13 +160,9 @@ class TestTestCaseResult:
 
     def test_empty_test_case_id(self):
         """Test that empty test_case_id raises ValueError."""
-        with pytest.raises(ValueError, match="test_case_id must be non-empty"):
-            TestCaseResult(
-                test_case_id="",
-                status='completed',
-                check_results=[],
-                summary=TestCaseSummary(0, 0, 0, 0),
-            )
+        # Test that empty test case id in TestCase raises error immediately
+        with pytest.raises(ValueError, match="TestCase.id must be a non-empty string"):
+            TestCase(id="", input="test", expected="test")
 
     def test_summary_mismatch_total(self):
         """Test that summary total mismatch raises ValueError."""
@@ -161,8 +170,8 @@ class TestTestCaseResult:
 
         with pytest.raises(ValueError, match="summary does not match check_results"):
             TestCaseResult(
-                test_case_id="test-1",
                 status='completed',
+                execution_context=self.create_execution_context("test-1"),
                 check_results=check_results,
                 summary=TestCaseSummary(2, 2, 0, 0),  # Wrong total
             )
@@ -175,7 +184,7 @@ class TestTestCaseResult:
             results={},
             resolved_arguments={},
             evaluated_at=datetime.now(UTC),
-            metadata=CheckResultMetadata("test-1", None, None, {}),
+            metadata=CheckResultMetadata(check_version="1.0.0"),
             error=CheckError("test_error", "Test error", True),
         )
         check_results = [
@@ -185,8 +194,8 @@ class TestTestCaseResult:
 
         with pytest.raises(ValueError, match="summary does not match check_results"):
             TestCaseResult(
-                test_case_id="test-1",
                 status='error',
+                execution_context=self.create_execution_context("test-1"),
                 check_results=check_results,
                 summary=TestCaseSummary(2, 2, 0, 0),  # Wrong completed count
             )
@@ -199,7 +208,7 @@ class TestTestCaseResult:
             results={},
             resolved_arguments={},
             evaluated_at=datetime.now(UTC),
-            metadata=CheckResultMetadata("test-1", None, None, {}),
+            metadata=CheckResultMetadata(check_version="1.0.0"),
             error=CheckError("test_error", "Test error", True),
         )
         check_results = [
@@ -210,8 +219,8 @@ class TestTestCaseResult:
 
         with pytest.raises(ValueError, match="status should be 'error'"):
             TestCaseResult(
-                test_case_id="test-1",
                 status='completed',  # Wrong - should be error
+                execution_context=self.create_execution_context("test-1"),
                 check_results=check_results,
                 summary=summary,
             )
@@ -226,8 +235,8 @@ class TestTestCaseResult:
 
         with pytest.raises(ValueError, match="status should be 'skip'"):
             TestCaseResult(
-                test_case_id="test-1",
                 status='completed',  # Wrong - should be skip
+                execution_context=self.create_execution_context("test-1"),
                 check_results=check_results,
                 summary=summary,
             )
@@ -240,7 +249,7 @@ class TestTestCaseResult:
             results={},
             resolved_arguments={},
             evaluated_at=datetime.now(UTC),
-            metadata=CheckResultMetadata("test-1", None, None, {}),
+            metadata=CheckResultMetadata(check_version="1.0.0"),
             error=CheckError("test_error", "Test error", True),
         )
         check_results = [
@@ -250,8 +259,8 @@ class TestTestCaseResult:
         summary = TestCaseSummary(2, 0, 1, 1)
 
         result = TestCaseResult(
-            test_case_id="test-1",
             status='error',
+            execution_context=self.create_execution_context("test-1"),
             check_results=check_results,
             summary=summary,
         )
@@ -261,8 +270,8 @@ class TestTestCaseResult:
     def test_empty_check_results(self):
         """Test TestCaseResult with empty check results."""
         result = TestCaseResult(
-            test_case_id="test-1",
             status='completed',
+            execution_context=self.create_execution_context("test-1"),
             check_results=[],
             summary=TestCaseSummary(0, 0, 0, 0),
         )
@@ -323,6 +332,21 @@ class TestEvaluationSummary:
 class TestEvaluationRunResult:
     """Test EvaluationRunResult schema validation and behavior."""
 
+    def create_test_case(self, test_id: str = "test-1") -> TestCase:
+        """Helper to create TestCase for testing."""
+        return TestCase(id=test_id, input="test input", expected="test expected")
+
+    def create_output(self, value: str = "test output") -> Output:
+        """Helper to create Output for testing."""
+        return Output(value=value)
+
+    def create_execution_context(self, test_id: str = "test-1") -> ExecutionContext:
+        """Helper to create ExecutionContext for testing."""
+        return ExecutionContext(
+            test_case=self.create_test_case(test_id),
+            output=self.create_output(),
+        )
+
     def create_test_case_result(self, status: str, test_case_id: str = "test-1") -> TestCaseResult:
         """Helper to create TestCaseResult for testing."""
         if status == 'completed':
@@ -333,7 +357,7 @@ class TestEvaluationRunResult:
                     results={},
                     resolved_arguments={},
                     evaluated_at=datetime.now(UTC),
-                    metadata=CheckResultMetadata(test_case_id, None, None, {}),
+                    metadata=CheckResultMetadata(check_version="1.0.0"),
                 ),
             ]
             summary = TestCaseSummary(1, 1, 0, 0)
@@ -345,7 +369,7 @@ class TestEvaluationRunResult:
                     results={},
                     resolved_arguments={},
                     evaluated_at=datetime.now(UTC),
-                    metadata=CheckResultMetadata(test_case_id, None, None, {}),
+                    metadata=CheckResultMetadata(check_version="1.0.0"),
                     error=CheckError('validation_error', "Test error", True),
                 ),
             ]
@@ -358,14 +382,14 @@ class TestEvaluationRunResult:
                     results={},
                     resolved_arguments={},
                     evaluated_at=datetime.now(UTC),
-                    metadata=CheckResultMetadata(test_case_id, None, None, {}),
+                    metadata=CheckResultMetadata(check_version="1.0.0"),
                 ),
             ]
             summary = TestCaseSummary(1, 0, 0, 1)
 
         return TestCaseResult(
-            test_case_id=test_case_id,
             status=status,
+            execution_context=self.create_execution_context(test_case_id),
             check_results=check_results,
             summary=summary,
         )
@@ -539,7 +563,7 @@ class TestEvaluationRunResult:
 
     def test_check_result_accepts_status_enum(self):
         """Test CheckResult accepts Status enum."""
-        metadata = CheckResultMetadata(test_case_id="test_001")
+        metadata = CheckResultMetadata(check_version="1.0.0")
         result = CheckResult(
             check_type='exact_match',
             status=Status.COMPLETED,
@@ -558,7 +582,7 @@ class TestEvaluationRunResult:
             error_checks=0,
             skipped_checks=0,
         )
-        metadata = CheckResultMetadata(test_case_id="test_001")
+        metadata = CheckResultMetadata(check_version="1.0.0")
         check_result = CheckResult(
             check_type='exact_match',
             status='completed',
@@ -569,8 +593,8 @@ class TestEvaluationRunResult:
         )
 
         result = TestCaseResult(
-            test_case_id="test_001",
             status=Status.COMPLETED,
+            execution_context=self.create_execution_context("test_001"),
             check_results=[check_result],
             summary=summary,
         )
@@ -590,7 +614,7 @@ class TestEvaluationRunResult:
             error_checks=0,
             skipped_checks=0,
         )
-        metadata = CheckResultMetadata(test_case_id="test_001")
+        metadata = CheckResultMetadata(check_version="1.0.0")
         check_result = CheckResult(
             check_type='exact_match',
             status='completed',
@@ -600,8 +624,8 @@ class TestEvaluationRunResult:
             metadata=metadata,
         )
         test_case_result = TestCaseResult(
-            test_case_id="test_001",
             status='completed',
+            execution_context=self.create_execution_context("test_001"),
             check_results=[check_result],
             summary=test_case_summary,
         )

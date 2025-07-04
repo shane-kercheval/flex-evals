@@ -6,8 +6,25 @@ from typing import Any, Literal
 
 from flex_evals.schemas.check import CheckResult
 from flex_evals.schemas.experiments import ExperimentMetadata
+from flex_evals.schemas.test_case import TestCase
+from flex_evals.schemas.output import Output
 
 from ..constants import Status
+
+
+@dataclass
+class ExecutionContext:
+    """Complete execution context - the test case and output that were evaluated together."""
+
+    test_case: TestCase
+    output: Output
+
+    def __post_init__(self):
+        """Validate execution context."""
+        if not isinstance(self.test_case, TestCase):
+            raise ValueError("ExecutionContext.test_case must be a TestCase instance")
+        if not isinstance(self.output, Output):
+            raise ValueError("ExecutionContext.output must be an Output instance")
 
 
 @dataclass
@@ -36,8 +53,8 @@ class TestCaseResult:
     Provides both individual check results and summary statistics.
 
     Required Fields:
-    - test_case_id: Unique identifier linking to the original test case
     - status: Computed overall status based on individual check statuses
+    - execution_context: Complete execution context including test case and output
     - check_results: Array of individual check execution results
     - summary: Aggregate statistics for all check results
 
@@ -50,16 +67,18 @@ class TestCaseResult:
     - 'skip': No errors, but at least one check has status 'skip'
     """
 
-    test_case_id: str
     status: Status | Literal['completed', 'error', 'skip']
+    execution_context: ExecutionContext
     check_results: list[CheckResult]
     summary: TestCaseSummary
     metadata: dict[str, Any] | None = None
 
     def __post_init__(self):
         """Validate status matches check results and summary is accurate."""
-        if not self.test_case_id:
-            raise ValueError("TestCaseResult.test_case_id must be non-empty")
+        if not isinstance(self.execution_context, ExecutionContext):
+            raise ValueError(
+                "TestCaseResult.execution_context must be an ExecutionContext instance",
+            )
 
         # Validate summary matches check_results
         actual_total = len(self.check_results)

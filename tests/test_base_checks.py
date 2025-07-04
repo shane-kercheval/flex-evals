@@ -91,10 +91,8 @@ class TestBaseCheck:
         assert result.results["actual_value"] == "expected"
         assert result.error is None
 
-        # Test metadata
-        assert result.metadata.test_case_id == "test_001"
-        assert result.metadata.test_case_metadata == self.test_case.metadata
-        assert result.metadata.output_metadata == self.output.metadata
+        # Test metadata (should be None since no check_version was provided)
+        assert result.metadata is None
 
     def test_check_with_jsonpath_arguments(self):
         """Test check execution with JSONPath argument resolution."""

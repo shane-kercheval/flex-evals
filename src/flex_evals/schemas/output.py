@@ -16,10 +16,12 @@ class Output:
     - value: The actual output from the system being evaluated
 
     Optional Fields:
+    - id: Unique identifier for this output instance
     - metadata: System-specific information about the output generation
     """
 
     value: str | dict[str, Any]
+    id: str | None = None
     metadata: dict[str, Any] | None = None
 
     def __post_init__(self):
@@ -29,3 +31,6 @@ class Output:
 
         if not isinstance(self.value, str | dict):
             raise ValueError("Output.value must be a string or dictionary")
+
+        if self.id is not None and (not isinstance(self.id, str) or not self.id.strip()):
+            raise ValueError("Output.id must be a non-empty string if provided")

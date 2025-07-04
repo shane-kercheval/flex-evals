@@ -14,7 +14,7 @@ from flex_evals.schemas import (
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck
 from flex_evals.registry import register, clear_registry
 from flex_evals.exceptions import ValidationError
-from flex_evals.schemas.check import CheckResult, CheckResultMetadata
+from flex_evals.schemas.check import CheckResult
 from tests.conftest import restore_standard_checks
 
 
@@ -124,8 +124,8 @@ class TestEvaluationEngine:
 
         # Verify each test case is paired with correct output
         assert len(result.results) == 2
-        assert result.results[0].test_case_id == "test_001"
-        assert result.results[1].test_case_id == "test_002"
+        assert result.results[0].execution_context.test_case.id == "test_001"
+        assert result.results[1].execution_context.test_case.id == "test_002"
 
         # First test case (Paris) should pass, second (4) should fail
         assert result.results[0].check_results[0].results["passed"] is True
@@ -688,12 +688,7 @@ class TestEvaluationEngine:
                 results={"id": i},
                 resolved_arguments={},
                 evaluated_at=datetime.now(UTC),
-                metadata=CheckResultMetadata(
-                    test_case_id="test",
-                    test_case_metadata=None,
-                    output_metadata=None,
-                    check_version=None,
-                ),
+                metadata=None,
             )
             for i in range(3)
         ]
@@ -718,12 +713,7 @@ class TestEvaluationEngine:
                 results={"id": i + 10},
                 resolved_arguments={},
                 evaluated_at=datetime.now(UTC),
-                metadata=CheckResultMetadata(
-                    test_case_id="test",
-                    test_case_metadata=None,
-                    output_metadata=None,
-                    check_version=None,
-                ),
+                metadata=None,
             )
             for i in range(2)
         ]
@@ -745,12 +735,7 @@ class TestEvaluationEngine:
                 results={"type": "sync", "id": i},
                 resolved_arguments={},
                 evaluated_at=datetime.now(UTC),
-                metadata=CheckResultMetadata(
-                    test_case_id="test",
-                    test_case_metadata=None,
-                    output_metadata=None,
-                    check_version=None,
-                ),
+                metadata=None,
             )
             for i in range(3)
         ]
@@ -762,12 +747,7 @@ class TestEvaluationEngine:
                 results={"type": "async", "id": i + 100},
                 resolved_arguments={},
                 evaluated_at=datetime.now(UTC),
-                metadata=CheckResultMetadata(
-                    test_case_id="test",
-                    test_case_metadata=None,
-                    output_metadata=None,
-                    check_version=None,
-                ),
+                metadata=None,
             )
             for i in range(2)
         ]
@@ -887,7 +867,7 @@ class TestEvaluationEngine:
                 if test_result.status == 'error':
                     for check_result in test_result.check_results:
                         if check_result.status == 'error' and check_result.error:
-                            print(f"Error in {test_result.test_case_id}: {check_result.error.message}")  # noqa: E501
+                            print(f"Error in {test_result.execution_context.test_case.id}: {check_result.error.message}")  # noqa: E501
 
         # Verify the evaluation completed successfully
         assert result.status == 'completed'
@@ -895,14 +875,14 @@ class TestEvaluationEngine:
 
         # All test cases should pass (matching expected values)
         for i, test_result in enumerate(result.results):
-            assert test_result.test_case_id == f"test_{i}"
+            assert test_result.execution_context.test_case.id == f"test_{i}"
             assert test_result.status == 'completed'
             assert len(test_result.check_results) == 1
             assert test_result.check_results[0].results["passed"] is True
 
         # Results should be in the same order as input
         for i, test_result in enumerate(result.results):
-            assert test_result.test_case_id == f"test_{i}"
+            assert test_result.execution_context.test_case.id == f"test_{i}"
 
     def test_evaluate_mixed_parallelization_and_async_concurrency(self):
         """Test combination of parallel workers and async concurrency control."""
@@ -977,7 +957,7 @@ class TestEvaluationEngine:
         assert len(result1.results) == len(result2.results)
 
         for r1, r2 in zip(result1.results, result2.results):
-            assert r1.test_case_id == r2.test_case_id
+            assert r1.execution_context.test_case.id == r2.execution_context.test_case.id
             assert r1.status == r2.status
             assert len(r1.check_results) == len(r2.check_results)
 
@@ -1005,7 +985,7 @@ class TestEvaluationEngine:
         assert len(result_serial.results) == len(result_parallel.results)
 
         for r1, r2 in zip(result_serial.results, result_parallel.results):
-            assert r1.test_case_id == r2.test_case_id
+            assert r1.execution_context.test_case.id == r2.execution_context.test_case.id
             assert r1.status == r2.status
             assert len(r1.check_results) == len(r2.check_results)
 

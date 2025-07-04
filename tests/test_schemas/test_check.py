@@ -62,10 +62,8 @@ class TestCheckResult:
     def test_check_result_all_required_fields(self):
         """Test CheckResult with all required fields present."""
         metadata = CheckResultMetadata(
-            test_case_id="test_001",
-            test_case_metadata={"version": "1.0"},
-            output_metadata={"execution_time_ms": 245},
             check_version="1.0.0",
+            execution_time_ms=245,
         )
 
         result = CheckResult(
@@ -83,11 +81,11 @@ class TestCheckResult:
         assert result.check_type == 'exact_match'
         assert result.status == 'completed'
         assert result.results["passed"] is True
-        assert result.metadata.test_case_id == "test_001"
+        assert result.metadata.check_version == "1.0.0"
 
     def test_check_result_status_enum(self):
         """Test valid status values."""
-        metadata = CheckResultMetadata(test_case_id="test_001")
+        metadata = CheckResultMetadata()
         base_args = {
             "check_type": 'exact_match',
             "results": {"passed": True},
@@ -108,7 +106,7 @@ class TestCheckResult:
 
     def test_check_result_resolved_args_jsonpath(self):
         """Test resolved_arguments with JSONPath includes both value and jsonpath fields."""
-        metadata = CheckResultMetadata(test_case_id="test_001")
+        metadata = CheckResultMetadata()
 
         result = CheckResult(
             check_type='exact_match',
@@ -135,7 +133,7 @@ class TestCheckResult:
 
     def test_check_result_resolved_args_literal(self):
         """Test resolved_arguments with literals only includes value field."""
-        metadata = CheckResultMetadata(test_case_id="test_001")
+        metadata = CheckResultMetadata()
 
         result = CheckResult(
             check_type='exact_match',
@@ -159,7 +157,7 @@ class TestCheckResult:
 
     def test_check_result_timestamp_format(self):
         """Test evaluated_at serializes to ISO 8601 UTC."""
-        metadata = CheckResultMetadata(test_case_id="test_001")
+        metadata = CheckResultMetadata()
         timestamp = datetime.now(UTC)
 
         result = CheckResult(
@@ -179,8 +177,8 @@ class TestCheckResult:
         assert iso_string.endswith("+00:00")
 
     def test_check_result_metadata_test_case_id(self):
-        """Test metadata.test_case_id is required."""
-        metadata = CheckResultMetadata(test_case_id="test_001")
+        """Test metadata check_version defaults."""
+        metadata = CheckResultMetadata()
 
         result = CheckResult(
             check_type='exact_match',
@@ -191,15 +189,23 @@ class TestCheckResult:
             metadata=metadata,
         )
 
-        assert result.metadata.test_case_id == "test_001"
+        assert result.metadata.check_version is None
 
-        # Test empty test_case_id raises error
-        with pytest.raises(ValueError, match="CheckResultMetadata.test_case_id is required"):
-            CheckResultMetadata(test_case_id="")
+        # Test with explicit version
+        metadata_with_version = CheckResultMetadata(check_version="2.0.0")
+        result_with_version = CheckResult(
+            check_type='exact_match',
+            status='completed',
+            results={"passed": True},
+            resolved_arguments={"actual": {"value": "test"}},
+            evaluated_at=datetime.now(UTC),
+            metadata=metadata_with_version,
+        )
+        assert result_with_version.metadata.check_version == "2.0.0"
 
     def test_check_result_error_types(self):
         """Test all valid error.type enum values."""
-        metadata = CheckResultMetadata(test_case_id="test_001")
+        metadata = CheckResultMetadata()
         error_types = ['jsonpath_error', 'validation_error', "timeout_error", 'unknown_error']
 
         for error_type in error_types:
@@ -217,7 +223,7 @@ class TestCheckResult:
 
     def test_check_result_error_optional(self):
         """Test error only present when status='error'."""
-        metadata = CheckResultMetadata(test_case_id="test_001")
+        metadata = CheckResultMetadata()
 
         # No error when status is completed
         result1 = CheckResult(
@@ -255,9 +261,8 @@ class TestCheckResult:
     def test_check_result_serialization(self):
         """Test full CheckResult JSON serialization."""
         metadata = CheckResultMetadata(
-            test_case_id="test_001",
-            test_case_metadata={"version": "1.0"},
-            output_metadata={"execution_time_ms": 245},
+            check_version="2.1.0",
+            execution_time_ms=245,
         )
 
         result = CheckResult(
@@ -279,7 +284,8 @@ class TestCheckResult:
         assert data["status"] == 'completed'
         assert data["results"]["passed"] is True
         assert data["resolved_arguments"]["actual"]["value"] == "Paris"
-        assert data["metadata"]["test_case_id"] == "test_001"
+        assert data["metadata"]["check_version"] == "2.1.0"
+        assert data["metadata"]["execution_time_ms"] == 245
         assert data['error'] is None
 
     def test_check_accepts_check_type_enum(self):

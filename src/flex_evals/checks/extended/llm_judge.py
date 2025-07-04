@@ -256,8 +256,8 @@ class LlmJudgeCheck(BaseAsyncCheck):
             try:
                 # Process prompt template by resolving {{$.jsonpath}} placeholders
                 processed_prompt = self._process_prompt_template(
-                    arguments["prompt"],
-                    context,
+                    template=arguments["prompt"],
+                    context=context,
                 )
 
                 # Create modified arguments with processed prompt
@@ -272,7 +272,6 @@ class LlmJudgeCheck(BaseAsyncCheck):
                     error_message=f"Error processing prompt template: {e}",
                     resolved_arguments={},
                     evaluated_at=datetime.now(UTC),
-                    context=context,
                     check_version=check_version,
                     recoverable=False,
                 )

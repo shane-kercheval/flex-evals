@@ -490,10 +490,7 @@ class TestLlmJudgeCheck:
         )
 
         assert result.check_type == "llm_judge"
-        assert result.metadata.test_case_id == "test_001"
         assert result.metadata.check_version == "2.0.0"
-        assert result.metadata.test_case_metadata == self.test_case.metadata
-        assert result.metadata.output_metadata == self.output.metadata
         assert isinstance(result.evaluated_at, datetime)
         assert result.evaluated_at.tzinfo == UTC
 

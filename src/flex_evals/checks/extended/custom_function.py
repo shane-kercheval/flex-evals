@@ -59,7 +59,6 @@ class CustomFunctionCheck(BaseAsyncCheck):
                 error_message="function_args is required for custom_function checks",
                 resolved_arguments={},
                 evaluated_at=datetime.now(UTC),
-                context=context,
                 check_version=check_version,
                 recoverable=False,
             )
@@ -71,7 +70,6 @@ class CustomFunctionCheck(BaseAsyncCheck):
                 error_message="function_args must be a dictionary",
                 resolved_arguments={},
                 evaluated_at=datetime.now(UTC),
-                context=context,
                 check_version=check_version,
                 recoverable=False,
             )
