@@ -106,9 +106,9 @@ class TestTestCaseResult:
         """Helper to create TestCase for testing."""
         return TestCase(id=test_id, input="test input", expected="test expected")
 
-    def create_output(self, value: str = "test output") -> Output:
+    def create_output(self, value: str = "test output", output_id: str = "output-1") -> Output:
         """Helper to create Output for testing."""
-        return Output(value=value)
+        return Output(value=value, id=output_id)
 
     def create_execution_context(self, test_id: str = "test-1") -> ExecutionContext:
         """Helper to create ExecutionContext for testing."""
@@ -139,6 +139,7 @@ class TestTestCaseResult:
         )
 
         assert result.execution_context.test_case.id == "test-1"
+        assert result.execution_context.output.id == "output-1"
         assert result.status == 'completed'
         assert len(result.check_results) == 2
         assert result.metadata is None
@@ -157,6 +158,8 @@ class TestTestCaseResult:
         )
 
         assert result.metadata == {"custom": "value"}
+        # Verify output ID is accessible through execution context
+        assert result.execution_context.output.id == "output-1"
 
     def test_empty_test_case_id(self):
         """Test that empty test_case_id raises ValueError."""
@@ -279,6 +282,24 @@ class TestTestCaseResult:
         assert len(result.check_results) == 0
         assert result.status == 'completed'
 
+    def test_output_id_in_execution_context(self):
+        """Test that output ID is properly stored and accessible."""
+        # Create execution context with specific IDs
+        test_case = self.create_test_case("test-specific")
+        output = self.create_output("test output", "output-specific")
+        execution_context = ExecutionContext(test_case=test_case, output=output)
+
+        result = TestCaseResult(
+            status='completed',
+            execution_context=execution_context,
+            check_results=[],
+            summary=TestCaseSummary(0, 0, 0, 0),
+        )
+
+        # Verify both IDs are accessible
+        assert result.execution_context.test_case.id == "test-specific"
+        assert result.execution_context.output.id == "output-specific"
+
 
 class TestEvaluationSummary:
     """Test EvaluationSummary schema validation and behavior."""
@@ -336,9 +357,9 @@ class TestEvaluationRunResult:
         """Helper to create TestCase for testing."""
         return TestCase(id=test_id, input="test input", expected="test expected")
 
-    def create_output(self, value: str = "test output") -> Output:
+    def create_output(self, value: str = "test output", output_id: str = "output-1") -> Output:
         """Helper to create Output for testing."""
-        return Output(value=value)
+        return Output(value=value, id=output_id)
 
     def create_execution_context(self, test_id: str = "test-1") -> ExecutionContext:
         """Helper to create ExecutionContext for testing."""

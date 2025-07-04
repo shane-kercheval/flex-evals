@@ -80,8 +80,8 @@ class TestEvaluationEngine:
         ]
 
         self.outputs = [
-            Output(value="Paris"),
-            Output(value="4"),
+            Output(value="Paris", id="output_001"),
+            Output(value="4", id="output_002"),
         ]
 
         self.shared_checks = [
@@ -107,7 +107,11 @@ class TestEvaluationEngine:
         """Test test_cases and outputs same length validation."""
         # Mismatched lengths should raise ValidationError
         with pytest.raises(ValidationError, match="test_cases and outputs must have same length"):
-            evaluate(self.test_cases, [Output(value="Paris")], self.shared_checks)  # Only 1 output
+            evaluate(
+                self.test_cases,
+                [Output(value="Paris", id="output_001")],
+                self.shared_checks,
+            )  # Only 1 output
 
     def test_evaluate_empty_inputs(self):
         """Test behavior with empty test_cases and outputs."""
@@ -125,7 +129,9 @@ class TestEvaluationEngine:
         # Verify each test case is paired with correct output
         assert len(result.results) == 2
         assert result.results[0].execution_context.test_case.id == "test_001"
+        assert result.results[0].execution_context.output.id == "output_001"
         assert result.results[1].execution_context.test_case.id == "test_002"
+        assert result.results[1].execution_context.output.id == "output_002"
 
         # First test case (Paris) should pass, second (4) should fail
         assert result.results[0].check_results[0].results["passed"] is True
@@ -428,7 +434,7 @@ class TestEvaluationEngine:
         start_time = time.time()
         result = evaluate(
             test_cases=[TestCase(id="test_1", input="test input", expected="test")],
-            outputs=[Output(value="test")],
+            outputs=[Output(value="test", id="output_test")],
             checks=[concurrent_checks],
         )  # Single check per test case
         duration = time.time() - start_time
@@ -484,7 +490,7 @@ class TestEvaluationEngine:
         start_time = time.time()
         result = evaluate(
             test_cases=[TestCase(id="test_1", input="test", expected="test")],
-            outputs=[Output(value="test")],
+            outputs=[Output(value="test", id="output_test")],
             checks=mixed_checks,
         )
         duration = time.time() - start_time
@@ -516,7 +522,7 @@ class TestEvaluationEngine:
 
         result = evaluate(
             test_cases=[TestCase(id="test_1", input="test", expected="test")],
-            outputs=[Output(value="test")],
+            outputs=[Output(value="test", id="output_test")],
             checks=checks,
         )
 
@@ -555,7 +561,7 @@ class TestEvaluationEngine:
         start_time = time.time()
         result = evaluate(
             test_cases=[TestCase(id="test_1", input="test", expected="test")],
-            outputs=[Output(value="test")],
+            outputs=[Output(value="test", id="output_test")],
             checks=sync_checks,
         )
         duration = time.time() - start_time
@@ -801,7 +807,7 @@ class TestEvaluationEngine:
         start_time = time.time()
         result = evaluate(
             test_cases=[TestCase(id="test_1", input="test input", expected="test")],
-            outputs=[Output(value="test")],
+            outputs=[Output(value="test", id="output_test")],
             checks=concurrent_checks,
             max_async_concurrent=max_concurrent,
         )
@@ -840,7 +846,7 @@ class TestEvaluationEngine:
         ]
 
         outputs = [
-            Output(value=f"output_{i}")
+            Output(value=f"output_{i}", id=f"output_{i}")
             for i in range(num_test_cases)
         ]
 
@@ -876,6 +882,7 @@ class TestEvaluationEngine:
         # All test cases should pass (matching expected values)
         for i, test_result in enumerate(result.results):
             assert test_result.execution_context.test_case.id == f"test_{i}"
+            assert test_result.execution_context.output.id == f"output_{i}"
             assert test_result.status == 'completed'
             assert len(test_result.check_results) == 1
             assert test_result.check_results[0].results["passed"] is True
@@ -898,7 +905,7 @@ class TestEvaluationEngine:
             for i in range(num_test_cases)
         ]
 
-        outputs = [Output(value="test") for _ in range(num_test_cases)]
+        outputs = [Output(value="test", id=f"output_{i}") for i in range(num_test_cases)]
 
         # Each test case gets multiple async checks
         checks = [
@@ -1012,7 +1019,7 @@ class TestEvaluationEngine:
         start_time = time.time()
         result = evaluate(
             test_cases=[TestCase(id="test_1", input="test", expected="test")],
-            outputs=[Output(value="test")],
+            outputs=[Output(value="test", id="output_test")],
             checks=concurrent_checks,
             max_async_concurrent=None,  # No limit
         )
@@ -1044,7 +1051,7 @@ class TestEvaluationEngine:
             for i in range(4)
         ]
 
-        outputs = [Output(value="test") for _ in range(4)]
+        outputs = [Output(value="test", id=f"output_{i}") for i in range(4)]
 
         # Use per-test-case checks with unique arguments per test case
         per_test_case_checks = [
@@ -1080,3 +1087,29 @@ class TestEvaluationEngine:
             assert check_result.results["passed"] is True
             assert check_result.results["check_identifier"] == "custom_user_check_v2"
             assert check_result.results["test_value"] == f"custom_value_{i}"
+
+    def test_output_id_preservation(self):
+        """Test that output IDs are preserved through evaluation process."""
+        # Create test cases with specific output IDs
+        test_cases = [
+            TestCase(id="test_unique", input="test", expected="test"),
+        ]
+
+        outputs = [
+            Output(value="test", id="output_unique_123"),
+        ]
+
+        checks = [
+            Check(type="test_check", arguments={"expected": "test", "actual": "$.output.value"}),
+        ]
+
+        result = evaluate(test_cases, outputs, checks)
+
+        # Verify output ID is preserved in execution context
+        assert result.status == 'completed'
+        assert len(result.results) == 1
+
+        test_result = result.results[0]
+        assert test_result.execution_context.test_case.id == "test_unique"
+        assert test_result.execution_context.output.id == "output_unique_123"
+        assert test_result.execution_context.output.value == "test"
