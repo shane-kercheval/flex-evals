@@ -5,7 +5,8 @@ This module provides the @evaluate decorator that allows running test functions
 multiple times and validating success rates using existing flex-evals checks.
 """
 
-import functools
+import asyncio
+import inspect
 import traceback
 from typing import Any, TypeVar
 from collections.abc import Callable
@@ -18,7 +19,7 @@ from .schemas import TestCase, Output, Check, CheckResult
 F = TypeVar('F', bound=Callable[..., Any])
 
 
-def evaluate(
+def evaluate(  # noqa: PLR0915
     test_cases: list[TestCase],
     checks: list[Check] | None = None,
     samples: int = 1,
@@ -34,7 +35,7 @@ def evaluate(
     EXECUTION FLOW:
     ==============
 
-    1. Execute the wrapped function `samples` number of times
+    1. Execute the wrapped function `samples` number of times, passing test_case as first parameter
     2. Collect all return values and any exceptions
     3. Reuse original TestCase objects (cycling through if multiple)
     4. Wrap function outputs in Output objects
@@ -118,8 +119,9 @@ def evaluate(
             samples=10,
             success_threshold=0.8
         )
-        def test_my_function():
-            return {"result": "expected output"}
+        def test_my_function(test_case):
+            response = example_llm_function(test_case.input)
+            return {"result": response}
 
     Error Handling:
         - Function exceptions are caught and counted as failures
@@ -127,7 +129,7 @@ def evaluate(
         - Missing 'passed' field in CheckResult raises clear error
         - Incompatible checks (no 'passed' field) are validated early
     """
-    def decorator(func: F) -> F:
+    def decorator(func: F) -> F:  # noqa: PLR0915
         # Validate decorator parameters
         if not test_cases:
             raise ValueError("test_cases list cannot be empty")
@@ -141,81 +143,171 @@ def evaluate(
         # Validate check configuration
         _validate_check_configuration(test_cases, checks)
 
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> None:  # noqa: ANN002, ANN003
-            # Execute function multiple times and collect results
-            outputs = []
-            test_cases_for_evaluation = []
-            exceptions = []
+        # Get original function signature
+        sig = inspect.signature(func)
+        expects_test_case = 'test_case' in sig.parameters
 
-            for sample_idx in range(samples):
-                try:
-                    # Execute the function
-                    result = func(*args, **kwargs)
+        if asyncio.iscoroutinefunction(func):
+            def wrapper(**kwargs) -> None:  # kwargs = pytest fixtures  # noqa: ANN003
+                async def async_execution():  # noqa: ANN202
+                    # Expand test cases: [A, B] * samples = [A,B,A,B,...]
+                    expanded_test_cases = []
+                    for _ in range(samples):
+                        expanded_test_cases.extend(test_cases)
 
-                    # Create Output object
-                    output = Output(value=result)
-                    outputs.append(output)
-                    exceptions.append(None)
+                    # Generate outputs concurrently
+                    tasks = []
+                    for test_case in expanded_test_cases:
+                        if expects_test_case:  # noqa: SIM108
+                            # Call function with test_case as first argument
+                            task = func(test_case, **kwargs)
+                        else:
+                            task = func(**kwargs)
+                        tasks.append(task)
 
-                except Exception as e:
-                    # Create error output for exception
-                    error_output = Output(
-                        value={
-                            "error": True,
-                            "exception_type": type(e).__name__,
-                            "exception_message": str(e),
-                            "traceback": traceback.format_exc(),
-                        },
-                    )
-                    outputs.append(error_output)
-                    exceptions.append(e)
+                    # Execute all tasks concurrently
+                    try:
+                        results = await asyncio.gather(*tasks, return_exceptions=True)
+                    except Exception as e:
+                        pytest.fail(f"Function execution failed: {e}")
 
-                # Just reuse the original test case - no copying needed!
-                base_test_case = test_cases[sample_idx % len(test_cases)]
-                test_cases_for_evaluation.append(base_test_case)
+                    # Process results and exceptions
+                    outputs = []
+                    exceptions = []
+                    for result in results:
+                        if isinstance(result, Exception):
+                            # Create error output for exception
+                            error_output = Output(
+                                value={
+                                    "error": True,
+                                    "exception_type": type(result).__name__,
+                                    "exception_message": str(result),
+                                    "traceback": traceback.format_exception(type(result), result, result.__traceback__),  # noqa: E501
+                                },
+                            )
+                            outputs.append(error_output)
+                            exceptions.append(result)
+                        else:
+                            outputs.append(Output(value=result))
+                            exceptions.append(None)
 
-            # Evaluate using flex-evals engine
-            try:
-                evaluation_result = engine_evaluate(
-                    test_cases=test_cases_for_evaluation,
-                    outputs=outputs,
-                    checks=checks,
+                    return expanded_test_cases, outputs, exceptions
+
+                # Run async execution
+                expanded_test_cases, outputs, exceptions = asyncio.run(async_execution())
+
+                # Process evaluation results
+                _process_evaluation_results(
+                    expanded_test_cases, outputs, exceptions, checks, samples, success_threshold, func.__name__,  # noqa: E501
                 )
-            except Exception as e:
-                pytest.fail(f"Evaluation failed: {e}")
+        else:
+            def wrapper(**kwargs) -> None:  # kwargs = pytest fixtures  # noqa: ANN003
+                # Expand test cases: [A, B] * samples = [A,B,A,B,...]
+                expanded_test_cases = []
+                for _ in range(samples):
+                    expanded_test_cases.extend(test_cases)
 
-            # Extract passed status from check results
-            passed_count = 0
-            failed_samples = []
+                # Generate outputs synchronously
+                outputs = []
+                exceptions = []
+                for test_case in expanded_test_cases:
+                    try:
+                        if expects_test_case:  # noqa: SIM108
+                            # Call function with test_case as first argument
+                            result = func(test_case, **kwargs)
+                        else:
+                            result = func(**kwargs)
+                        outputs.append(Output(value=result))
+                        exceptions.append(None)
+                    except Exception as e:
+                        # Create error output for exception
+                        error_output = Output(
+                            value={
+                                "error": True,
+                                "exception_type": type(e).__name__,
+                                "exception_message": str(e),
+                                "traceback": traceback.format_exc(),
+                            },
+                        )
+                        outputs.append(error_output)
+                        exceptions.append(e)
 
-            for i, test_case_result in enumerate(evaluation_result.results):
-                sample_passed = _check_sample_passed(test_case_result.check_results)
-                if sample_passed:
-                    passed_count += 1
-                else:
-                    failed_samples.append({
-                        "sample_index": i,
-                        "exception": exceptions[i],
-                        "check_results": test_case_result.check_results,
-                    })
-
-            # Calculate success rate
-            success_rate = passed_count / samples
-
-            # Check if threshold is met
-            if success_rate < success_threshold:
-                _generate_failure_report(
-                    func_name=func.__name__,
-                    samples=samples,
-                    passed_count=passed_count,
-                    success_rate=success_rate,
-                    success_threshold=success_threshold,
-                    failed_samples=failed_samples,
+                # Process evaluation results
+                _process_evaluation_results(
+                    expanded_test_cases, outputs, exceptions, checks, samples, success_threshold, func.__name__,  # noqa: E501
                 )
-            # Test passed - return None (pytest convention)
+
+        # Remove test_case from wrapper signature if present
+        if expects_test_case:
+            wrapper_params = [p for name, p in sig.parameters.items() if name != 'test_case']
+            wrapper.__signature__ = sig.replace(parameters=wrapper_params)
+        else:
+            wrapper.__signature__ = sig
+
         return wrapper
     return decorator
+
+
+def _process_evaluation_results(
+    expanded_test_cases: list[TestCase],
+    outputs: list[Output],
+    exceptions: list[Exception | None],
+    checks: list[Check] | None,
+    samples: int,
+    success_threshold: float,
+    func_name: str,
+) -> None:
+    """Process evaluation results and handle sample-based success calculation."""
+    # Call evaluate once with all expanded test cases
+    try:
+        evaluation_result = engine_evaluate(
+            test_cases=expanded_test_cases,
+            outputs=outputs,
+            checks=checks,
+        )
+    except Exception as e:
+        pytest.fail(f"Evaluation failed: {e}")
+
+    # Group results back into samples
+    # Each sample contains len(original_test_cases) consecutive results
+    num_test_cases_per_sample = len(expanded_test_cases) // samples
+    sample_results = []
+
+    for sample_idx in range(samples):
+        start_idx = sample_idx * num_test_cases_per_sample
+        end_idx = start_idx + num_test_cases_per_sample
+        sample_test_case_results = evaluation_result.results[start_idx:end_idx]
+        sample_exceptions = exceptions[start_idx:end_idx]
+
+        # A sample passes if ALL its test cases pass
+        sample_passed = all(
+            _check_sample_passed(tcr.check_results) for tcr in sample_test_case_results
+        )
+
+        if not sample_passed:
+            sample_results.append({
+                "sample_index": sample_idx,
+                "exceptions": sample_exceptions,
+                "test_case_results": sample_test_case_results,
+            })
+        else:
+            sample_results.append(None)  # Sample passed
+
+    # Calculate success rate based on samples, not individual test cases
+    passed_samples = sum(1 for result in sample_results if result is None)
+    success_rate = passed_samples / samples
+
+    # Check if threshold is met
+    if success_rate < success_threshold:
+        failed_samples = [result for result in sample_results if result is not None]
+        _generate_failure_report(
+            func_name=func_name,
+            samples=samples,
+            passed_count=passed_samples,
+            success_rate=success_rate,
+            success_threshold=success_threshold,
+            failed_samples=failed_samples,
+        )
 
 
 def _validate_check_configuration(test_cases: list[TestCase], checks: list[Check] | None) -> None:
@@ -307,24 +399,28 @@ def _generate_failure_report(
 
     for failure in failed_samples[:5]:  # Show first 5 failures
         sample_idx = failure["sample_index"]
-        exception = failure["exception"]
-        check_results = failure["check_results"]
+        exceptions = failure["exceptions"]
+        test_case_results = failure["test_case_results"]
 
         report_lines.append(f"  Sample {sample_idx}:")
 
-        if exception:
-            report_lines.append(f"    Exception: {type(exception).__name__}: {exception}")
+        # Report exceptions for this sample
+        for i, exception in enumerate(exceptions):
+            if exception:
+                report_lines.append(f"    Test case {i} exception: {type(exception).__name__}: {exception}")  # noqa: E501
 
-        for check_result in check_results:
-            if check_result.status != 'completed':
-                report_lines.append(f"    Check '{check_result.check_type}': {check_result.status}")  # noqa: E501
-                if check_result.error:
-                    report_lines.append(f"      Error: {check_result.error.message}")
-            elif not check_result.results.get('passed', False):
-                report_lines.append(f"    Check '{check_result.check_type}': failed")
-                # Add additional details if available
-                if 'reasoning' in check_result.results:
-                    report_lines.append(f"      Reasoning: {check_result.results['reasoning']}")
+        # Report check failures for this sample
+        for i, test_case_result in enumerate(test_case_results):
+            for check_result in test_case_result.check_results:
+                if check_result.status != 'completed':
+                    report_lines.append(f"    Test case {i} check '{check_result.check_type}': {check_result.status}")  # noqa: E501
+                    if check_result.error:
+                        report_lines.append(f"      Error: {check_result.error.message}")
+                elif not check_result.results.get('passed', False):
+                    report_lines.append(f"    Test case {i} check '{check_result.check_type}': failed")  # noqa: E501
+                    # Add additional details if available
+                    if 'reasoning' in check_result.results:
+                        report_lines.append(f"      Reasoning: {check_result.results['reasoning']}")  # noqa: E501
 
     if len(failed_samples) > 5:
         report_lines.append(f"  ... and {len(failed_samples) - 5} more failures")

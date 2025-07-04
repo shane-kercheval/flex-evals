@@ -1,8 +1,11 @@
 """Tests for pytest decorator implementation using real checks (no mocks)."""
 
 import pytest
+import time
 import _pytest.outcomes
+import asyncio
 from pydantic import BaseModel, Field
+import threading
 
 from flex_evals.pytest_decorator import evaluate
 from flex_evals.schemas import TestCase, Check
@@ -40,7 +43,7 @@ class TestEvaluateDecoratorBasicFunctionality:
             samples=3,
             success_threshold=1.0,
         )
-        def deterministic_success() -> str:
+        def deterministic_success(test_case) -> str:  # noqa
             return "Python is awesome"
 
         # Should pass silently (pytest convention)
@@ -59,7 +62,7 @@ class TestEvaluateDecoratorBasicFunctionality:
             samples=3,
             success_threshold=0.5,
         )
-        def deterministic_failure() -> str:
+        def deterministic_failure(test_case) -> str:  # noqa
             return "different_value"
 
         # Should fail with pytest.fail
@@ -84,7 +87,7 @@ class TestEvaluateDecoratorBasicFunctionality:
             samples=4,
             success_threshold=0.75,  # Exactly 75%
         )
-        def exact_threshold_function() -> str:
+        def exact_threshold_function(test_case) -> str:  # noqa
             nonlocal call_count
             call_count += 1
             # Pass exactly 3 out of 4 times (75%)
@@ -110,7 +113,7 @@ class TestEvaluateDecoratorStatistical:
             samples=10,
             success_threshold=0.7,  # 70% threshold
         )
-        def statistical_function() -> str:
+        def statistical_function(test_case) -> str:  # noqa
             nonlocal call_count
             call_count += 1
             # 80% success rate (8 out of 10)
@@ -132,7 +135,7 @@ class TestEvaluateDecoratorStatistical:
             samples=10,
             success_threshold=0.8,  # 80% threshold
         )
-        def statistical_failure_function() -> str:
+        def statistical_failure_function(test_case) -> str:  # noqa
             nonlocal call_count
             call_count += 1
             # 60% success rate (6 out of 10)
@@ -159,7 +162,7 @@ class TestEvaluateDecoratorStatistical:
             samples=20,
             success_threshold=0.65,  # 65% threshold
         )
-        def high_variance_function() -> str:
+        def high_variance_function(test_case) -> str:  # noqa
             nonlocal call_count
             call_count += 1
             # ~70% success rate with some variance
@@ -185,7 +188,7 @@ class TestEvaluateDecoratorErrorHandling:
             samples=6,
             success_threshold=0.4,  # 40% threshold
         )
-        def exception_prone_function() -> str:
+        def exception_prone_function(test_case) -> str:  # noqa
             nonlocal call_count
             call_count += 1
             if call_count <= 3:
@@ -207,7 +210,7 @@ class TestEvaluateDecoratorErrorHandling:
             samples=3,
             success_threshold=0.1,  # Even 10% threshold
         )
-        def always_throws() -> Never:
+        def always_throws(test_case) -> Never:  # noqa
             raise ValueError("Always fails")
 
         # Should fail with 0% success rate
@@ -216,7 +219,7 @@ class TestEvaluateDecoratorErrorHandling:
 
         error_message = str(exc_info.value)
         assert "Success rate: 0.00%" in error_message
-        assert "Exception: ValueError: Always fails" in error_message
+        assert "Test case 0 exception: ValueError: Always fails" in error_message
 
     def test_mixed_exceptions_and_failures(self):
         """Test mix of exceptions and check failures."""
@@ -231,7 +234,7 @@ class TestEvaluateDecoratorErrorHandling:
             samples=9,
             success_threshold=0.25,  # 25% threshold
         )
-        def mixed_failure_function() -> str:
+        def mixed_failure_function(test_case) -> str:  # noqa
             nonlocal call_count
             call_count += 1
             if call_count <= 3:
@@ -269,7 +272,7 @@ class TestEvaluateDecoratorCheckTypes:
             samples=2,
             success_threshold=1.0,
         )
-        def multi_check_function():  # noqa: ANN202
+        def multi_check_function(test_case):  # noqa
             return {
                 "result": "expected_output",  # Matches exact check
                 "message": "This contains the key phrase",  # Matches contains check
@@ -299,7 +302,7 @@ class TestEvaluateDecoratorCheckTypes:
             samples=4,
             success_threshold=0.25,  # 25% threshold
         )
-        def partial_check_function() -> str:
+        def partial_check_function(test_case) -> str:  # noqa
             # Only passes contains check, fails exact match
             return "success message but not exact match"
 
@@ -322,7 +325,7 @@ class TestEvaluateDecoratorCheckTypes:
             samples=3,
             success_threshold=1.0,
         )
-        def regex_function() -> str:
+        def regex_function(test_case) -> str:  # noqa
             return "Result: 42"
 
         regex_function()
@@ -343,7 +346,7 @@ class TestEvaluateDecoratorCheckTypes:
             samples=2,
             success_threshold=1.0,
         )
-        def threshold_function():  # noqa: ANN202
+        def threshold_function(test_case):  # noqa
             return {"score": 95, "message": "High quality"}
 
         threshold_function()
@@ -382,7 +385,7 @@ class TestEvaluateDecoratorLLMJudge:
             samples=3,
             success_threshold=1.0,
         )
-        def good_response_function() -> str:
+        def good_response_function(test_case) -> str:  # noqa
             return "This is a good response"
 
         good_response_function()
@@ -415,7 +418,7 @@ class TestEvaluateDecoratorLLMJudge:
             samples=8,
             success_threshold=0.6,  # 60% threshold
         )
-        def variable_quality_function() -> str:
+        def variable_quality_function(test_case) -> str:  # noqa
             nonlocal call_count
             call_count += 1
             responses = ["excellent", "good", "okay", "poor"] * 2
@@ -443,7 +446,7 @@ class TestEvaluateDecoratorLLMJudge:
             samples=2,
             success_threshold=1.0,
         )
-        def simple_function() -> str:
+        def simple_function(test_case) -> str:  # noqa
             return "test response"
 
         # This test verifies the LLM judge integration works with flattened response
@@ -470,7 +473,7 @@ class TestEvaluateDecoratorTestCaseChecks:
             samples=3,
             success_threshold=1.0,
         )
-        def test_case_checks_function() -> str:
+        def test_case_checks_function(test_case) -> str:  # noqa
             return "This is a success message"
 
         test_case_checks_function()
@@ -504,7 +507,7 @@ class TestEvaluateDecoratorTestCaseChecks:
             samples=4,  # Will cycle: contains, exact, contains, exact
             success_threshold=1.0,
         )
-        def cycling_function() -> str:
+        def cycling_function(test_case) -> str:  # noqa
             nonlocal call_count
             call_count += 1
             # Return appropriate response based on which test case we're cycling to
@@ -532,7 +535,7 @@ class TestEvaluateDecoratorTestCaseChecks:
             samples=4,  # Will cycle: case1, case2, case1, case2
             success_threshold=1.0,
         )
-        def cycling_function() -> str:
+        def cycling_function(test_case) -> str:  # noqa
             nonlocal call_count
             call_count += 1
             # Return expected value based on which test case we're on
@@ -558,7 +561,7 @@ class TestEvaluateDecoratorEdgeCases:
             samples=2,
             success_threshold=1.0,
         )
-        def complex_return_function():  # noqa: ANN202
+        def complex_return_function(test_case):  # noqa
             return {
                 "message": "Operation was a success",
                 "data": {"items": [1, 2, 3]},
@@ -579,7 +582,7 @@ class TestEvaluateDecoratorEdgeCases:
             samples=2,
             success_threshold=1.0,
         )
-        def none_return_function():  # noqa: ANN202
+        def none_return_function(test_case):  # noqa
             # Output.value can't be None, so wrap it in a dict
             return {"result": None}
 
@@ -597,7 +600,7 @@ class TestEvaluateDecoratorEdgeCases:
             samples=2,
             success_threshold=1.0,
         )
-        def string_return_function() -> str:
+        def string_return_function(test_case) -> str:  # noqa
             return "simple string"
 
         string_return_function()
@@ -614,7 +617,7 @@ class TestEvaluateDecoratorEdgeCases:
             samples=2,
             success_threshold=1.0,
         )
-        def list_return_function():  # noqa: ANN202
+        def list_return_function(test_case):  # noqa
             # Output.value can't be a list, so wrap it in a dict
             return {"items": [1, 2, 3]}
 
@@ -632,7 +635,7 @@ class TestEvaluateDecoratorEdgeCases:
             samples=1,
             success_threshold=1.0,
         )
-        def single_sample_function() -> str:
+        def single_sample_function(test_case) -> str:  # noqa
             return "success"
 
         single_sample_function()
@@ -649,7 +652,7 @@ class TestEvaluateDecoratorEdgeCases:
             samples=50,
             success_threshold=0.9,
         )
-        def large_sample_function() -> str:
+        def large_sample_function(test_case) -> str:  # noqa
             return "This should pass every time"
 
         large_sample_function()
@@ -667,7 +670,7 @@ class TestEvaluateDecoratorParameterValidation:
                 samples=1,
                 success_threshold=1.0,
             )
-            def empty_test_cases() -> str:
+            def empty_test_cases(test_case) -> str:  # noqa
                 return "test"
 
     def test_zero_samples_error(self):
@@ -679,7 +682,7 @@ class TestEvaluateDecoratorParameterValidation:
                 samples=0,
                 success_threshold=1.0,
             )
-            def zero_samples() -> str:
+            def zero_samples(test_case) -> str:  # noqa
                 return "test"
 
     def test_negative_samples_error(self):
@@ -691,7 +694,7 @@ class TestEvaluateDecoratorParameterValidation:
                 samples=-1,
                 success_threshold=1.0,
             )
-            def negative_samples() -> str:
+            def negative_samples(test_case) -> str:  # noqa
                 return "test"
 
     def test_invalid_threshold_high_error(self):
@@ -703,7 +706,7 @@ class TestEvaluateDecoratorParameterValidation:
                 samples=1,
                 success_threshold=1.5,
             )
-            def invalid_high_threshold() -> str:
+            def invalid_high_threshold(test_case) -> str:  # noqa
                 return "test"
 
     def test_invalid_threshold_low_error(self):
@@ -715,7 +718,7 @@ class TestEvaluateDecoratorParameterValidation:
                 samples=1,
                 success_threshold=-0.1,
             )
-            def invalid_low_threshold() -> str:
+            def invalid_low_threshold(test_case) -> str:  # noqa
                 return "test"
 
     def test_no_checks_anywhere_error(self):
@@ -729,8 +732,396 @@ class TestEvaluateDecoratorParameterValidation:
                 samples=1,
                 success_threshold=1.0,
             )
-            def no_checks_function() -> str:
+            def no_checks_function(test_case) -> str:  # noqa
                 return "test"
+
+
+class TestEvaluateDecoratorTestCaseParameter:
+    """Test that test_case parameter is passed correctly to test functions."""
+
+    def test_single_test_case_parameter_passed(self):
+        """Test that test_case parameter is passed with single test case."""
+        received_test_cases = []
+
+        @evaluate(
+            test_cases=[TestCase(id="param_test", input="test_input", expected="expected_value")],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "success", "actual": "$.output.value"},
+            )],
+            samples=3,
+            success_threshold=1.0,
+        )
+        def test_function_with_test_case(test_case) -> str:  # noqa
+            received_test_cases.append(test_case)
+            # Verify test_case has expected attributes
+            assert test_case.id == "param_test"
+            assert test_case.input == "test_input"
+            assert test_case.expected == "expected_value"
+            return "success"
+
+        test_function_with_test_case()
+
+        # Verify test_case was passed to all 3 samples
+        assert len(received_test_cases) == 3
+        for test_case in received_test_cases:
+            assert test_case.id == "param_test"
+            assert test_case.input == "test_input"
+            assert test_case.expected == "expected_value"
+
+    def test_multiple_test_cases_parameter_cycling(self):
+        """Test that test_case parameter cycles through multiple test cases correctly."""
+        received_test_cases = []
+
+        test_cases = [
+            TestCase(id="case_1", input="input_1", expected="result_1"),
+            TestCase(id="case_2", input="input_2", expected="result_2"),
+            TestCase(id="case_3", input="input_3", expected="result_3"),
+        ]
+
+        @evaluate(
+            test_cases=test_cases,
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=7,  # Will cycle: case_1, case_2, case_3, case_1, case_2, case_3, case_1
+            success_threshold=1.0,
+        )
+        def cycling_test_function(test_case) -> str:  # noqa
+            received_test_cases.append(test_case)
+            # Return the expected value from the test case
+            return test_case.expected
+
+        cycling_test_function()
+
+        # Verify correct expansion pattern: 3 test cases * 7 samples = 21 total calls
+        assert len(received_test_cases) == 21
+
+        # Pattern should be: [case_1, case_2, case_3] repeated 7 times
+        expected_pattern = ["case_1", "case_2", "case_3"] * 7
+
+        for i, test_case in enumerate(received_test_cases):
+            expected_id = expected_pattern[i]
+            assert test_case.id == expected_id
+
+            # Verify the corresponding input and expected values
+            case_number = expected_id.split("_")[1]
+            assert test_case.input == f"input_{case_number}"
+            assert test_case.expected == f"result_{case_number}"
+
+    def test_test_case_parameter_with_llm_function(self):
+        """Test that test_case parameter can be used with LLM functions."""
+        def mock_llm_function(prompt: str) -> str:
+            # Simple mock that processes the prompt
+            return f"Processed: {prompt}"
+
+        @evaluate(
+            test_cases=[TestCase(id="llm_test", input="What is Python?")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["Processed", "Python"]},
+            )],
+            samples=2,
+            success_threshold=1.0,
+        )
+        def test_llm_integration(test_case) -> str:  # noqa
+            # Use test_case.input to call the LLM function
+            return mock_llm_function(test_case.input)
+
+        test_llm_integration()
+
+
+class TestEvaluateDecoratorSampling:
+    """Test sample-based evaluation with multiple test cases."""
+
+    def test_multiple_test_cases_samples_counting(self):
+        """Test correct sample counting with multiple test cases."""
+        execution_log = []
+
+        test_cases = [
+            TestCase(id="case_A", input="A", expected="result_A"),
+            TestCase(id="case_B", input="B", expected="result_B"),
+            TestCase(id="case_C", input="C", expected="result_C"),
+        ]
+
+        @evaluate(
+            test_cases=test_cases,
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=4,  # 4 samples * 3 test cases = 12 total function calls
+            success_threshold=1.0,
+        )
+        def test_sampling_function(test_case) -> str:  # noqa
+            execution_log.append((test_case.id, test_case.input))
+            return test_case.expected  # Always return expected value (should pass)
+
+        test_sampling_function()
+
+        # Verify execution pattern: should be called 12 times total (4 samples * 3 test cases)
+        assert len(execution_log) == 12
+
+        # Verify cycling pattern: A,B,C,A,B,C,A,B,C,A,B,C
+        expected_pattern = [("case_A", "A"), ("case_B", "B"), ("case_C", "C")] * 4
+        assert execution_log == expected_pattern
+
+    def test_sample_failure_when_any_test_case_fails(self):
+        """Test that a sample fails if ANY test case in the sample fails."""
+        test_cases = [
+            TestCase(id="case_pass", input="pass", expected="pass"),
+            TestCase(id="case_fail", input="fail", expected="pass"),  # This will fail
+        ]
+
+        @evaluate(
+            test_cases=test_cases,
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=3,  # 3 samples * 2 test cases = 6 total calls
+            success_threshold=0.1,  # Very low threshold (should still fail)
+        )
+        def test_partial_failure(test_case) -> str:  # noqa
+            return test_case.input  # case_pass returns "pass", case_fail returns "fail"
+
+        # Should fail because every sample has one failing test case
+        with pytest.raises(_pytest.outcomes.Failed) as exc_info:
+            test_partial_failure()
+
+        error_message = str(exc_info.value)
+        assert "Success rate: 0.00%" in error_message
+        assert "Required threshold: 10.00%" in error_message
+
+    def test_sample_success_when_all_test_cases_pass(self):
+        """Test that a sample passes only when ALL test cases pass."""
+        test_cases = [
+            TestCase(id="case_1", input="input1", expected="output1"),
+            TestCase(id="case_2", input="input2", expected="output2"),
+            TestCase(id="case_3", input="input3", expected="output3"),
+        ]
+
+        @evaluate(
+            test_cases=test_cases,
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=5,
+            success_threshold=1.0,
+        )
+        def test_all_pass(test_case) -> str:  # noqa
+            # Map input to expected output
+            mapping = {"input1": "output1", "input2": "output2", "input3": "output3"}
+            return mapping[test_case.input]
+
+        # Should pass (all samples pass because all test cases pass)
+        test_all_pass()
+
+    def test_mixed_sample_results(self):
+        """Test scenario with some samples passing and some failing."""
+        call_count = 0
+        test_cases = [
+            TestCase(id="case_1", input="1", expected="pass"),
+            TestCase(id="case_2", input="2", expected="pass"),
+        ]
+
+        @evaluate(
+            test_cases=test_cases,
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=4,  # 4 samples * 2 test cases = 8 calls
+            success_threshold=0.6,  # 60% threshold
+        )
+        def test_mixed_results(test_case) -> str:  # noqa
+            nonlocal call_count
+            call_count += 1
+
+            # Pattern: make samples 0 and 2 pass, samples 1 and 3 fail
+            # Sample 0: calls 1,2 -> pass,pass -> sample passes
+            # Sample 1: calls 3,4 -> fail,pass -> sample fails (one failed)
+            # Sample 2: calls 5,6 -> pass,pass -> sample passes
+            # Sample 3: calls 7,8 -> fail,pass -> sample fails (one failed)
+            # Result: 2/4 = 50% < 60% -> should fail
+
+            if call_count in [1, 2, 5, 6]:  # Samples 0 and 2 pass completely
+                return "pass"
+            # Samples 1 and 3 have one failure each
+            return "fail"
+
+        # Should fail (50% success rate < 60% threshold)
+        with pytest.raises(_pytest.outcomes.Failed) as exc_info:
+            test_mixed_results()
+
+        error_message = str(exc_info.value)
+        assert "Success rate: 50.00%" in error_message
+        assert "Required threshold: 60.00%" in error_message
+
+    def test_single_test_case_multiple_samples(self):
+        """Test edge case with single test case and multiple samples."""
+        call_count = 0
+
+        @evaluate(
+            test_cases=[TestCase(id="single", input="test", expected="pass")],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=10,
+            success_threshold=0.7,  # 70% threshold
+        )
+        def test_single_case_sampling(test_case) -> str:  # noqa
+            nonlocal call_count
+            call_count += 1
+            # Pass 8 out of 10 times (80% > 70%)
+            return "pass" if call_count <= 8 else "fail"
+
+        # Should pass (80% success rate > 70% threshold)
+        test_single_case_sampling()
+
+        # Verify function was called 10 times
+        assert call_count == 10
+
+
+class TestEvaluateDecoratorAsync:
+    """Test async function support with timing validation."""
+
+    def test_async_function_basic(self):
+        """Test basic async function support."""
+        execution_log = []
+
+        @evaluate(
+            test_cases=[TestCase(id="async_test", input="test_input")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["async"]},
+            )],
+            samples=3,
+            success_threshold=1.0,
+        )
+        async def test_async_function(test_case) -> str:  # noqa
+            execution_log.append(test_case.input)
+            await asyncio.sleep(0.01)  # Small delay to verify async execution
+            return f"async result for {test_case.input}"
+
+        test_async_function()
+
+        # Verify function was called correct number of times
+        assert len(execution_log) == 3
+        assert all(inp == "test_input" for inp in execution_log)
+
+    def test_async_function_concurrency_timing(self):
+        """Test that async functions run concurrently, not sequentially."""
+        start_times = []
+
+        @evaluate(
+            test_cases=[TestCase(id="timing_test", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["result"]},
+            )],
+            samples=5,  # 5 samples with 0.1s delay each
+            success_threshold=1.0,
+        )
+        async def test_concurrent_async(test_case) -> str:  # noqa
+            start_times.append(time.time())
+            await asyncio.sleep(0.1)  # 0.1 second delay
+            return "async result"
+
+        overall_start = time.time()
+        test_concurrent_async()
+        total_duration = time.time() - overall_start
+
+        # If run concurrently: ~0.1s total
+        # If run sequentially: ~0.5s total
+        # Allow some buffer for overhead
+        assert total_duration < 0.3, f"Async functions may not be concurrent (took {total_duration:.3f}s)"  # noqa: E501
+
+        # Verify all functions started around the same time (concurrent)
+        if len(start_times) > 1:
+            time_spread = max(start_times) - min(start_times)
+            assert time_spread < 0.05, f"Functions started too far apart: {time_spread:.3f}s"
+
+    def test_async_with_multiple_test_cases_timing(self):
+        """Test async concurrency with multiple test cases per sample."""
+        test_cases = [
+            TestCase(id="case_1", input="input1"),
+            TestCase(id="case_2", input="input2"),
+            TestCase(id="case_3", input="input3"),
+        ]
+
+        @evaluate(
+            test_cases=test_cases,
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["processed"]},
+            )],
+            samples=4,  # 4 samples * 3 test cases = 12 concurrent calls
+            success_threshold=1.0,
+        )
+        async def test_multi_case_async(test_case) -> str:  # noqa
+            await asyncio.sleep(0.05)  # 50ms delay per call
+            return f"processed {test_case.input}"
+
+        start_time = time.time()
+        test_multi_case_async()
+        duration = time.time() - start_time
+
+        # 12 concurrent calls with 0.05s delay should take ~0.05s total
+        # If sequential: would take 12 * 0.05 = 0.6s
+        assert duration < 0.2, f"Multiple test case async not concurrent (took {duration:.3f}s)"
+
+    def test_async_with_exceptions(self):
+        """Test async function exception handling."""
+        # Use a thread-safe counter for concurrent execution
+        execution_count = threading.Lock()
+        call_numbers = []
+
+        @evaluate(
+            test_cases=[TestCase(id="exception_test", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["success"]},
+            )],
+            samples=4,
+            success_threshold=0.6,  # 60% threshold
+        )
+        async def test_async_exceptions(test_case) -> str:  # noqa
+            await asyncio.sleep(0.01)
+
+            # Use thread-safe counter to assign unique execution numbers
+            with execution_count:
+                current_call = len(call_numbers) + 1
+                call_numbers.append(current_call)
+
+            if current_call <= 3:
+                return "success result"
+            raise ValueError("Async exception")
+
+        # Should pass (75% success rate > 60% threshold)
+        test_async_exceptions()
+
+    def test_async_function_with_simple_fixtures(self):
+        """Test async function without complex pytest fixtures."""
+
+        @evaluate(
+            test_cases=[TestCase(id="fixture_test", input="test_data")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["processed", "test_data"]},
+            )],
+            samples=2,
+            success_threshold=1.0,
+        )
+        async def test_async_simple(test_case: TestCase) -> str:
+            # Use test_case parameter
+            await asyncio.sleep(0.01)
+            return f"processed {test_case.input}"
+
+        test_async_simple()
 
 
 class TestEvaluateDecoratorFailureReporting:
@@ -754,7 +1145,7 @@ class TestEvaluateDecoratorFailureReporting:
             samples=2,
             success_threshold=0.5,
         )
-        def detailed_failure_function() -> str:
+        def detailed_failure_function(test_case) -> str:  # noqa
             return "always fails both checks"
 
         with pytest.raises(_pytest.outcomes.Failed) as exc_info:
@@ -784,7 +1175,7 @@ class TestEvaluateDecoratorFailureReporting:
             samples=3,
             success_threshold=0.8,  # 80% threshold
         )
-        def exception_reporting_function() -> str:
+        def exception_reporting_function(test_case) -> str:  # noqa
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -795,4 +1186,4 @@ class TestEvaluateDecoratorFailureReporting:
             exception_reporting_function()
 
         error_message = str(exc_info.value)
-        assert "Exception: ValueError: Test exception" in error_message
+        assert "Test case 0 exception: ValueError: Test exception" in error_message

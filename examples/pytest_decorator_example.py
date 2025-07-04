@@ -44,9 +44,12 @@ def simple_quality_judge(prompt: str, response_format: type) -> tuple:
     samples=3,
     success_threshold=1.0,  # Expect 100% success
 )
-def test_python_explanation() -> str:
+def test_python_explanation(test_case: TestCase) -> str:
     """Deterministic function that always produces good Python explanations."""
-    return "Python is a popular programming language known for simplicity."
+    # Use test_case.input to generate more contextual response
+    if "Python" in test_case.input:
+        return "Python is a popular programming language known for simplicity."
+    return "Python is a versatile programming language."
 
 
 # Example 2: Multiple check types
@@ -69,10 +72,17 @@ def test_python_explanation() -> str:
     samples=2,
     success_threshold=1.0,
 )
-def test_code_generation() -> dict:
+def test_code_generation(test_case: TestCase) -> dict:
     """Generate code examples with multiple validation checks."""
+    # Use test_case.input to generate contextual code
+    if "example" in test_case.input:
+        return {
+            "code": "print('Hello, World!')",
+            "type": "example",
+            "language": "python",
+        }
     return {
-        "code": "print('Hello, World!')",
+        "code": "print('Generated code')",
         "type": "example",
         "language": "python",
     }
@@ -94,9 +104,10 @@ test_case_with_checks = TestCase(
     samples=2,
     success_threshold=1.0,
 )
-def test_with_testcase_checks() -> str:
+def test_with_testcase_checks(test_case: TestCase) -> str:
     """Demonstrate TestCase-defined checks pattern."""
-    return "Operation completed successfully"
+    # Use test_case.input for more dynamic response
+    return f"Operation for '{test_case.input}' completed successfully"
 
 
 # Example 4: LLM Judge integration
@@ -113,10 +124,18 @@ def test_with_testcase_checks() -> str:
     samples=2,
     success_threshold=1.0,
 )
-def test_llm_quality_assessment() -> str:
+def test_llm_quality_assessment(test_case: TestCase) -> str:
     """Demonstrate LLM judge evaluation with deterministic mock."""
-    # Long response with "Python" keyword will pass the mock judge
-    return "Python is an excellent programming language for beginners and experts alike, offering clear syntax and powerful libraries."  # noqa: E501
+    # Use test_case.input to generate contextual response
+    if "AI" in test_case.input:
+        return (
+            "Python is an excellent programming language for AI development, "
+            "offering clear syntax and powerful libraries like TensorFlow and PyTorch."
+        )
+    return (
+        "Python is an excellent programming language for beginners and experts alike, "
+        "offering clear syntax and powerful libraries."
+    )
 
 
 # Example 5: Statistical threshold demonstration
@@ -129,7 +148,7 @@ def test_llm_quality_assessment() -> str:
     samples=4,
     success_threshold=0.75,  # 75% threshold (3 out of 4 must pass)
 )
-def test_statistical_threshold() -> str:
+def test_statistical_threshold(test_case: TestCase) -> str:  # noqa: ARG001
     """Demonstrate statistical threshold with predictable variance."""
     # Simple counter-based approach for deterministic behavior
     if hasattr(test_statistical_threshold, '_counter'):
@@ -154,18 +173,18 @@ def test_statistical_threshold() -> str:
     samples=4,  # Will cycle: math, string, math, string
     success_threshold=1.0,
 )
-def test_cycling_test_cases() -> str:
+def test_cycling_test_cases(test_case: TestCase) -> str:
     """Demonstrate cycling through multiple test cases."""
-    # Counter for deterministic cycling behavior
-    if hasattr(test_cycling_test_cases, '_counter'):
-        test_cycling_test_cases._counter += 1
-    else:
-        test_cycling_test_cases._counter = 1
-
-    # Return appropriate response based on test case cycling
-    if test_cycling_test_cases._counter % 2 == 1:
-        return "4"  # For math test case (2+2 = 4)
-    return "HELLO"  # For string test case (hello -> HELLO)
+    # Use test_case to determine appropriate response
+    if test_case.id == "math":
+        # For math test case: evaluate the input expression
+        if test_case.input == "2+2":
+            return "4"
+        return str(eval(test_case.input))  # Simple evaluation for demo
+    if test_case.id == "string":
+        # For string test case: uppercase the input
+        return test_case.input.upper()
+    return test_case.expected  # Fallback to expected value
 
 
 if __name__ == "__main__":
