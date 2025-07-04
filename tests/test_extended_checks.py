@@ -131,22 +131,19 @@ class TestLlmJudgeCheck:
             llm_function=llm_function,
         )
 
-        # Check new structure
-        assert "response" in result
-        assert "metadata" in result
-
-        expected_response = {
+        # Check new structure with separate judge_metadata
+        expected_structure = {
             "score": 4,
             "is_helpful": True,
             "reasoning": "Clear and accurate response",
+            "judge_metadata": {
+                "cost_usd": 0.0023,
+                "tokens_used": 150,
+                "response_time_ms": 842,
+                "model_version": "gpt-4o-mini-2024-07-02",
+            },
         }
-        assert result["response"] == expected_response
-
-        # Check metadata
-        assert result["metadata"]["cost_usd"] == 0.0023
-        assert result["metadata"]["tokens_used"] == 150
-        assert result["metadata"]["response_time_ms"] == 842
-        assert result["metadata"]["model_version"] == "gpt-4o-mini-2024-07-02"
+        assert result == expected_structure
 
     @pytest.mark.asyncio
     async def test_call_with_async_llm_function(self):
@@ -160,9 +157,8 @@ class TestLlmJudgeCheck:
             llm_function=llm_function,
         )
 
-        assert result["response"] == {"passed": True}
-        assert "metadata" in result
-        assert result["metadata"]["model_version"] == "gpt-4o-mini-async"
+        assert result["passed"] is True
+        assert result["judge_metadata"]["model_version"] == "gpt-4o-mini-async"
 
     @pytest.mark.asyncio
     async def test_call_with_complex_response_format(self):
@@ -182,8 +178,15 @@ class TestLlmJudgeCheck:
             llm_function=llm_function,
         )
 
-        assert result["response"] == response_data
-        assert "metadata" in result
+        # Check structure includes all response fields and separate judge_metadata
+        assert result["overall_score"] == 0.85
+        assert result["categories"] == {"accuracy": 5, "clarity": 4, "completeness": 4}
+        assert result["issues"] == ["Could provide more examples"]
+        assert result["recommendations"] == ["Add specific examples", "Include sources"]
+        assert result["metadata"] == {"confidence": 0.9, "processing_time": 1.2}
+        # Should also have LLM metadata in separate field
+        assert "cost_usd" in result["judge_metadata"]
+        assert "tokens_used" in result["judge_metadata"]
 
     @pytest.mark.asyncio
     async def test_call_argument_validation(self):
@@ -265,8 +268,13 @@ class TestLlmJudgeCheck:
             response_format=QualityAssessment,
             llm_function=llm_function,
         )
-        assert result["response"] == {"score": 5, "is_helpful": True, "reasoning": "Perfect"}
-        assert result["metadata"] == custom_metadata
+        # Check structure with separate judge_metadata
+        assert result["score"] == 5
+        assert result["is_helpful"] is True
+        assert result["reasoning"] == "Perfect"
+        assert result["judge_metadata"]["cost_usd"] == 0.001
+        assert result["judge_metadata"]["tokens_used"] == 75
+        assert result["judge_metadata"]["model"] == "test-model"
 
         # Test invalid response format (not tuple)
         def invalid_llm_function(p, rf):  # noqa
@@ -304,8 +312,13 @@ class TestLlmJudgeCheck:
 
         assert result.status == Status.COMPLETED
         assert result.check_type == "llm_judge"
-        assert result.results["response"] == {"score": 4, "is_helpful": True, "reasoning": "Good"}
-        assert "metadata" in result.results
+        # Check structure with separate judge_metadata in results
+        assert result.results["score"] == 4
+        assert result.results["is_helpful"] is True
+        assert result.results["reasoning"] == "Good"
+        # Should also have metadata fields in separate judge_metadata
+        assert "cost_usd" in result.results["judge_metadata"]
+        assert "tokens_used" in result.results["judge_metadata"]
 
         # Verify template was processed
         resolved_prompt = result.resolved_arguments["prompt"]["value"]
@@ -544,10 +557,12 @@ class TestLlmJudgeCheck:
         assert results.results[0].check_results[0].status == Status.COMPLETED
 
         check_result = results.results[0].check_results[0]
-        assert check_result.results["response"]["score"] == 5
-        assert check_result.results["response"]["is_helpful"] is True
-        assert "Accurate geographical answer" in check_result.results["response"]["reasoning"]
-        assert "metadata" in check_result.results
+        # Check structure with separate judge_metadata in check results
+        assert check_result.results["score"] == 5
+        assert check_result.results["is_helpful"] is True
+        assert "Accurate geographical answer" in check_result.results["reasoning"]
+        assert "cost_usd" in check_result.results["judge_metadata"]
+        assert "tokens_used" in check_result.results["judge_metadata"]
 
     def test_llm_judge_via_evaluate_complex_jsonpath(self):
         """Test LLM judge via evaluate with complex JSONPath expressions."""
@@ -596,7 +611,7 @@ class TestLlmJudgeCheck:
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
-        assert results.results[0].check_results[0].results["response"]["passed"] is True
+        assert results.results[0].check_results[0].results["passed"] is True
 
         # Verify complex JSONPath resolution
         resolved_prompt = results.results[0].check_results[0].resolved_arguments["prompt"]["value"]
@@ -652,14 +667,14 @@ class TestLlmJudgeCheck:
         assert results.summary.completed_test_cases == 1
         assert len(results.results[0].check_results) == 2
 
-        # First check (quality assessment)
+        # First check (quality assessment) - structure with separate judge_metadata
         quality_result = results.results[0].check_results[0]
-        assert quality_result.results["response"]["score"] == 4
-        assert quality_result.results["response"]["is_helpful"] is True
+        assert quality_result.results["score"] == 4
+        assert quality_result.results["is_helpful"] is True
 
-        # Second check (boolean result)
+        # Second check (boolean result) - structure with separate judge_metadata
         boolean_result = results.results[0].check_results[1]
-        assert boolean_result.results["response"]["passed"] is True
+        assert boolean_result.results["passed"] is True
 
     def test_llm_judge_via_evaluate_error_handling(self):
         """Test error handling via evaluate function."""
@@ -864,13 +879,15 @@ class TestLlmJudgeCheck:
             llm_function=llm_function,
         )
 
-        # Verify structure
-        assert "response" in result
-        assert "metadata" in result
-
-        # Verify content
-        assert result["response"] == {"passed": True}
-        assert result["metadata"] == custom_metadata
+        # Verify structure includes response fields and separate judge_metadata
+        assert result["passed"] is True
+        assert result["judge_metadata"]["cost_usd"] == 0.0045
+        assert result["judge_metadata"]["tokens_used"] == 250
+        assert result["judge_metadata"]["input_tokens"] == 180
+        assert result["judge_metadata"]["output_tokens"] == 70
+        assert result["judge_metadata"]["response_time_ms"] == 1200
+        assert result["judge_metadata"]["model_version"] == "gpt-4o-mini-test"
+        assert result["judge_metadata"]["temperature"] == 0.1
 
     @pytest.mark.asyncio
     async def test_response_format_validation_edge_cases(self):
@@ -884,8 +901,10 @@ class TestLlmJudgeCheck:
             response_format=SimpleBooleanResult,
             llm_function=llm_function,
         )
-        assert result["response"] == {"passed": True}
-        assert "metadata" in result
+        assert result["passed"] is True
+        # Should have metadata fields in separate judge_metadata
+        assert "cost_usd" in result["judge_metadata"]
+        assert "tokens_used" in result["judge_metadata"]
 
         # Test with response containing extra fields (should be preserved)
         extra_fields_response = {"passed": True, "extra_field": "value", "another": 123}
@@ -902,8 +921,13 @@ class TestLlmJudgeCheck:
             response_format=ExtendedResult,
             llm_function=llm_function,
         )
-        assert result["response"] == {"passed": True, "extra_field": "value", "another": 123}
-        assert "metadata" in result
+        # Check structure includes all fields with separate judge_metadata
+        assert result["passed"] is True
+        assert result["extra_field"] == "value"
+        assert result["another"] == 123
+        # Should also have metadata fields in separate judge_metadata
+        assert "cost_usd" in result["judge_metadata"]
+        assert "tokens_used" in result["judge_metadata"]
 
     def test_concurrent_evaluations(self):
         """Test multiple concurrent LLM judge evaluations."""
@@ -976,12 +1000,12 @@ class TestLlmJudgeCheck:
         assert results.summary.completed_test_cases == 3
         assert results.summary.error_test_cases == 0
 
-        # Verify each test case got the expected score
-        scores = [result.check_results[0].results["response"]["score"] for result in results.results]  # noqa: E501
+        # Verify each test case got the expected score (structure with separate judge_metadata)
+        scores = [result.check_results[0].results["score"] for result in results.results]
         assert scores == [5, 3, 1]
-        is_helpful = [result.check_results[0].results["response"]["is_helpful"] for result in results.results]  # noqa: E501
+        is_helpful = [result.check_results[0].results["is_helpful"] for result in results.results]
         assert is_helpful == [True, True, False]
-        reasoning = [result.check_results[0].results["response"]["reasoning"] for result in results.results]  # noqa: E501
+        reasoning = [result.check_results[0].results["reasoning"] for result in results.results]
         assert reasoning == [
             "Excellent",
             "Good",
