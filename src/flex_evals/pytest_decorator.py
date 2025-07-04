@@ -1,5 +1,5 @@
 """
-Pytest decorator for statistical evaluation using flex-evals.
+Simplified pytest decorator for statistical evaluation using flex-evals.
 
 This module provides the @evaluate decorator that allows running test functions
 multiple times and validating success rates using existing flex-evals checks.
@@ -10,6 +10,7 @@ import inspect
 import traceback
 from typing import Any, TypeVar
 from collections.abc import Callable
+from functools import wraps
 
 import pytest
 
@@ -32,70 +33,6 @@ def evaluate(  # noqa: PLR0915
     the success rate using existing flex-evals checks. It integrates with
     pytest's testing framework and provides rich failure reporting.
 
-    EXECUTION FLOW:
-    ==============
-
-    1. Execute the wrapped function `samples` number of times, passing test_case as first parameter
-    2. Collect all return values and any exceptions
-    3. Reuse original TestCase objects (cycling through if multiple)
-    4. Wrap function outputs in Output objects
-    5. Call engine.evaluate() with test cases, outputs, and checks
-    6. Extract 'passed' field from CheckResult objects
-    7. Calculate success rate and compare against threshold
-    8. Use pytest.fail() with detailed reporting if threshold not met
-
-    CHECK SOURCES:
-    =============
-
-    Checks can be provided in two ways:
-    1. Via the checks parameter (shared across all test cases)
-    2. Via TestCase.checks field (per-test-case checks)
-
-    If checks parameter is provided, it overrides any checks defined in TestCase objects.
-    If checks=None, each TestCase must define its own checks.
-
-    TEST CASE REUSE:
-    ===============
-
-    The decorator reuses the original TestCase objects for each sample:
-    - Preserves original input structure (JSONPath expressions work correctly)
-    - Preserves expected values for comparison checks
-    - Preserves check definitions if using TestCase.checks pattern
-    - No side effects since engine.evaluate() only reads TestCase data
-
-    If the original test_cases list has multiple items, the decorator cycles
-    through them to provide variety in the evaluation.
-
-    OUTPUT WRAPPING:
-    ===============
-
-    Function return values are wrapped in Output objects:
-    - Value: The actual function return value
-    - Simple structure preserving the original data
-
-    For exceptions, error outputs are created with exception details including
-    error type, message, and traceback information.
-
-    SUCCESS RATE CALCULATION:
-    ========================
-
-    The decorator extracts the 'passed' field from each CheckResult:
-    - Counts total samples executed
-    - Counts samples where all checks passed
-    - Calculates success_rate = passed_samples / total_samples
-    - Compares against success_threshold
-
-    PYTEST INTEGRATION:
-    ==================
-
-    - Uses pytest.fail() for threshold failures with detailed message
-    - Provides rich reporting showing:
-      * Total samples executed
-      * Number passed/failed
-      * Success rate achieved vs required
-      * Details of failed samples
-      * Exception details if any occurred
-
     Args:
         test_cases: List of TestCase objects to cycle through for evaluation
         checks: Optional list of checks to apply to all samples
@@ -104,10 +41,6 @@ def evaluate(  # noqa: PLR0915
 
     Returns:
         Decorated function that performs statistical evaluation
-
-    Raises:
-        ValueError: If checks configuration is invalid
-        pytest.fail: If success threshold is not met
 
     Example:
         @evaluate(
@@ -133,67 +66,45 @@ def evaluate(  # noqa: PLR0915
         # Validate decorator parameters
         if not test_cases:
             raise ValueError("test_cases list cannot be empty")
-
         if samples <= 0:
             raise ValueError("samples must be positive")
-
         if not 0.0 <= success_threshold <= 1.0:
             raise ValueError("success_threshold must be between 0.0 and 1.0")
 
         # Validate check configuration
         _validate_check_configuration(test_cases, checks)
 
-        # Get original function signature
+        # Check if function expects test_case parameter
         sig = inspect.signature(func)
         expects_test_case = 'test_case' in sig.parameters
 
-        # Create wrapper signature without test_case parameter for pytest
+        # Create new signature without test_case parameter for pytest
         if expects_test_case:
-            wrapper_params = [p for name, p in sig.parameters.items() if name != 'test_case']
-            wrapper_sig = sig.replace(parameters=wrapper_params)
+            new_params = [p for name, p in sig.parameters.items() if name != 'test_case']
+            new_sig = sig.replace(parameters=new_params)
         else:
-            wrapper_sig = sig
+            new_sig = sig
 
-        # Create execution functions
-        def _execute_sync_expansion():  # noqa: ANN202
-            # Expand test cases: [A, B] * samples = [A,B,A,B,...]
-            expanded_test_cases = []
-            for _ in range(samples):
-                expanded_test_cases.extend(test_cases)
-            return expanded_test_cases
+        def _create_error_output(exception):  # noqa: ANN001, ANN202
+            """Create an error output for an exception."""
+            return Output(
+                value={
+                    "error": True,
+                    "exception_type": type(exception).__name__,
+                    "exception_message": str(exception),
+                    "traceback": traceback.format_exc() if not isinstance(exception, type) else
+                                traceback.format_exception(type(exception), exception, exception.__traceback__),  # noqa: E501
+                },
+            )
 
-        async def _execute_async_calls(expanded_test_cases, kwargs):  # noqa
-            # Generate outputs concurrently
-            tasks = []
-            for test_case in expanded_test_cases:
-                if expects_test_case:  # noqa: SIM108
-                    # Call function with test_case as first argument
-                    task = func(test_case, **kwargs)
-                else:
-                    task = func(**kwargs)
-                tasks.append(task)
-
-            # Execute all tasks concurrently
-            try:
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-            except Exception as e:
-                pytest.fail(f"Function execution failed: {e}")
-
-            # Process results and exceptions
+        def _process_task_results(results):  # noqa: ANN001, ANN202
+            """Process results from asyncio.gather."""
             outputs = []
             exceptions = []
+
             for result in results:
                 if isinstance(result, Exception):
-                    # Create error output for exception
-                    error_output = Output(
-                        value={
-                            "error": True,
-                            "exception_type": type(result).__name__,
-                            "exception_message": str(result),
-                            "traceback": traceback.format_exception(type(result), result, result.__traceback__),  # noqa: E501
-                        },
-                    )
-                    outputs.append(error_output)
+                    outputs.append(_create_error_output(result))
                     exceptions.append(result)
                 else:
                     outputs.append(Output(value=result))
@@ -201,186 +112,126 @@ def evaluate(  # noqa: PLR0915
 
             return outputs, exceptions
 
-        def _execute_sync_calls(expanded_test_cases, kwargs):  # noqa
-            # Generate outputs synchronously
+        def _evaluate_results(expanded_test_cases, outputs, exceptions) -> None:  # noqa: ANN001
+            """Evaluate results and check success threshold."""
+            try:
+                evaluation_result = engine_evaluate(
+                    test_cases=expanded_test_cases,
+                    outputs=outputs,
+                    checks=checks,
+                )
+            except Exception as e:
+                pytest.fail(f"Evaluation failed: {e}")
+
+            # Calculate sample-based success rate
+            num_test_cases_per_sample = len(test_cases)
+            passed_samples = 0
+            failed_samples = []
+
+            for sample_idx in range(samples):
+                start_idx = sample_idx * num_test_cases_per_sample
+                end_idx = start_idx + num_test_cases_per_sample
+
+                sample_test_case_results = evaluation_result.results[start_idx:end_idx]
+                sample_exceptions = exceptions[start_idx:end_idx]
+
+                # Sample passes if ALL test cases pass
+                sample_passed = all(
+                    _check_sample_passed(tcr.check_results) for tcr in sample_test_case_results
+                )
+
+                if sample_passed:
+                    passed_samples += 1
+                else:
+                    failed_samples.append({
+                        "sample_index": sample_idx,
+                        "exceptions": sample_exceptions,
+                        "test_case_results": sample_test_case_results,
+                    })
+
+            # Check success threshold
+            success_rate = passed_samples / samples
+            if success_rate < success_threshold:
+                _generate_failure_report(
+                    func_name=func.__name__,
+                    samples=samples,
+                    passed_count=passed_samples,
+                    success_rate=success_rate,
+                    success_threshold=success_threshold,
+                    failed_samples=failed_samples,
+                )
+
+        async def _execute_async_calls(expanded_test_cases, args, kwargs) -> None:  # noqa: ANN001
+            """Execute async function calls concurrently."""
+            # Create tasks for all calls
+            tasks = []
+            for test_case in expanded_test_cases:
+                if expects_test_case:
+                    task = func(test_case, *args, **kwargs)
+                else:
+                    task = func(*args, **kwargs)
+                tasks.append(task)
+
+            # Execute concurrently and collect results
+            try:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+            except Exception as e:
+                pytest.fail(f"Function execution failed: {e}")
+
+            outputs, exceptions = _process_task_results(results)
+            _evaluate_results(expanded_test_cases, outputs, exceptions)
+
+        def _execute_sync_calls(expanded_test_cases, args, kwargs) -> None:  # noqa: ANN001
+            """Execute sync function calls sequentially."""
             outputs = []
             exceptions = []
+
             for test_case in expanded_test_cases:
                 try:
-                    if expects_test_case:  # noqa: SIM108
-                        # Call function with test_case as first argument
-                        result = func(test_case, **kwargs)
+                    if expects_test_case:
+                        result = func(test_case, *args, **kwargs)
                     else:
-                        result = func(**kwargs)
+                        result = func(*args, **kwargs)
                     outputs.append(Output(value=result))
                     exceptions.append(None)
                 except Exception as e:
-                    # Create error output for exception
-                    error_output = Output(
-                        value={
-                            "error": True,
-                            "exception_type": type(e).__name__,
-                            "exception_message": str(e),
-                            "traceback": traceback.format_exc(),
-                        },
-                    )
-                    outputs.append(error_output)
+                    outputs.append(_create_error_output(e))
                     exceptions.append(e)
 
-            return outputs, exceptions
+            _evaluate_results(expanded_test_cases, outputs, exceptions)
 
-        # Create wrapper function dynamically with correct signature
-        # We need to create a function that actually has the signature pytest expects
+        async def _run_async_evaluation(args, kwargs) -> None:  # noqa: ANN001
+            """Run evaluation for async functions."""
+            expanded_test_cases = test_cases * samples
+            await _execute_async_calls(expanded_test_cases, args, kwargs)
 
-        # Get parameter names for the wrapper (excluding test_case)
-        param_names = list(wrapper_sig.parameters.keys())
+        def _run_sync_evaluation(args, kwargs) -> None:  # noqa: ANN001
+            """Run evaluation for sync functions."""
+            expanded_test_cases = test_cases * samples
+            _execute_sync_calls(expanded_test_cases, args, kwargs)
 
+        # Create wrapper based on function type
         if asyncio.iscoroutinefunction(func):
-            # Create async wrapper with proper signature
-            async def async_wrapper_impl(kwargs_dict) -> None:  # noqa: ANN001
-                expanded_test_cases = _execute_sync_expansion()
-                outputs, exceptions = await _execute_async_calls(expanded_test_cases, kwargs_dict)
+            @wraps(func)
+            def async_wrapper(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+                # Run async function using asyncio.run
+                return asyncio.run(_run_async_evaluation(args, kwargs))
 
-                # Process evaluation results
-                _process_evaluation_results(
-                    expanded_test_cases, outputs, exceptions, checks, samples, success_threshold, func.__name__,  # noqa: E501
-                )
+            async_wrapper.__signature__ = new_sig
+            return async_wrapper
+        @wraps(func)
+        def sync_wrapper(*args, **kwargs) -> None:  # noqa: ANN002, ANN003
+            _run_sync_evaluation(args, kwargs)
 
-            # Create dynamic wrapper function with correct parameter names
-            if param_names:
-                # Create function string with actual parameter names
-                param_str = ', '.join(param_names)
-                kwargs_str = ', '.join(f"'{name}': {name}" for name in param_names)
-                func_code = f"""
-def wrapper({param_str}) -> None:
-    import asyncio
-    kwargs_dict = {{{kwargs_str}}}
-    asyncio.run(async_wrapper_impl(kwargs_dict))
-"""
-            else:
-                func_code = """
-def wrapper() -> None:
-    import asyncio
-    asyncio.run(async_wrapper_impl({}))
-"""
+        sync_wrapper.__signature__ = new_sig
+        return sync_wrapper
 
-            # Execute the dynamic function code
-            namespace = {'async_wrapper_impl': async_wrapper_impl, 'asyncio': asyncio}
-            exec(func_code, namespace, namespace)
-            wrapper = namespace['wrapper']
-        else:
-            # Sync wrapper
-            def sync_wrapper_impl(kwargs_dict) -> None:  # noqa
-                expanded_test_cases = _execute_sync_expansion()
-                outputs, exceptions = _execute_sync_calls(expanded_test_cases, kwargs_dict)
-
-                # Process evaluation results
-                _process_evaluation_results(
-                    expanded_test_cases, outputs, exceptions, checks, samples, success_threshold, func.__name__,  # noqa: E501
-                )
-
-            # Create dynamic wrapper function with correct parameter names
-            if param_names:
-                # Create function string with actual parameter names
-                param_str = ', '.join(param_names)
-                kwargs_str = ', '.join(f"'{name}': {name}" for name in param_names)
-                func_code = f"""
-def wrapper({param_str}) -> None:
-    kwargs_dict = {{{kwargs_str}}}
-    sync_wrapper_impl(kwargs_dict)
-"""
-            else:
-                func_code = """
-def wrapper() -> None:
-    sync_wrapper_impl({})
-"""
-
-            # Execute the dynamic function code
-            namespace = {'sync_wrapper_impl': sync_wrapper_impl}
-            exec(func_code, namespace, namespace)
-            wrapper = namespace['wrapper']
-
-        # The wrapper function now has the correct signature naturally
-
-        return wrapper
     return decorator
 
 
-def _process_evaluation_results(
-    expanded_test_cases: list[TestCase],
-    outputs: list[Output],
-    exceptions: list[Exception | None],
-    checks: list[Check] | None,
-    samples: int,
-    success_threshold: float,
-    func_name: str,
-) -> None:
-    """Process evaluation results and handle sample-based success calculation."""
-    # Call evaluate once with all expanded test cases
-    try:
-        evaluation_result = engine_evaluate(
-            test_cases=expanded_test_cases,
-            outputs=outputs,
-            checks=checks,
-        )
-    except Exception as e:
-        pytest.fail(f"Evaluation failed: {e}")
-
-    # Group results back into samples
-    # Each sample contains len(original_test_cases) consecutive results
-    num_test_cases_per_sample = len(expanded_test_cases) // samples
-    sample_results = []
-
-    for sample_idx in range(samples):
-        start_idx = sample_idx * num_test_cases_per_sample
-        end_idx = start_idx + num_test_cases_per_sample
-        sample_test_case_results = evaluation_result.results[start_idx:end_idx]
-        sample_exceptions = exceptions[start_idx:end_idx]
-
-        # A sample passes if ALL its test cases pass
-        sample_passed = all(
-            _check_sample_passed(tcr.check_results) for tcr in sample_test_case_results
-        )
-
-        if not sample_passed:
-            sample_results.append({
-                "sample_index": sample_idx,
-                "exceptions": sample_exceptions,
-                "test_case_results": sample_test_case_results,
-            })
-        else:
-            sample_results.append(None)  # Sample passed
-
-    # Calculate success rate based on samples, not individual test cases
-    passed_samples = sum(1 for result in sample_results if result is None)
-    success_rate = passed_samples / samples
-
-    # Check if threshold is met
-    if success_rate < success_threshold:
-        failed_samples = [result for result in sample_results if result is not None]
-        _generate_failure_report(
-            func_name=func_name,
-            samples=samples,
-            passed_count=passed_samples,
-            success_rate=success_rate,
-            success_threshold=success_threshold,
-            failed_samples=failed_samples,
-        )
-
-
 def _validate_check_configuration(test_cases: list[TestCase], checks: list[Check] | None) -> None:
-    """
-    Validate that check configuration is valid for evaluation.
-
-    Args:
-        test_cases: List of test cases
-        checks: Optional shared checks
-
-    Raises:
-        ValueError: If configuration is invalid
-    """
+    """Validate that check configuration is valid for evaluation."""
     if checks is None:
-        # Each test case must have checks defined
         for test_case in test_cases:
             if not test_case.checks:
                 raise ValueError(
@@ -390,20 +241,7 @@ def _validate_check_configuration(test_cases: list[TestCase], checks: list[Check
 
 
 def _check_sample_passed(check_results: list[CheckResult]) -> bool:
-    """
-    Check if a sample passed by examining all check results.
-
-    A sample passes if all checks have a 'passed' field that is True.
-
-    Args:
-        check_results: List of check results for a sample
-
-    Returns:
-        bool: True if sample passed, False otherwise
-
-    Raises:
-        ValueError: If any check result doesn't have a 'passed' field
-    """
+    """Check if a sample passed by examining all check results."""
     if not check_results:
         return False
 
@@ -431,17 +269,7 @@ def _generate_failure_report(
     success_threshold: float,
     failed_samples: list[dict],
 ) -> None:
-    """
-    Generate detailed failure report and call pytest.fail().
-
-    Args:
-        func_name: Name of the test function
-        samples: Total number of samples
-        passed_count: Number of samples that passed
-        success_rate: Calculated success rate
-        success_threshold: Required success threshold
-        failed_samples: List of failed sample details
-    """
+    """Generate detailed failure report and call pytest.fail()."""
     failed_count = samples - passed_count
 
     report_lines = [
@@ -462,27 +290,24 @@ def _generate_failure_report(
 
         report_lines.append(f"  Sample {sample_idx}:")
 
-        # Report exceptions for this sample
+        # Report exceptions
         for i, exception in enumerate(exceptions):
             if exception:
                 report_lines.append(f"    Test case {i} exception: {type(exception).__name__}: {exception}")  # noqa: E501
 
-        # Report check failures for this sample
+        # Report check failures
         for i, test_case_result in enumerate(test_case_results):
             for check_result in test_case_result.check_results:
                 if check_result.status != 'completed':
                     report_lines.append(f"    Test case {i} check '{check_result.check_type}': {check_result.status}")  # noqa: E501
                     if check_result.error:
                         report_lines.append(f"      Error: {check_result.error.message}")
-                    # Add resolved arguments for debugging error cases too
                     if check_result.resolved_arguments:
                         report_lines.append(f"      Resolved arguments: {check_result.resolved_arguments}")  # noqa: E501
                 elif not check_result.results.get('passed', False):
                     report_lines.append(f"    Test case {i} check '{check_result.check_type}': failed")  # noqa: E501
-                    # Add additional details if available
                     if 'reasoning' in check_result.results:
                         report_lines.append(f"      Reasoning: {check_result.results['reasoning']}")  # noqa: E501
-                    # Add resolved arguments for debugging
                     if check_result.resolved_arguments:
                         report_lines.append(f"      Resolved arguments: {check_result.resolved_arguments}")  # noqa: E501
 
