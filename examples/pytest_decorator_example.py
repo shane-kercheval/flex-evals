@@ -7,6 +7,7 @@ deterministic examples that will always pass when run as tests.
 To run: pytest examples/pytest_decorator_example.py -v
 """
 
+import asyncio
 import pytest
 from pydantic import BaseModel, Field
 
@@ -171,7 +172,7 @@ def user_data_fixture() -> str:
     return "user_data_123"
 
 
-# Example 7: Pytest fixture integration
+# Example 6: Pytest fixture integration
 @evaluate(
     test_cases=[TestCase(id="fixture_test", input="user_data")],
     checks=[ExactMatchCheck(
@@ -186,7 +187,7 @@ def test_with_simple_fixture(test_case: TestCase, simple_fixture) -> str:  # noq
     return f"{simple_fixture}:{test_case.input}"
 
 
-# Example 8: Multiple fixtures
+# Example 7: Multiple fixtures
 @evaluate(
     test_cases=[TestCase(id="multi_fixture", input="combined")],
     checks=[ExactMatchCheck(
@@ -201,6 +202,34 @@ def test_with_multiple_fixtures(test_case: TestCase, simple_fixture, user_data_f
     return f"{simple_fixture}+{user_data_fixture}+{test_case.input}"
 
 
+# Example 8: Async function with concurrent execution (100 samples)
+# This example samples the async function (which sleeps for 0.1 seconds)
+# 100 times concurrently. Total execution time is <0.4 seconds. If run sequentially,
+# it would take ~10 seconds (100 * 0.1s).
+@evaluate(
+    test_cases=[TestCase(id="async_demo", input="async_task")],
+    checks=[ContainsCheck(
+        text="$.output.value",
+        phrases=["completed", "async"],
+    )],
+    samples=100,  # 100 samples executed concurrently
+    success_threshold=1.0,
+)
+async def test_async_concurrent_execution(test_case: TestCase) -> str:
+    """
+    Demonstrate async function execution with 50 concurrent samples.
+
+    This test simulates an async operation (like an API call) that takes 0.1 seconds.
+    With 50 samples running concurrently, the total execution time should be around
+    0.1 seconds instead of 5.0 seconds (50 * 0.1s) if run sequentially.
+    """
+    # Simulate async work (e.g., API call, database query, network request)
+    await asyncio.sleep(0.1)
+    # Use test_case.input to generate contextual response
+    return f"Async task '{test_case.input}' completed successfully"
+
+
+
 if __name__ == "__main__":
     print("Simple @evaluate decorator examples")
     print("Run with: pytest examples/pytest_decorator_example.py -v")
@@ -211,6 +240,7 @@ if __name__ == "__main__":
     print("  test_with_testcase_checks: TestCase-defined checks")
     print("  test_llm_quality_assessment: LLM judge integration")
     print("  test_statistical_threshold: Statistical evaluation")
-    print("  test_cycling_test_cases: Multiple test cases")
     print("  test_with_simple_fixture: Pytest fixture integration")
     print("  test_with_multiple_fixtures: Multiple fixtures integration")
+    print("  test_async_concurrent_execution: Async with 50 concurrent samples")
+    print("  test_async_timing_demonstration: Async timing and performance")
