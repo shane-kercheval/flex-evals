@@ -9,9 +9,7 @@ from flex_evals.registry import (
     get_registry_state, restore_registry_state,
 )
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
-from flex_evals.constants import CheckType
-from flex_evals.schemas.output import Output
-from flex_evals.schemas.test_case import TestCase
+from flex_evals import CheckType, Output, TestCase
 from tests.conftest import restore_standard_checks
 
 

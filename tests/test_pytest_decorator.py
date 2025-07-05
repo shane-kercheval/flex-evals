@@ -9,8 +9,7 @@ from pydantic import BaseModel, Field
 import threading
 
 from flex_evals.pytest_decorator import evaluate
-from flex_evals.schemas import TestCase, Check
-from flex_evals.constants import CheckType
+from flex_evals import TestCase, Check, CheckType
 
 from typing import Never
 

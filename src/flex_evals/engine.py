@@ -15,7 +15,7 @@ from .schemas import (
     EvaluationRunResult, EvaluationSummary, ExperimentMetadata,
 )
 from .schemas.results import ExecutionContext
-from .schemas.check import CheckError, CheckResultMetadata
+from .schemas.check import CheckError, CheckResultMetadata, SchemaCheck
 from .checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
 from .registry import get_check_class, is_async_check, get_registry_state, restore_registry_state
 from .exceptions import ValidationError
@@ -24,7 +24,7 @@ from .exceptions import ValidationError
 def evaluate(
         test_cases: list[TestCase],
         outputs: list[Output],
-        checks: list[Check] | list[list[Check]] | None = None,
+        checks: list[Check | SchemaCheck] | list[list[Check | SchemaCheck]] | None = None,
         experiment_metadata: ExperimentMetadata | None = None,
         max_async_concurrent: int | None = None,
         max_parallel_workers: int = 1,
@@ -44,9 +44,10 @@ def evaluate(
         test_cases: List of test cases to evaluate
         outputs: List of system outputs corresponding to test cases
         checks: Either:
-            - List[Check]: Same checks applied to all test cases (shared pattern)
-            - List[List[Check]]: checks[i] applies to test_cases[i] (per-test-case pattern)
+            - List[Check | SchemaCheck]: Same checks applied to all test cases (shared pattern)
+            - List[List[Check | SchemaCheck]]: checks[i] applies to test_cases[i] (per-test-case pattern)
             - None: Extract checks from TestCase.checks field (convenience pattern)
+            Check | SchemaCheck can be either Check or SchemaCheck objects
         experiment_metadata: Optional experiment context information
         max_async_concurrent: Maximum number of concurrent async "check" executions (default: no limit)
         max_parallel_workers: Number of parallel worker processes (default: 1, no parallelization)
@@ -97,10 +98,17 @@ def evaluate(
     )
 
 
+def _convert_check_input(check_input: Check | SchemaCheck) -> Check:
+    """Convert a Check | SchemaCheck (Check or SchemaCheck) to a Check object."""
+    if isinstance(check_input, SchemaCheck):
+        return check_input.to_check()
+    return check_input
+
+
 def _validate_inputs(
         test_cases: list[TestCase],
         outputs: list[Output],
-        checks: list[Check] | list[list[Check]] | None,
+        checks: list[Check | SchemaCheck] | list[list[Check | SchemaCheck]] | None,
     ) -> None:
     """Validate evaluation inputs according to FEP protocol."""
     if len(test_cases) != len(outputs):
@@ -126,41 +134,48 @@ def _validate_inputs(
                 f"When using per-test-case checks pattern, checks list must have same length as test_cases. "  # noqa: E501
                 f"Got {len(checks)} check lists and {len(test_cases)} test cases",
             )
-    # otherwise, checks must be a single list of Check objects
+    # otherwise, checks must be a single list of Check | SchemaCheck objects
     else:  # noqa: PLR5501
-        if not all(isinstance(check, Check) for check in checks):
+        if not all(isinstance(check, Check | SchemaCheck) for check in checks):
             raise ValidationError(
-                "When using shared checks pattern, checks must be a list of Check objects",
+                "When using shared checks pattern, checks must be a list of Check or SchemaCheck objects",  # noqa: E501
             )
 
 
 def _resolve_checks(
         test_cases: list[TestCase],
-        checks: list[Check] | list[list[Check]] | None,
+        checks: list[Check | SchemaCheck] | list[list[Check | SchemaCheck]] | None,
     ) -> list[list[Check]]:
     """
     Resolve checks for each test case according to FEP patterns.
 
-    Returns List[List[Check]] where result[i] contains checks for test_cases[i].
+    Converts SchemaCheck objects to Check objects and returns List[List[Check]]
+    where result[i] contains checks for test_cases[i].
     """
     if checks is None:
         # Extract from TestCase.checks (convenience pattern)
         resolved = []
         for test_case in test_cases:
             if test_case.checks is not None:
-                resolved.append(test_case.checks)
+                # Convert any SchemaCheck objects to Check objects
+                converted_checks = [_convert_check_input(check) for check in test_case.checks]
+                resolved.append(converted_checks)
             else:
                 resolved.append([])  # No checks for this test case
         return resolved
 
-    if len(checks) > 0 and isinstance(checks[0], Check):
+    if len(checks) > 0 and isinstance(checks[0], Check | SchemaCheck):
         # Shared checks pattern: same checks for all test cases
-        shared_checks = checks  # type: ignore
+        shared_checks = [_convert_check_input(check) for check in checks]  # type: ignore
         return [shared_checks for _ in test_cases]
 
     if len(checks) > 0 and isinstance(checks[0], list):
         # Per-test-case checks pattern
-        return checks  # type: ignore
+        resolved = []
+        for check_list in checks:  # type: ignore
+            converted_checks = [_convert_check_input(check) for check in check_list]
+            resolved.append(converted_checks)
+        return resolved
 
     # Empty checks list
     return [[] for _ in test_cases]

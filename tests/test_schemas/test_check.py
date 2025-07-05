@@ -3,8 +3,7 @@
 import dataclasses
 import pytest
 from datetime import datetime, UTC
-from flex_evals.schemas import Check, CheckResult, CheckError, CheckResultMetadata
-from flex_evals.constants import CheckType, ErrorType
+from flex_evals import Check, CheckResult, CheckError, CheckResultMetadata, CheckType, ErrorType
 
 
 class TestCheck:

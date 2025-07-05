@@ -6,7 +6,7 @@ from flex_evals.checks.standard.contains import ContainsCheck
 from flex_evals.checks.standard.exact_match import ExactMatchCheck
 from flex_evals.checks.standard.regex import RegexCheck
 from flex_evals.checks.standard.threshold import ThresholdCheck
-from flex_evals.constants import CheckType
+from flex_evals import CheckType
 from flex_evals.registry import register
 
 

@@ -10,7 +10,7 @@ To run: pytest examples/pytest_decorator_example.py -v
 import pytest
 from pydantic import BaseModel, Field
 
-from flex_evals import TestCase, Check, CheckType
+from flex_evals import TestCase, ContainsCheck, ExactMatchCheck, LLMJudgeCheck
 from flex_evals.pytest_decorator import evaluate
 
 
@@ -38,9 +38,9 @@ def simple_quality_judge(prompt: str, response_format: type) -> tuple:
 # Example 1: Basic deterministic success
 @evaluate(
     test_cases=[TestCase(id="basic", input="What is Python?")],
-    checks=[Check(
-        type=CheckType.CONTAINS,
-        arguments={"text": "$.output.value", "phrases": ["Python", "programming"]},
+    checks=[ContainsCheck(
+        text="$.output.value",
+        phrases=["Python", "programming"],
     )],
     samples=3,
     success_threshold=1.0,  # Expect 100% success
@@ -61,13 +61,13 @@ def test_python_explanation(test_case: TestCase) -> str:
         expected="example",
     )],
     checks=[
-        Check(
-            type=CheckType.CONTAINS,
-            arguments={"text": "$.output.value.code", "phrases": ["print"]},
+        ContainsCheck(
+            text="$.output.value.code",
+            phrases=["print"],
         ),
-        Check(
-            type=CheckType.EXACT_MATCH,
-            arguments={"expected": "$.test_case.expected", "actual": "$.output.value.type"},
+        ExactMatchCheck(
+            expected="$.test_case.expected",
+            actual="$.output.value.type",
         ),
     ],
     samples=2,
@@ -93,9 +93,9 @@ def test_code_generation(test_case: TestCase) -> dict:
 test_case_with_checks = TestCase(
     id="self_contained",
     input="demo",
-    checks=[Check(
-        type=CheckType.CONTAINS,
-        arguments={"text": "$.output.value", "phrases": ["success"]},
+    checks=[ContainsCheck(
+        text="$.output.value",
+        phrases=["success"],
     )],
 )
 
@@ -114,13 +114,10 @@ def test_with_testcase_checks(test_case: TestCase) -> str:
 # Example 4: LLM Judge integration
 @evaluate(
     test_cases=[TestCase(id="quality", input="AI explanation")],
-    checks=[Check(
-        type=CheckType.LLM_JUDGE,
-        arguments={
-            "prompt": "Evaluate this explanation: {{$.output.value}}",
-            "response_format": QualityResult,
-            "llm_function": simple_quality_judge,
-        },
+    checks=[LLMJudgeCheck(
+        prompt="Evaluate this explanation: {{$.output.value}}",
+        response_format=QualityResult,
+        llm_function=simple_quality_judge,
     )],
     samples=2,
     success_threshold=1.0,
@@ -142,9 +139,9 @@ def test_llm_quality_assessment(test_case: TestCase) -> str:
 # Example 5: Statistical threshold demonstration
 @evaluate(
     test_cases=[TestCase(id="variable", input="test")],
-    checks=[Check(
-        type=CheckType.EXACT_MATCH,
-        arguments={"expected": "pass", "actual": "$.output.value"},
+    checks=[ExactMatchCheck(
+        expected="pass",
+        actual="$.output.value",
     )],
     samples=4,
     success_threshold=0.75,  # 75% threshold (3 out of 4 must pass)
@@ -177,9 +174,9 @@ def user_data_fixture() -> str:
 # Example 7: Pytest fixture integration
 @evaluate(
     test_cases=[TestCase(id="fixture_test", input="user_data")],
-    checks=[Check(
-        type=CheckType.EXACT_MATCH,
-        arguments={"expected": "fixture_value:user_data", "actual": "$.output.value"},
+    checks=[ExactMatchCheck(
+        expected="fixture_value:user_data",
+        actual="$.output.value",
     )],
     samples=2,
     success_threshold=1.0,
@@ -192,12 +189,9 @@ def test_with_simple_fixture(test_case: TestCase, simple_fixture) -> str:  # noq
 # Example 8: Multiple fixtures
 @evaluate(
     test_cases=[TestCase(id="multi_fixture", input="combined")],
-    checks=[Check(
-        type=CheckType.EXACT_MATCH,
-        arguments={
-            "expected": "fixture_value+user_data_123+combined",
-            "actual": "$.output.value",
-        },
+    checks=[ExactMatchCheck(
+        expected="fixture_value+user_data_123+combined",
+        actual="$.output.value",
     )],
     samples=2,
     success_threshold=1.0,
