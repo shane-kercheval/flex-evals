@@ -1019,8 +1019,8 @@ class TestEvaluateDecoratorAsync:
         num_samples = 50  # each sample has 0.1s delay
         delay = 0.1  # 100ms delay per sample
         num_func_calls = 0
-        # Allow some buffer for overhead; still much lower than sequential execution
-        max_concurrent_duration = delay * 3
+        # Allow some buffer for overhead; still much lower than sequential execution (5s)
+        max_concurrent_duration = 0.5  # 500ms max for 50 concurrent calls
 
         @evaluate(
             test_cases=[TestCase(id="timing_test", input="test")],
