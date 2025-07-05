@@ -9,20 +9,16 @@ A Python implementation of the [**Flexible Evaluation Protocol (FEP)**](https://
 ## Quick Start
 
 ```python
-from flex_evals import evaluate, TestCase, Output, Check, CheckType
+from flex_evals import evaluate, TestCase, Output, ContainsCheck
 
-# Define your test cases
 test_cases = [
     TestCase(
         id='test_001',
         input="What is the capital of France?",
         checks=[
-            Check(
-                type=CheckType.CONTAINS,  # Can also use 'exact_match' string
-                arguments={
-                    'text': '$.output.value',  # JSONPath expression
-                    'phrases': ['Paris', 'France'],
-                },
+            ContainsCheck(
+                text='$.output.value',  # JSONPath expression
+                phrases=['Paris', 'France'],
             ),
         ],
     ),
@@ -44,15 +40,15 @@ print(f"Passed: {results.results[0].check_results[0].results}")
 Use the `@evaluate` decorator to test functions with automatic evaluation:
 
 ```python
-from flex_evals import TestCase, Check, CheckType
+from flex_evals import TestCase, ContainsCheck
 from flex_evals.pytest_decorator import evaluate
 
 @evaluate(
     test_cases=[TestCase(input="What is Python?")],
     checks=[
-        Check(
-            type=CheckType.CONTAINS,
-            arguments={"text": "$.output.value", "phrases": ["Python", "programming"]},
+        ContainsCheck(
+            text="$.output.value",
+            phrases=["Python", "programming"],
         ),
     ],
     samples=10,
@@ -145,18 +141,15 @@ output = Output(
 ```
 
 ### **Checks**
-Define evaluation criteria with flexible argument resolution:
+Define evaluation criteria with type-safe, validated classes:
 
 ```python
-from flex_evals import Check, CheckType
+from flex_evals import ExactMatchCheck
 
-check = Check(
-    type=CheckType.EXACT_MATCH,  # Can also use 'exact_match' string
-    arguments={
-        'actual': '$.output.value',  # JSONPath to extract data
-        'expected': 'Paris',         # Literal value
-        'case_sensitive': False
-    },
+check = ExactMatchCheck(
+    actual='$.output.value',  # JSONPath to extract data
+    expected='Paris',         # Literal value
+    case_sensitive=False
 )
 ```
 
@@ -165,18 +158,15 @@ check = Check(
 ### **Simple Text Comparison**
 
 ```python
-from flex_evals import evaluate, TestCase, Output, Check, CheckType
+from flex_evals import evaluate, TestCase, Output, ExactMatchCheck
 
 # Geography quiz evaluation
 test_cases = [TestCase(id='q1', input="Capital of France?", expected='Paris')]
 outputs = [Output(value='Paris')]
 checks = [
-    Check(
-        type=CheckType.EXACT_MATCH,
-        arguments={
-            'actual': '$.output.value',
-            'expected': '$.test_case.expected',
-        },
+    ExactMatchCheck(
+        actual='$.output.value',
+        expected='$.test_case.expected',
     ),
 ]
 
@@ -186,25 +176,22 @@ results = evaluate(test_cases, outputs, checks)
 ### **Pattern 1: Shared Checks (1-to-Many)**
 
 ```python
+from flex_evals import ContainsCheck, RegexCheck
+import re
+
 # Each test case shares the same checks
 checks = [
     # Check if answer is correct
-    Check(
-        type=CheckType.CONTAINS,  # Can also use 'contains' string
-        arguments={
-            'text': '$.output.value',
-            'phrases': ['Paris'],
-            'case_sensitive': False
-        }
+    ContainsCheck(
+        text='$.output.value',
+        phrases=['Paris'],
+        case_sensitive=False
     ),
     # Check if response is properly formatted
-    Check(
-        type=CheckType.REGEX,  # Can also use 'regex' string
-        arguments={
-            'text': '$.output.value',
-            'pattern': r'The capital of .+ is .+\.',
-            'flags': {'case_insensitive': True}
-        }
+    RegexCheck(
+        text='$.output.value',
+        pattern=r'The capital of .+ is .+\.',
+        flags=re.IGNORECASE
     )
 ]
 
@@ -214,15 +201,17 @@ results = evaluate(test_cases, outputs, checks)
 ### **Pattern 2: Per-Test-Case Checks (1-to-1)**
 
 ```python
+from flex_evals import ExactMatchCheck, RegexCheck
+
 # Each test case has it's own checks
 test_cases = [
     TestCase(
         id='math_problem',
         input="What is 2+2?",
         checks=[
-            Check(
-                type=CheckType.EXACT_MATCH,
-                arguments={'actual': '$.output.value', 'expected': '4'},
+            ExactMatchCheck(
+                actual='$.output.value', 
+                expected='4'
             )
         ]
     ),
@@ -230,9 +219,9 @@ test_cases = [
         id='creative_writing',
         input="Write a haiku about code",
         checks=[
-            Check(
-                type=CheckType.REGEX,
-                arguments={'text': '$.output.value', 'pattern': r'(.+\n){2}.+'},
+            RegexCheck(
+                text='$.output.value', 
+                pattern=r'(.+\n){2}.+'
             )
         ]
     )
@@ -249,7 +238,7 @@ results = evaluate(test_cases, outputs, checks=None)
 
 ## JSONPath Support
 
-Access data anywhere in the "evaluation context" (i.e. test case definition and output) using JSONPath expressions:
+Access data anywhere in the "evaluation context" (i.e. test case definition and output) using [JSONPath](https://www.rfc-editor.org/rfc/rfc9535.html) expressions:
 
 ```python
 # Evaluation context structure:
@@ -296,97 +285,86 @@ output = Output(
 )
 
 checks = [
-    Check(
-        type=CheckType.EXACT_MATCH,
-        arguments={
-            # use JSONPath to access nested output value
-            'actual': '$.output.value.status',
-            # use JSONPath to access expected value
-            'expected': '$.test_case.expected.status'
-        }
+    ExactMatchCheck(
+        # use JSONPath to access nested output value
+        actual='$.output.value.status',
+        # use JSONPath to access expected value
+        expected='$.test_case.expected.status'
     ),
-    Check(
-        type=CheckType.THRESHOLD,
-        arguments={
-            # use JSONPath to access nested metadata
-            'value': '$.output.metadata.response_time',
-            'max_value': 500
-        }
+    ThresholdCheck(
+        # use JSONPath to access nested metadata
+        value='$.output.metadata.response_time',
+        max_value=500
     )
 ]
 ```
 
 ## Available Checks
 
+flex-evals provides type-safe check classes with IDE support, validation, and clear APIs:
+
 ### **Standard Checks**
 
-#### **`exact_match`**
+#### **`ExactMatchCheck`**
 
 Compare two values for exact equality:
 
 ```python
-Check(
-    type=CheckType.EXACT_MATCH,
-    arguments={
-        'actual': '$.output.value',
-        'expected': 'Paris',
-        'case_sensitive': True,  # Default
-        'negate': False,         # Default
-    },
+from flex_evals import ExactMatchCheck
+
+ExactMatchCheck(
+    actual='$.output.value',
+    expected='Paris',
+    case_sensitive=True,  # Default
+    negate=False,         # Default
 )
 ```
 
-#### **`contains`**  
+#### **`ContainsCheck`**  
 
 Check if text contains all specified phrases:
 
 ```python
-Check(
-    type=CheckType.CONTAINS,
-    arguments={
-        'text': '$.output.value',
-        'phrases': ['Paris', 'France'],
-        'case_sensitive': True,  # Default
-        'negate': False,         # Pass if ALL phrases found
-    },
+from flex_evals import ContainsCheck
+
+ContainsCheck(
+    text='$.output.value',
+    phrases=['Paris', 'France'],
+    case_sensitive=True,  # Default
+    negate=False,         # Pass if ALL phrases found
 )
 ```
 
-#### **`regex`**
+#### **`RegexCheck`**
 
 Test text against regular expression patterns:
 
 ```python
-Check(
-    type=CheckType.REGEX,
-    arguments={
-        'text': '$.output.value',
-        'pattern': r'^[A-Z][a-z]+$',
-        'flags': {
-            'case_insensitive': False,
-            'multiline': False,
-            'dot_all': False
-        },
-        'negate': False,
-    },
+import re
+from flex_evals import RegexCheck
+
+RegexCheck(
+    text='$.output.value',
+    pattern=r'^[A-Z][a-z]+$',
+    flags=re.IGNORECASE,  # Use standard re flags
+    negate=False,
 )
 ```
 
-#### **`threshold`**
+#### **`ThresholdCheck`**
 
 Validate numeric values against bounds:
 
 ```python
-Check(
-    type=CheckType.THRESHOLD,
-    arguments={
-        'value': '$.output.confidence',
-        'min_value': 0.8,
-        'max_value': 1.0,
-        'min_inclusive': True,   # Default
-        'max_inclusive': True,   # Default
-        'negate': False,
-    },
+from flex_evals import ThresholdCheck
+
+ThresholdCheck(
+    value='$.output.confidence',
+    min_value=0.8,
+    max_value=1.0,
+    min_inclusive=True,   # Default
+    max_inclusive=True,   # Default
+    negate=False,
 )
 ```
 
@@ -419,6 +397,7 @@ async def llm_judge(prompt: str, response_format: type[BaseModel]):
     }
     return response, metadata
 
+# CheckType format
 Check(
     type=CheckType.LLM_JUDGE,  # Can also use 'llm_judge' string
     arguments={
@@ -427,6 +406,14 @@ Check(
         'response_format': HelpfulnessScore,
         'llm_function': llm_judge
     },
+)
+
+# Type-safe SchemaCheck format
+from flex_evals import LLMJudgeCheck
+LLMJudgeCheck(
+    prompt="Rate this response for helpfulness: {{$.output.value.response}}",
+    response_format=HelpfulnessScore,
+    llm_function=llm_judge,
 )
 ```
 

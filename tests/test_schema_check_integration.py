@@ -7,8 +7,8 @@ from flex_evals import (
     evaluate, ContainsCheck, ExactMatchCheck, RegexCheck, ThresholdCheck,
     CustomFunctionCheck,
     Check, TestCase, Output,
+    RegexFlags,
 )
-from flex_evals.schemas.checks.regex import RegexFlags
 
 
 class SimpleResponse(BaseModel):

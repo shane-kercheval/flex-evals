@@ -2,8 +2,7 @@
 
 import dataclasses
 import pytest
-from flex_evals.schemas import TestCase
-from flex_evals.schemas.check import Check
+from flex_evals import TestCase, Check
 
 
 class TestTestCase:

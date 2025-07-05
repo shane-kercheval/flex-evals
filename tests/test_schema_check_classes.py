@@ -3,13 +3,11 @@
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from flex_evals.schemas.checks import (
+from flex_evals import (
     ContainsCheck, ExactMatchCheck, RegexCheck, ThresholdCheck,
     SemanticSimilarityCheck, LLMJudgeCheck, CustomFunctionCheck,
+    RegexFlags, ThresholdConfig, CheckType, SimilarityMetric,
 )
-from flex_evals.schemas.checks.regex import RegexFlags
-from flex_evals.schemas.checks.semantic_similarity import ThresholdConfig
-from flex_evals.constants import CheckType, SimilarityMetric
 
 
 class TestContainsCheck:

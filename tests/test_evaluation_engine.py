@@ -6,15 +6,15 @@ import time
 from datetime import datetime, UTC
 from typing import Any
 
-from flex_evals.engine import _reconstruct_check_order, _separate_checks_by_type, evaluate
-from flex_evals.schemas import (
-    TestCase, Output, Check, EvaluationRunResult,
-    ExperimentMetadata,
+from flex_evals.engine import _reconstruct_check_order, _separate_checks_by_type
+from flex_evals import (
+    evaluate, TestCase, Output, Check, EvaluationRunResult,
+    CheckResult,
 )
+from flex_evals.schemas import ExperimentMetadata
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck
 from flex_evals.registry import register, clear_registry
 from flex_evals.exceptions import ValidationError
-from flex_evals.schemas.check import CheckResult
 from tests.conftest import restore_standard_checks
 
 

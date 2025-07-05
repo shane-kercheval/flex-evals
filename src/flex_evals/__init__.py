@@ -10,10 +10,12 @@ from . import schemas
 from .constants import CheckType, Status, ErrorType, SimilarityMetric
 # Import checks to trigger registration of standard checks
 from . import checks  # noqa: F401
-from .schemas.check import Check, CheckError, CheckResult, CheckResultMetadata, SchemaCheck
+from .schemas.check import (
+    Check, CheckError, CheckResult, CheckResultMetadata, SchemaCheck,
+)
 from .schemas.checks import (
-    ContainsCheck, ExactMatchCheck, RegexCheck, ThresholdCheck,
-    SemanticSimilarityCheck, LLMJudgeCheck, CustomFunctionCheck,
+    ContainsCheck, ExactMatchCheck, RegexCheck, RegexFlags, ThresholdCheck,
+    SemanticSimilarityCheck, LLMJudgeCheck, CustomFunctionCheck, ThresholdConfig,
 )
 from .schemas.test_case import TestCase
 from .schemas.output import Output
@@ -34,6 +36,7 @@ __all__ = [
     "LLMJudgeCheck",
     "Output",
     "RegexCheck",
+    "RegexFlags",
     "SchemaCheck",
     "SemanticSimilarityCheck",
     "SimilarityMetric",
@@ -41,6 +44,7 @@ __all__ = [
     "TestCase",
     "TestCaseResult",
     "ThresholdCheck",
+    "ThresholdConfig",
     "evaluate",
     "schemas",
 ]

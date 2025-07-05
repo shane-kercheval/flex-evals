@@ -6,12 +6,8 @@ from flex_evals.checks.standard.exact_match import ExactMatchCheck
 from flex_evals.checks.standard.contains import ContainsCheck
 from flex_evals.checks.standard.regex import RegexCheck
 from flex_evals.checks.standard.threshold import ThresholdCheck
-from flex_evals.constants import CheckType, Status
-from flex_evals.engine import evaluate
+from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
 from flex_evals.exceptions import ValidationError
-from flex_evals.schemas.check import Check
-from flex_evals.schemas.output import Output
-from flex_evals.schemas.test_case import TestCase
 
 
 class TestExactMatchCheck:
