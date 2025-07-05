@@ -448,8 +448,17 @@ flex-evals automatically detects and optimizes async checks:
 ```python
 # Mix of sync and async checks
 checks = [
-    ExactMatchCheck(actual='$.output.value', expected='Paris'),  # Sync __call__
-    LLMJudgeCheck(prompt="{{$.output.value}}", response_format=MyFormat, llm_function=judge_func)  # Async __call__
+    # Sync __call__
+    ExactMatchCheck(
+        actual='$.output.value',
+        expected='Paris',
+    ),
+    # Async __call__
+    LLMJudgeCheck(
+        prompt="{{$.output.value}}",
+        response_format=MyFormat,
+        llm_function=judge_func,
+    )
 ]
 
 # Engine automatically:
