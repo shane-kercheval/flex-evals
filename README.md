@@ -434,7 +434,6 @@ async def llm_judge(prompt: str, response_format: type[BaseModel]):
     }
     return response, metadata
 
-# Type-safe SchemaCheck format
 LLMJudgeCheck(
     prompt="Rate this response for helpfulness: {{$.output.value.response}}",
     response_format=HelpfulnessScore,
