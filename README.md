@@ -463,8 +463,8 @@ checks = [
 
 # Engine automatically:
 # 1. Detects async checks  
-# 2. Runs everything in async context
-# 3. Maintains proper result ordering
+# 2. Runs all async checks in event loop
+# 3. Maintains proper result ordering after execution
 results = evaluate(test_cases, outputs, checks)
 ```
 
