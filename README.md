@@ -54,7 +54,7 @@ from flex_evals.pytest_decorator import evaluate
     samples=10,
     success_threshold=0.8,  # Expect 80% success
 )
-def test_python_explanation(test_case: TestCase) -> str:
+async def test_python_explanation(test_case: TestCase) -> str:
     # the value returned by the test will be populated into an `Output` dataclass and
     # can be referenced by the Check via `argument="$.output.value"` as shown above
     return my_llm(test_case.input)  # generate output
