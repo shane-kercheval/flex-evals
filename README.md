@@ -303,6 +303,38 @@ checks = [
 
 flex-evals provides type-safe check classes with IDE support, validation, and clear APIs:
 
+### **YAML Configuration**
+
+Checks can also be defined in YAML format for configuration-driven evaluations:
+
+```yaml
+# test_cases.yaml
+checks:
+  - type: exact_match
+    arguments:
+      actual: "$.output.value"
+      expected: "Paris"
+      case_sensitive: false
+```
+
+Load and use YAML-defined checks:
+
+```python
+import yaml
+from flex_evals import Check
+
+# Load checks from YAML
+with open('test_cases.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+
+checks = [Check(**check_config) for check_config in config['checks']]
+
+# Use in evaluation
+results = evaluate(test_cases, outputs, checks)
+```
+
+See [example_yaml_test_cases.ipynb](examples/example_yaml_test_cases.ipynb) for comprehensive YAML configuration examples.
+
 ### **Standard Checks**
 
 #### **`ExactMatchCheck`**
