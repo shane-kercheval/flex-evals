@@ -157,7 +157,7 @@ class TestBaseCheck:
 
         result = self.check.execute("test_check", arguments, self.context, check_version)
 
-        assert result.metadata.check_version == check_version
+        assert result.metadata["check_version"] == check_version
 
     def test_timestamp_format(self):
         """Test that evaluated_at timestamp is in correct format."""

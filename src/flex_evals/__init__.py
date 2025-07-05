@@ -11,7 +11,7 @@ from .constants import CheckType, Status, ErrorType, SimilarityMetric
 # Import checks to trigger registration of standard checks
 from . import checks  # noqa: F401
 from .schemas.check import (
-    Check, CheckError, CheckResult, CheckResultMetadata, SchemaCheck,
+    Check, CheckError, CheckResult, SchemaCheck,
 )
 from .schemas.checks import (
     ContainsCheck, ExactMatchCheck, RegexCheck, RegexFlags, ThresholdCheck,
@@ -26,7 +26,6 @@ __all__ = [
     "Check",
     "CheckError",
     "CheckResult",
-    "CheckResultMetadata",
     "CheckType",
     "ContainsCheck",
     "CustomFunctionCheck",

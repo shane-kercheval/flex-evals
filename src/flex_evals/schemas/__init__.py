@@ -7,7 +7,7 @@ CheckResult, TestCaseResult, and EvaluationRunResult.
 
 from .test_case import TestCase
 from .output import Output
-from .check import Check, CheckResult, CheckError, CheckResultMetadata, SchemaCheck
+from .check import Check, CheckResult, CheckError, SchemaCheck
 from .checks import (
     ContainsCheck, ExactMatchCheck, RegexCheck, ThresholdCheck,
     SemanticSimilarityCheck, LLMJudgeCheck, CustomFunctionCheck,
@@ -19,7 +19,6 @@ __all__ = [
     "Check",
     "CheckError",
     "CheckResult",
-    "CheckResultMetadata",
     "ContainsCheck",
     "CustomFunctionCheck",
     "EvaluationRunResult",

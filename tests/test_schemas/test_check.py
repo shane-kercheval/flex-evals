@@ -3,7 +3,7 @@
 import dataclasses
 import pytest
 from datetime import datetime, UTC
-from flex_evals import Check, CheckResult, CheckError, CheckResultMetadata, CheckType, ErrorType
+from flex_evals import Check, CheckResult, CheckError, CheckType, ErrorType
 
 
 class TestCheck:
@@ -60,10 +60,10 @@ class TestCheckResult:
 
     def test_check_result_all_required_fields(self):
         """Test CheckResult with all required fields present."""
-        metadata = CheckResultMetadata(
-            check_version="1.0.0",
-            execution_time_ms=245,
-        )
+        metadata = {
+            "check_version": "1.0.0",
+            "execution_time_ms": 245,
+        }
 
         result = CheckResult(
             check_type='exact_match',
@@ -80,11 +80,11 @@ class TestCheckResult:
         assert result.check_type == 'exact_match'
         assert result.status == 'completed'
         assert result.results["passed"] is True
-        assert result.metadata.check_version == "1.0.0"
+        assert result.metadata["check_version"] == "1.0.0"
 
     def test_check_result_status_enum(self):
         """Test valid status values."""
-        metadata = CheckResultMetadata()
+        metadata = {}
         base_args = {
             "check_type": 'exact_match',
             "results": {"passed": True},
@@ -105,7 +105,7 @@ class TestCheckResult:
 
     def test_check_result_resolved_args_jsonpath(self):
         """Test resolved_arguments with JSONPath includes both value and jsonpath fields."""
-        metadata = CheckResultMetadata()
+        metadata = {}
 
         result = CheckResult(
             check_type='exact_match',
@@ -132,7 +132,7 @@ class TestCheckResult:
 
     def test_check_result_resolved_args_literal(self):
         """Test resolved_arguments with literals only includes value field."""
-        metadata = CheckResultMetadata()
+        metadata = {}
 
         result = CheckResult(
             check_type='exact_match',
@@ -156,7 +156,7 @@ class TestCheckResult:
 
     def test_check_result_timestamp_format(self):
         """Test evaluated_at serializes to ISO 8601 UTC."""
-        metadata = CheckResultMetadata()
+        metadata = {}
         timestamp = datetime.now(UTC)
 
         result = CheckResult(
@@ -177,7 +177,7 @@ class TestCheckResult:
 
     def test_check_result_metadata_test_case_id(self):
         """Test metadata check_version defaults."""
-        metadata = CheckResultMetadata()
+        metadata = {}
 
         result = CheckResult(
             check_type='exact_match',
@@ -188,10 +188,10 @@ class TestCheckResult:
             metadata=metadata,
         )
 
-        assert result.metadata.check_version is None
+        assert result.metadata.get("check_version") is None
 
         # Test with explicit version
-        metadata_with_version = CheckResultMetadata(check_version="2.0.0")
+        metadata_with_version = {"check_version": "2.0.0"}
         result_with_version = CheckResult(
             check_type='exact_match',
             status='completed',
@@ -200,11 +200,11 @@ class TestCheckResult:
             evaluated_at=datetime.now(UTC),
             metadata=metadata_with_version,
         )
-        assert result_with_version.metadata.check_version == "2.0.0"
+        assert result_with_version.metadata["check_version"] == "2.0.0"
 
     def test_check_result_error_types(self):
         """Test all valid error.type enum values."""
-        metadata = CheckResultMetadata()
+        metadata = {}
         error_types = ['jsonpath_error', 'validation_error', "timeout_error", 'unknown_error']
 
         for error_type in error_types:
@@ -222,7 +222,7 @@ class TestCheckResult:
 
     def test_check_result_error_optional(self):
         """Test error only present when status='error'."""
-        metadata = CheckResultMetadata()
+        metadata = {}
 
         # No error when status is completed
         result1 = CheckResult(
@@ -259,10 +259,10 @@ class TestCheckResult:
 
     def test_check_result_serialization(self):
         """Test full CheckResult JSON serialization."""
-        metadata = CheckResultMetadata(
-            check_version="2.1.0",
-            execution_time_ms=245,
-        )
+        metadata = {
+            "check_version": "2.1.0",
+            "execution_time_ms": 245,
+        }
 
         result = CheckResult(
             check_type='exact_match',

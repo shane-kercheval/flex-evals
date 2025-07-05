@@ -15,7 +15,7 @@ from .schemas import (
     EvaluationRunResult, EvaluationSummary, ExperimentMetadata,
 )
 from .schemas.results import ExecutionContext
-from .schemas.check import CheckError, CheckResultMetadata, SchemaCheck
+from .schemas.check import CheckError, SchemaCheck
 from .checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
 from .registry import get_check_class, is_async_check, get_registry_state, restore_registry_state
 from .exceptions import ValidationError
@@ -410,9 +410,9 @@ def _create_error_check_result(
         results={},
         resolved_arguments={},
         evaluated_at=datetime.now(UTC),
-        metadata=CheckResultMetadata(
-            check_version=check.version,
-        ) if check.version else None,
+        metadata={
+            "check_version": check.version,
+        } if check.version else None,
         error=CheckError(
             type='unknown_error',
             message=f"Unhandled error during check execution: {error_message}",

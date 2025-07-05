@@ -10,7 +10,7 @@ from flex_evals.schemas.results import (
     EvaluationRunResult,
     ExecutionContext,
 )
-from flex_evals import TestCase, Output, Status, CheckResult, CheckResultMetadata, CheckError
+from flex_evals import TestCase, Output, Status, CheckResult, CheckError
 from flex_evals.schemas.experiments import ExperimentMetadata
 
 
@@ -184,7 +184,7 @@ class TestTestCaseResult:
             results={},
             resolved_arguments={},
             evaluated_at=datetime.now(UTC),
-            metadata=CheckResultMetadata(check_version="1.0.0"),
+            metadata={"check_version": "1.0.0"},
             error=CheckError("test_error", "Test error", True),
         )
         check_results = [
@@ -208,7 +208,7 @@ class TestTestCaseResult:
             results={},
             resolved_arguments={},
             evaluated_at=datetime.now(UTC),
-            metadata=CheckResultMetadata(check_version="1.0.0"),
+            metadata={"check_version": "1.0.0"},
             error=CheckError("test_error", "Test error", True),
         )
         check_results = [
@@ -249,7 +249,7 @@ class TestTestCaseResult:
             results={},
             resolved_arguments={},
             evaluated_at=datetime.now(UTC),
-            metadata=CheckResultMetadata(check_version="1.0.0"),
+            metadata={"check_version": "1.0.0"},
             error=CheckError("test_error", "Test error", True),
         )
         check_results = [
@@ -375,7 +375,7 @@ class TestEvaluationRunResult:
                     results={},
                     resolved_arguments={},
                     evaluated_at=datetime.now(UTC),
-                    metadata=CheckResultMetadata(check_version="1.0.0"),
+                    metadata={"check_version": "1.0.0"},
                 ),
             ]
             summary = TestCaseSummary(1, 1, 0, 0)
@@ -387,7 +387,7 @@ class TestEvaluationRunResult:
                     results={},
                     resolved_arguments={},
                     evaluated_at=datetime.now(UTC),
-                    metadata=CheckResultMetadata(check_version="1.0.0"),
+                    metadata={"check_version": "1.0.0"},
                     error=CheckError('validation_error', "Test error", True),
                 ),
             ]
@@ -400,7 +400,7 @@ class TestEvaluationRunResult:
                     results={},
                     resolved_arguments={},
                     evaluated_at=datetime.now(UTC),
-                    metadata=CheckResultMetadata(check_version="1.0.0"),
+                    metadata={"check_version": "1.0.0"},
                 ),
             ]
             summary = TestCaseSummary(1, 0, 0, 1)
@@ -581,7 +581,7 @@ class TestEvaluationRunResult:
 
     def test_check_result_accepts_status_enum(self):
         """Test CheckResult accepts Status enum."""
-        metadata = CheckResultMetadata(check_version="1.0.0")
+        metadata = {"check_version": "1.0.0"}
         result = CheckResult(
             check_type='exact_match',
             status=Status.COMPLETED,
@@ -600,7 +600,7 @@ class TestEvaluationRunResult:
             error_checks=0,
             skipped_checks=0,
         )
-        metadata = CheckResultMetadata(check_version="1.0.0")
+        metadata = {"check_version": "1.0.0"}
         check_result = CheckResult(
             check_type='exact_match',
             status='completed',
@@ -632,7 +632,7 @@ class TestEvaluationRunResult:
             error_checks=0,
             skipped_checks=0,
         )
-        metadata = CheckResultMetadata(check_version="1.0.0")
+        metadata = {"check_version": "1.0.0"}
         check_result = CheckResult(
             check_type='exact_match',
             status='completed',

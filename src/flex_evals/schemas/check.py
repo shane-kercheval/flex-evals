@@ -92,17 +92,6 @@ class CheckError:
     recoverable: bool = False
 
 
-@dataclass
-class CheckResultMetadata:
-    """Check-specific metadata about execution and configuration."""
-
-    check_version: str | None = None
-    execution_time_ms: float | None = None
-
-    def __post_init__(self):
-        """Validate metadata fields."""
-        if self.execution_time_ms is not None and self.execution_time_ms < 0:
-            raise ValueError("CheckResultMetadata.execution_time_ms must be non-negative")
 
 
 @dataclass
@@ -122,7 +111,8 @@ class CheckResult:
     - evaluated_at: UTC timestamp when check was evaluated
 
     Optional Fields:
-    - metadata: Check-specific metadata about execution and configuration
+    - metadata: Dictionary containing check-specific metadata
+      (e.g., check_version, execution_time_ms)
     - error: Error details (only present when status is 'error')
     """
 
@@ -131,7 +121,7 @@ class CheckResult:
     results: dict[str, Any]
     resolved_arguments: dict[str, Any]
     evaluated_at: datetime
-    metadata: CheckResultMetadata | None = None
+    metadata: dict | None = None
     error: CheckError | None = None
 
     def __post_init__(self):

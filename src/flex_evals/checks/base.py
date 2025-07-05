@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 from datetime import datetime, UTC
 
-from ..schemas import TestCase, Output, CheckResult, CheckError, CheckResultMetadata
+from ..schemas import TestCase, Output, CheckResult, CheckError
 from ..jsonpath_resolver import JSONPathResolver
 from ..exceptions import CheckExecutionError, JSONPathError, ValidationError
 
@@ -112,9 +112,9 @@ class BaseCheck(ABC):
                 results=results,
                 resolved_arguments=resolved_arguments,
                 evaluated_at=evaluated_at,
-                metadata=CheckResultMetadata(
-                    check_version=check_version,
-                ) if check_version else None,
+                metadata={
+                    "check_version": check_version,
+                } if check_version else None,
             )
 
         except JSONPathError as e:
@@ -178,9 +178,9 @@ class BaseCheck(ABC):
             results={},
             resolved_arguments=resolved_arguments,
             evaluated_at=evaluated_at,
-            metadata=CheckResultMetadata(
-                check_version=check_version,
-            ) if check_version else None,
+            metadata={
+                "check_version": check_version,
+            } if check_version else None,
             error=CheckError(
                 type=error_type,
                 message=error_message,
@@ -267,9 +267,9 @@ class BaseAsyncCheck(ABC):
                 results=results,
                 resolved_arguments=resolved_arguments,
                 evaluated_at=evaluated_at,
-                metadata=CheckResultMetadata(
-                    check_version=check_version,
-                ) if check_version else None,
+                metadata={
+                    "check_version": check_version,
+                } if check_version else None,
             )
 
         except JSONPathError as e:
@@ -333,9 +333,9 @@ class BaseAsyncCheck(ABC):
             results={},
             resolved_arguments=resolved_arguments,
             evaluated_at=evaluated_at,
-            metadata=CheckResultMetadata(
-                check_version=check_version,
-            ) if check_version else None,
+            metadata={
+                "check_version": check_version,
+            } if check_version else None,
             error=CheckError(
                 type=error_type,
                 message=error_message,
