@@ -8,7 +8,6 @@ from typing import Any
 
 from flex_evals import (
     evaluate, TestCase, Output, Check, EvaluationRunResult,
-    CheckResult,
 )
 from flex_evals.schemas import ExperimentMetadata
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck

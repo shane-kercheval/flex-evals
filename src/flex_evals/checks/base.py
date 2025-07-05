@@ -10,7 +10,7 @@ from typing import Any
 from datetime import datetime, UTC
 
 from ..schemas import TestCase, Output, CheckResult, CheckError
-from ..jsonpath_resolver import JSONPathResolver
+from ..jsonpath_resolver import get_shared_resolver
 from ..exceptions import CheckExecutionError, JSONPathError, ValidationError
 
 
@@ -25,7 +25,7 @@ class EvaluationContext:
     def __init__(self, test_case: TestCase, output: Output):
         self.test_case = test_case
         self.output = output
-        self._resolver = JSONPathResolver()
+        self._resolver = get_shared_resolver()
         self._context_dict = self._resolver.create_evaluation_context(test_case, output)
 
     @property
@@ -43,7 +43,7 @@ class BaseCheck(ABC):
     """
 
     def __init__(self):
-        self._resolver = JSONPathResolver()
+        self._resolver = get_shared_resolver()
 
     @abstractmethod
     def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
@@ -198,7 +198,7 @@ class BaseAsyncCheck(ABC):
     """
 
     def __init__(self):
-        self._resolver = JSONPathResolver()
+        self._resolver = get_shared_resolver()
 
     @abstractmethod
     async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
