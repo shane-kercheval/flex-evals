@@ -1016,7 +1016,11 @@ class TestEvaluateDecoratorAsync:
 
     def test_async_function_concurrency_timing(self):
         """Test that async functions run concurrently, not sequentially."""
-        start_times = []
+        num_samples = 50  # each sample has 0.1s delay
+        delay = 0.1  # 100ms delay per sample
+        num_func_calls = 0
+        # Allow some buffer for overhead; still much lower than sequential execution
+        max_concurrent_duration = delay * 3
 
         @evaluate(
             test_cases=[TestCase(id="timing_test", input="test")],
@@ -1024,27 +1028,21 @@ class TestEvaluateDecoratorAsync:
                 type=CheckType.CONTAINS,
                 arguments={"text": "$.output.value", "phrases": ["result"]},
             )],
-            samples=5,  # 5 samples with 0.1s delay each
+            samples=num_samples,
             success_threshold=1.0,
         )
         async def test_concurrent_async(test_case) -> str:  # noqa
-            start_times.append(time.time())
-            await asyncio.sleep(0.1)  # 0.1 second delay
+            nonlocal num_func_calls
+            num_func_calls += 1
+            await asyncio.sleep(delay)
             return "async result"
 
         overall_start = time.time()
         test_concurrent_async()
         total_duration = time.time() - overall_start
 
-        # If run concurrently: ~0.1s total
-        # If run sequentially: ~0.5s total
-        # Allow some buffer for overhead
-        assert total_duration < 0.3, f"Async functions may not be concurrent (took {total_duration:.3f}s)"  # noqa: E501
-
-        # Verify all functions started around the same time (concurrent)
-        if len(start_times) > 1:
-            time_spread = max(start_times) - min(start_times)
-            assert time_spread < 0.05, f"Functions started too far apart: {time_spread:.3f}s"
+        assert total_duration < max_concurrent_duration, f"Async functions may not be concurrent (took {total_duration:.3f}s)"  # noqa: E501
+        assert num_func_calls == num_samples, "Function should be called exactly num_samples times"
 
     def test_async_with_multiple_test_cases_timing(self):
         """Test async concurrency with multiple test cases per sample."""
