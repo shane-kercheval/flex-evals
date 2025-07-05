@@ -181,38 +181,112 @@ def _resolve_checks(
     return [[] for _ in test_cases]
 
 
-def _evaluate(
+def _flatten_checks_for_execution(
         work_items: list[tuple[TestCase, Output, list[Check]]],
-        max_async_concurrent: int | None = None,
-    ) -> list[TestCaseResult]:
-    """Execute evaluation with optimal sync/async separation."""
-    results = []
+    ) -> tuple[
+        list[tuple[Check, EvaluationContext]],
+        list[tuple[Check, EvaluationContext]],
+        list[tuple[int, int, bool, int]],
+    ]:
+    """
+    Flatten checks across all test cases and separate by type.
 
-    for (test_case, output, checks) in work_items:
+    Returns:
+        - flattened_sync_checks: List of (check, context) for sync checks
+        - flattened_async_checks: List of (check, context) for async checks
+        - check_tracking: List of (test_idx, check_idx, is_async, flattened_idx)
+    """
+    flattened_sync_checks = []
+    flattened_async_checks = []
+    check_tracking = []  # Maps: (test_case_idx, check_idx, is_async, flattened_idx)
+
+    for test_idx, (test_case, output, checks) in enumerate(work_items):
         context = EvaluationContext(test_case, output)
 
-        # Separate checks by type and track original order
-        sync_checks, async_checks, order_map = _separate_checks_by_type(checks)
+        for check_idx, check in enumerate(checks):
+            try:
+                if is_async_check(check.type):
+                    flattened_async_checks.append((check, context))
+                    check_tracking.append((test_idx, check_idx, True,
+                                         len(flattened_async_checks) - 1))
+                else:
+                    flattened_sync_checks.append((check, context))
+                    check_tracking.append((test_idx, check_idx, False,
+                                         len(flattened_sync_checks) - 1))
+            except ValueError:
+                # Check type not registered - treat as sync
+                flattened_sync_checks.append((check, context))
+                check_tracking.append((test_idx, check_idx, False,
+                                     len(flattened_sync_checks) - 1))
 
-        # Execute sync checks directly (no event loop overhead)
-        sync_results = [_execute_sync_check(check, context) for check in sync_checks]
+    return flattened_sync_checks, flattened_async_checks, check_tracking
 
-        # Execute async checks concurrently (only if needed)
-        if async_checks:
-            async_results = asyncio.run(
-                _execute_async_checks_concurrent(async_checks, context, max_async_concurrent),
-            )
-        else:
-            async_results = []
 
-        # Reconstruct results in original order
-        check_results = _reconstruct_check_order(sync_results, async_results, order_map)
+def _unflatten_check_results(
+        work_items: list[tuple[TestCase, Output, list[Check]]],
+        sync_results: list[CheckResult],
+        async_results: list[CheckResult],
+        check_tracking: list[tuple[int, int, bool, int]],
+    ) -> list[TestCaseResult]:
+    """
+    Reconstruct test case results from flattened check results.
+
+    Args:
+        work_items: Original work items with test cases and outputs
+        sync_results: Results from sync check execution
+        async_results: Results from async check execution
+        check_tracking: Tracking info to map results back to test cases
+
+    Returns:
+        List of TestCaseResult objects in original order
+    """
+    results = []
+    for test_idx, (test_case, output, _) in enumerate(work_items):
+        # Collect check results for this test case in original order
+        test_check_results = []
+        for t_idx, check_idx, is_async, flattened_idx in check_tracking:
+            if t_idx == test_idx:
+                if is_async:
+                    test_check_results.append((check_idx, async_results[flattened_idx]))
+                else:
+                    test_check_results.append((check_idx, sync_results[flattened_idx]))
+
+        # Sort by original check index to maintain order
+        test_check_results.sort(key=lambda x: x[0])
+        check_results = [result for _, result in test_check_results]
 
         # Create test case result
+        context = EvaluationContext(test_case, output)
         test_case_result = _create_test_case_result(check_results, context)
         results.append(test_case_result)
 
     return results
+
+
+def _evaluate(
+        work_items: list[tuple[TestCase, Output, list[Check]]],
+        max_async_concurrent: int | None = None,
+    ) -> list[TestCaseResult]:
+    """Execute evaluation with optimal sync/async separation across all test cases."""
+    # Flatten all checks across all test cases
+    flattened_sync_checks, flattened_async_checks, check_tracking = (
+        _flatten_checks_for_execution(work_items)
+    )
+
+    # Execute ALL sync checks at once (no event loop overhead)
+    sync_results = [_execute_sync_check(check, context)
+                    for check, context in flattened_sync_checks]
+
+    # Execute ALL async checks concurrently in a single event loop
+    if flattened_async_checks:
+        async_results = asyncio.run(
+            _execute_all_async_checks(flattened_async_checks, max_async_concurrent),
+        )
+    else:
+        async_results = []
+
+    # Reconstruct results by test case
+    return _unflatten_check_results(work_items, sync_results, async_results, check_tracking)
 
 
 def _evaluate_parallel(
@@ -268,35 +342,6 @@ def _evaluate_with_registry(
     return _evaluate(work_items, max_async_concurrent)
 
 
-def _separate_checks_by_type(
-        checks: list[Check],
-    ) -> tuple[list[Check], list[Check], list[tuple[str, int]]]:
-    """
-    Separate checks into sync and async lists, tracking original order.
-
-    Returns:
-        sync_checks: List of synchronous checks
-        async_checks: List of asynchronous checks
-        order_map: List of (type, index) tuples to reconstruct original order
-    """
-    sync_checks = []
-    async_checks = []
-    order_map = []
-
-    for check in checks:
-        try:
-            if is_async_check(check.type):
-                async_checks.append(check)
-                order_map.append(('async', len(async_checks) - 1))
-            else:
-                sync_checks.append(check)
-                order_map.append(('sync', len(sync_checks) - 1))
-        except ValueError:
-            # Check type not registered - treat as sync and handle error during execution
-            sync_checks.append(check)
-            order_map.append(('sync', len(sync_checks) - 1))
-
-    return sync_checks, async_checks, order_map
 
 
 def _execute_sync_check(check: Check, context: EvaluationContext) -> CheckResult:
@@ -324,21 +369,24 @@ def _execute_sync_check(check: Check, context: EvaluationContext) -> CheckResult
         return _create_error_check_result(check, str(e))
 
 
-async def _execute_async_checks_concurrent(
-        async_checks: list[Check],
-        context: EvaluationContext,
+
+
+async def _execute_all_async_checks(
+        async_check_contexts: list[tuple[Check, EvaluationContext]],
         max_async_concurrent: int | None = None,
     ) -> list[CheckResult]:
-    """Execute multiple async checks concurrently."""
+    """Execute ALL async checks across all test cases concurrently."""
     # Create semaphore if concurrency limit is specified
     semaphore = asyncio.Semaphore(max_async_concurrent) if max_async_concurrent else None
 
     tasks = []
-    for check in async_checks:
+    for check, context in async_check_contexts:
         task = asyncio.create_task(_execute_async_check(check, context, semaphore))
         tasks.append(task)
 
     return await asyncio.gather(*tasks)
+
+
 
 
 async def _execute_async_check(
@@ -378,25 +426,6 @@ async def _execute_async_check(
         return await _run_check()
 
 
-def _reconstruct_check_order(
-        sync_results: list[CheckResult],
-        async_results: list[CheckResult],
-        order_map: list[tuple[str, int]],
-    ) -> list[CheckResult]:
-    """Reconstruct check results in their original order."""
-    final_results = []
-    sync_idx = 0
-    async_idx = 0
-
-    for check_type, _ in order_map:
-        if check_type == 'sync':
-            final_results.append(sync_results[sync_idx])
-            sync_idx += 1
-        else:  # async
-            final_results.append(async_results[async_idx])
-            async_idx += 1
-
-    return final_results
 
 
 def _create_error_check_result(
