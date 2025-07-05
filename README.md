@@ -412,11 +412,14 @@ Measure semantic similarity using embeddings:
 TBD
 ```
 
-#### **`llm_judge`**
+#### **`LLMJudgeCheck`**
 
 Use an LLM for qualitative evaluation:
 
 ```python
+from flex_evals import LLMJudgeCheck
+from pydantic import BaseModel, Field
+
 class HelpfulnessScore(BaseModel):  # Pydantic model defining Judge format.
     score: int = Field(description="Rate the response on a scale of 1-5h.")
     reasoning: str = Field(description="Brief explanation of the score.")
@@ -431,19 +434,7 @@ async def llm_judge(prompt: str, response_format: type[BaseModel]):
     }
     return response, metadata
 
-# CheckType format
-Check(
-    type=CheckType.LLM_JUDGE,  # Can also use 'llm_judge' string
-    arguments={
-        # use JSONPath to access nested output value (e.g. output['value']['response'])
-        'prompt': "Rate this response for helpfulness: {{$.output.value.response}}",
-        'response_format': HelpfulnessScore,
-        'llm_function': llm_judge
-    },
-)
-
 # Type-safe SchemaCheck format
-from flex_evals import LLMJudgeCheck
 LLMJudgeCheck(
     prompt="Rate this response for helpfulness: {{$.output.value.response}}",
     response_format=HelpfulnessScore,
@@ -458,8 +449,8 @@ flex-evals automatically detects and optimizes async checks:
 ```python
 # Mix of sync and async checks
 checks = [
-    Check(type=Checktype.EXACT_MATCH, arguments={...}),  # Sync __call__
-    Check(type=CheckType.LLM_JUDGE, arguments={...})  # Async __call__
+    ExactMatchCheck(actual='$.output.value', expected='Paris'),  # Sync __call__
+    LLMJudgeCheck(prompt="{{$.output.value}}", response_format=MyFormat, llm_function=judge_func)  # Async __call__
 ]
 
 # Engine automatically:
