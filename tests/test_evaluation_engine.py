@@ -900,3 +900,251 @@ class TestEvaluationEngine:
         assert test_result.execution_context.test_case.id == "test_unique"
         assert test_result.execution_context.output.id == "output_unique_123"
         assert test_result.execution_context.output.value == "test"
+
+    def test_jsonpath_resolution_per_test_case_checks(self):
+        """
+        Test JSONPath correctly resolves different values for each test case with per-test-case
+        checks.
+
+        This test validates that:
+        1. Same JSONPath expressions extract different values from different contexts
+        2. Shared resolver cache doesn't cause value leakage between test cases
+        3. Each test case's checks operate on their own independent execution context
+        4. Complex nested JSONPath expressions work correctly across different data structures
+        """
+        # Create test cases with different data structures and per-test-case checks
+        test_cases = [
+            TestCase(
+                id="geography_test",
+                input={
+                    "question": "What is the capital of France?",
+                    "user_id": 1001,
+                    "difficulty": "easy",
+                    "metadata": {"category": "geography", "points": 10},
+                },
+                expected="Paris",
+                checks=[
+                    # Check 1: Basic output validation
+                    Check(
+                        type="test_check",
+                        arguments={
+                            "expected": "$.test_case.expected",
+                            "actual": "$.output.value.answer",
+                        },
+                    ),
+                    # Check 2: User context validation
+                    Check(
+                        type="test_check",
+                        arguments={
+                            "expected": "$.test_case.input.user_id",
+                            "actual": "$.output.metadata.user_id",
+                        },
+                    ),
+                    # Check 3: Category validation
+                    Check(
+                        type="test_check",
+                        arguments={
+                            "expected": "geography",
+                            "actual": "$.test_case.input.metadata.category",
+                        },
+                    ),
+                ],
+            ),
+            TestCase(
+                id="math_test",
+                input={
+                    "question": "What is 15 * 7?",
+                    "user_id": 2002,
+                    "difficulty": "medium",
+                    "metadata": {"category": "mathematics", "points": 20},
+                },
+                expected="105",
+                checks=[
+                    # Check 1: Answer validation
+                    Check(
+                        type="test_check",
+                        arguments={
+                            "expected": "$.test_case.expected",
+                            "actual": "$.output.value.result",
+                        },
+                    ),
+                    # Check 2: Difficulty validation
+                    Check(
+                        type="test_check",
+                        arguments={
+                            "expected": "medium",
+                            "actual": "$.test_case.input.difficulty",
+                        },
+                    ),
+                    # Check 3: Points validation
+                    Check(
+                        type="test_check",
+                        arguments={
+                            "expected": "$.test_case.input.metadata.points",
+                            "actual": "$.output.metadata.points_awarded",
+                        },
+                    ),
+                ],
+            ),
+            TestCase(
+                id="science_test",
+                input={
+                    "question": "What is the chemical symbol for gold?",
+                    "user_id": 3003,
+                    "difficulty": "hard",
+                    "metadata": {"category": "chemistry", "points": 30},
+                },
+                expected="Au",
+                checks=[
+                    # Check 1: Symbol validation
+                    Check(
+                        type="test_check",
+                        arguments={
+                            "expected": "Au",
+                            "actual": "$.output.value.symbol",
+                        },
+                    ),
+                    # Check 2: Question type validation
+                    Check(
+                        type="test_check",
+                        arguments={
+                            "expected": "chemistry",
+                            "actual": "$.output.metadata.subject",
+                        },
+                    ),
+                ],
+            ),
+        ]
+
+        # Create corresponding outputs with different structures
+        outputs = [
+            Output(
+                value={
+                    "answer": "Paris",
+                    "confidence": 0.95,
+                    "reasoning": "Paris is the capital city of France",
+                },
+                metadata={
+                    "user_id": 1001,
+                    "processing_time": 150,
+                    "model": "geography-expert",
+                },
+            ),
+            Output(
+                value={
+                    "result": "105",
+                    "calculation": "15 * 7 = 105",
+                    "steps": ["15", "*", "7", "=", "105"],
+                },
+                metadata={
+                    "user_id": 2002,
+                    "points_awarded": 20,
+                    "processing_time": 200,
+                },
+            ),
+            Output(
+                value={
+                    "symbol": "Au",
+                    "element_name": "Gold",
+                    "atomic_number": 79,
+                },
+                metadata={
+                    "user_id": 3003,
+                    "subject": "chemistry",
+                    "processing_time": 180,
+                },
+            ),
+        ]
+
+        # Execute evaluation using per-test-case checks
+        result = evaluate(test_cases, outputs, checks=None)
+
+        # Verify evaluation succeeded
+        assert result.status == "completed"
+        assert len(result.results) == 3
+
+        # Verify test case 1 (Geography) - resolved arguments should contain correct values
+        geo_result = result.results[0]
+        assert geo_result.status == "completed"
+        assert len(geo_result.check_results) == 3
+
+        # Check 1: expected="Paris", actual="Paris"
+        geo_check1 = geo_result.check_results[0]
+        assert geo_check1.status == "completed"
+        assert geo_check1.resolved_arguments["expected"]["jsonpath"] == "$.test_case.expected"
+        assert geo_check1.resolved_arguments["expected"]["value"] == "Paris"
+        assert geo_check1.resolved_arguments["actual"]["jsonpath"] == "$.output.value.answer"
+        assert geo_check1.resolved_arguments["actual"]["value"] == "Paris"
+        assert geo_check1.results["passed"] is True
+
+        # Check 2: expected=1001, actual=1001
+        geo_check2 = geo_result.check_results[1]
+        assert geo_check2.resolved_arguments["expected"]["jsonpath"] == "$.test_case.input.user_id"
+        assert geo_check2.resolved_arguments["expected"]["value"] == 1001
+        assert geo_check2.resolved_arguments["actual"]["jsonpath"] == "$.output.metadata.user_id"
+        assert geo_check2.resolved_arguments["actual"]["value"] == 1001
+        assert geo_check2.results["passed"] is True
+
+        # Check 3: expected="geography", actual="geography"
+        geo_check3 = geo_result.check_results[2]
+        assert geo_check3.resolved_arguments["expected"]["value"] == "geography"
+        assert geo_check3.resolved_arguments["actual"]["jsonpath"] == "$.test_case.input.metadata.category"  # noqa: E501
+        assert geo_check3.resolved_arguments["actual"]["value"] == "geography"
+        assert geo_check3.results["passed"] is True
+
+        # Verify test case 2 (Math) - different values extracted from different context
+        math_result = result.results[1]
+        assert math_result.status == "completed"
+        assert len(math_result.check_results) == 3
+
+        # Check 1: expected="105", actual="105"
+        math_check1 = math_result.check_results[0]
+        assert math_check1.resolved_arguments["expected"]["jsonpath"] == "$.test_case.expected"
+        assert math_check1.resolved_arguments["expected"]["value"] == "105"
+        assert math_check1.resolved_arguments["actual"]["jsonpath"] == "$.output.value.result"
+        assert math_check1.resolved_arguments["actual"]["value"] == "105"
+        assert math_check1.results["passed"] is True
+
+        # Check 2: expected="medium", actual="medium"
+        math_check2 = math_result.check_results[1]
+        assert math_check2.resolved_arguments["expected"]["value"] == "medium"
+        assert math_check2.resolved_arguments["actual"]["jsonpath"] == "$.test_case.input.difficulty"  # noqa: E501
+        assert math_check2.resolved_arguments["actual"]["value"] == "medium"
+        assert math_check2.results["passed"] is True
+
+        # Check 3: expected=20, actual=20
+        math_check3 = math_result.check_results[2]
+        assert math_check3.resolved_arguments["expected"]["jsonpath"] == "$.test_case.input.metadata.points"  # noqa: E501
+        assert math_check3.resolved_arguments["expected"]["value"] == 20
+        assert math_check3.resolved_arguments["actual"]["jsonpath"] == "$.output.metadata.points_awarded"  # noqa: E501
+        assert math_check3.resolved_arguments["actual"]["value"] == 20
+        assert math_check3.results["passed"] is True
+
+        # Verify test case 3 (Science) - yet different values from different context
+        science_result = result.results[2]
+        assert science_result.status == "completed"
+        assert len(science_result.check_results) == 2
+
+        # Check 1: expected="Au", actual="Au"
+        science_check1 = science_result.check_results[0]
+        assert science_check1.resolved_arguments["expected"]["value"] == "Au"
+        assert science_check1.resolved_arguments["actual"]["jsonpath"] == "$.output.value.symbol"
+        assert science_check1.resolved_arguments["actual"]["value"] == "Au"
+        assert science_check1.results["passed"] is True
+
+        # Check 2: expected="chemistry", actual="chemistry"
+        science_check2 = science_result.check_results[1]
+        assert science_check2.resolved_arguments["expected"]["value"] == "chemistry"
+        assert science_check2.resolved_arguments["actual"]["jsonpath"] == "$.output.metadata.subject"  # noqa: E501
+        assert science_check2.resolved_arguments["actual"]["value"] == "chemistry"
+        assert science_check2.results["passed"] is True
+
+        # Verify that the same JSONPath expressions extracted different values
+        # For example, "$.test_case.expected" should have extracted different values:
+        # - "Paris" for geography test
+        # - "105" for math test
+        # - No usage in science test (different check structure)
+
+        # Verify "$.test_case.input.user_id" extracted different user IDs:
+        assert geo_check2.resolved_arguments["expected"]["value"] == 1001  # Geography user
+        # Math test doesn't use user_id in checks, but we verified it has 2002 in input
