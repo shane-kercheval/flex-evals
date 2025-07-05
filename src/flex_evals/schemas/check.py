@@ -1,9 +1,12 @@
 """Check and CheckResult schema implementations for FEP."""
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
 import re
+
+from pydantic import BaseModel
 
 from ..constants import CheckType, ErrorType, Status
 
@@ -44,6 +47,40 @@ class Check:
         """Validate semantic version format."""
         semver_pattern = r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$'  # noqa: E501
         return bool(re.match(semver_pattern, version))
+
+
+class SchemaCheck(BaseModel, ABC):
+    """
+    Abstract base class for typed check schemas.
+
+    Provides a type-safe, strongly-typed alternative to the generic Check class
+    while maintaining full backward compatibility with the existing evaluation engine.
+
+    Benefits:
+    - Eliminates untyped arguments dictionaries
+    - Provides IDE autocompletion and type checking
+    - Adds validation at creation time
+    - Seamless integration with existing evaluate() function
+    """
+
+    version: str | None = None
+
+    @property
+    @abstractmethod
+    def check_type(self) -> CheckType:
+        """Return the CheckType for this check."""
+        pass
+
+    def to_check(self) -> Check:
+        """Convert to generic Check object for execution."""
+        data = self.model_dump()
+        version = data.pop('version', None)
+
+        return Check(
+            type=self.check_type,
+            arguments=data,
+            version=version,
+        )
 
 
 @dataclass
