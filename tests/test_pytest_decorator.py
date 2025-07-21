@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 import threading
 
 from flex_evals.pytest_decorator import evaluate
-from flex_evals import TestCase, Check, CheckType
+from flex_evals import TestCase, Check, CheckType, ContainsCheck
 
 from typing import Never
 
@@ -37,9 +37,9 @@ class TestEvaluateDecoratorBasicFunctionality:
 
         @evaluate(
             test_cases=[TestCase(id="basic", input="test input")],
-            checks=[Check(
-                type=CheckType.CONTAINS,
-                arguments={"text": "$.output.value", "phrases": ["Python"]},
+            checks=[ContainsCheck(
+                text="$.output.value",
+                phrases=["Python"],
             )],
             samples=3,
             success_threshold=1.0,
@@ -1046,10 +1046,12 @@ class TestEvaluateDecoratorAsync:
 
     def test_async_with_multiple_test_cases_timing(self):
         """Test async concurrency with multiple test cases per sample."""
+        num_samples = 10
+        num_test_cases = 20
+        call_count = 0
         test_cases = [
-            TestCase(id="case_1", input="input1"),
-            TestCase(id="case_2", input="input2"),
-            TestCase(id="case_3", input="input3"),
+            TestCase(id=f"case_{i}", input=f"input_{i}")
+            for i in range(0, num_test_cases)
         ]
 
         @evaluate(
@@ -1058,20 +1060,23 @@ class TestEvaluateDecoratorAsync:
                 type=CheckType.CONTAINS,
                 arguments={"text": "$.output.value", "phrases": ["processed"]},
             )],
-            samples=4,  # 4 samples * 3 test cases = 12 concurrent calls
+            samples=num_samples,
             success_threshold=1.0,
         )
         async def test_multi_case_async(test_case) -> str:  # noqa
-            await asyncio.sleep(0.05)  # 50ms delay per call
+            nonlocal call_count
+            call_count += 1
+            await asyncio.sleep(0.1)  # 100ms delay per test case
+            print(f"Processing {test_case.input}")
             return f"processed {test_case.input}"
 
         start_time = time.time()
         test_multi_case_async()
         duration = time.time() - start_time
 
-        # 12 concurrent calls with 0.05s delay should take ~0.05s total
-        # If sequential: would take 12 * 0.05 = 0.6s
-        assert duration < 0.2, f"Multiple test case async not concurrent (took {duration:.3f}s)"
+        assert call_count == num_samples * num_test_cases
+        # Should be much less than 20 seconds if concurrent
+        assert duration < 0.5, f"Multiple test case async not concurrent (took {duration:.3f}s)"
 
     def test_async_with_exceptions(self):
         """Test async function exception handling."""

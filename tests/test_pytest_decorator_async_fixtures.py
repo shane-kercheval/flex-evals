@@ -315,37 +315,3 @@ class TestAsyncFixtureFailureScenarios:
         error_message = str(exc_info.value)
         assert "Statistical evaluation failed" in error_message
         assert "Test case 0 exception: ValueError" in error_message
-
-
-class TestAsyncFixtureTimingValidation:
-    """Test that async fixtures actually run concurrently by measuring timing."""
-
-    def test_async_fixture_concurrency_timing_validation(self):
-        """Verify async fixtures run concurrently by measuring execution time."""
-        @evaluate(
-            test_cases=[TestCase(id="timing_validation", input="test")],
-            checks=[Check(
-                type=CheckType.CONTAINS,
-                arguments={"text": "$.output.value", "phrases": ["timed_fixture_result"]},
-            )],
-            samples=20,  # 20 samples with simulated delays
-            success_threshold=1.0,
-        )
-        async def timing_test_function(test_case: TestCase) -> str:  # noqa: ARG001
-            # Simulate async fixture delay + test delay
-            await asyncio.sleep(0.1)  # 100ms "fixture" delay
-            return "Result: timed_fixture_result"
-
-        # Measure execution time
-        start_time = time.time()
-        timing_test_function()
-        duration = time.time() - start_time
-
-        # If sequential: 20 samples * 100ms = 2 seconds
-        # If concurrent: 20 samples should complete in ~100ms total
-        max_allowed_time = 0.35  # 350ms buffer for overhead
-        assert duration < max_allowed_time, (
-            f"Async execution not concurrent "
-            f"(took {duration:.3f}s, expected < {max_allowed_time:.2f}s)"
-        )
-
