@@ -40,7 +40,7 @@ without changing behavior for existing use cases.
 
 import asyncio
 import pytest
-
+import _pytest.outcomes
 from flex_evals import TestCase, Check, CheckType
 from flex_evals.pytest_decorator import evaluate
 
@@ -181,7 +181,6 @@ class TestMultipleAsyncFixtures:
         return f"Simple: {simple_async_fixture}, Complex: {complex_async_fixture.get_data()}"
 
 
-
 class TestAsyncFixtureStatisticalEvaluation:
     """Test that async fixtures work with statistical sampling (multiple executions)."""
 
@@ -265,3 +264,53 @@ class TestAsyncFixtureContextValidation:
     ) -> str:
         """Test async fixtures work in pytest-asyncio event loop context."""
         return f"Context test: {simple_async_fixture}"
+
+
+class TestAsyncFixtureFailureScenarios:
+    """Test that @evaluate with async functions correctly fails when it should."""
+
+    def test_async_function_check_failure(self):
+        """Test that @evaluate fails when async test returns wrong value."""
+        @evaluate(
+            test_cases=[TestCase(id="should_fail", input="test")],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "expected_value", "actual": "$.output.value"},
+            )],
+            samples=2,
+            success_threshold=1.0,
+        )
+        async def failing_async_test(test_case: TestCase) -> str:  # noqa: ARG001
+            # Return wrong value - should fail the exact match check
+            return "wrong_value"
+
+        # This meta-test should PASS by confirming the evaluation FAILS
+        with pytest.raises(_pytest.outcomes.Failed) as exc_info:
+            failing_async_test()
+
+        error_message = str(exc_info.value)
+        assert "Statistical evaluation failed" in error_message
+        assert "Success rate: 0.00%" in error_message
+
+    def test_async_function_exception_failure(self):
+        """Test that @evaluate fails when async test throws exceptions."""
+        @evaluate(
+            test_cases=[TestCase(id="exception_test", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["success"]},
+            )],
+            samples=2,
+            success_threshold=1.0,
+        )
+        async def exception_async_test(test_case: TestCase) -> str:  # noqa: ARG001
+            # Always throw exception - should fail
+            raise ValueError("Test exception")
+
+        # This meta-test should PASS by confirming the evaluation FAILS
+        with pytest.raises(_pytest.outcomes.Failed) as exc_info:
+            exception_async_test()
+
+        error_message = str(exc_info.value)
+        assert "Statistical evaluation failed" in error_message
+        assert "Test case 0 exception: ValueError" in error_message
