@@ -242,6 +242,42 @@ def evaluate(  # noqa: PLR0915
 
             return resolved_kwargs
 
+        async def _run_with_async_fixtures_resolved(args, kwargs):  # noqa: ANN001, ANN202
+            """
+            Run evaluation with async fixtures resolved in a new event loop context.
+
+            PROBLEM SOLVED: Before this fix, when users tried to run individual tests with
+            async fixtures outside of pytest-asyncio (e.g., VS Code "Run Test" button),
+            they would get RuntimeError: "Detected async fixtures but no running event loop".
+
+            SOLUTION: Instead of throwing that error, we create a new event loop and resolve
+            the async fixtures before passing them to the evaluation logic. This enables
+            IDE integration while maintaining backward compatibility.
+
+            Args:
+                args: Function arguments
+                kwargs: Function keyword arguments (may contain coroutine objects from async
+                fixtures)
+
+            Returns:
+                The result of the async evaluation
+
+            Raises:
+                RuntimeError: If fixture resolution fails with contextual information
+            """
+            try:
+                # Resolve async fixtures first
+                resolved_kwargs = await _resolve_async_fixtures(kwargs)
+
+                # Pass resolved fixtures to existing evaluation logic
+                return await _run_async_evaluation(args, resolved_kwargs)
+
+            except Exception as e:
+                # Only add context about no-event-loop scenario
+                raise RuntimeError(
+                    f"Failed in no-event-loop context: {e}",
+                ) from e
+
         def _handle_pytest_asyncio_context(args, kwargs, loop) -> None:  # noqa: ANN001
             """
             Handle the pytest-asyncio context explicitly.
@@ -324,15 +360,13 @@ def evaluate(  # noqa: PLR0915
                     return _handle_pytest_asyncio_context(args, kwargs, loop)
 
                 except RuntimeError:
-                    # No event loop running - standalone usage
+                    # No event loop running - standalone usage (e.g., VS Code "Run Test")
                     if has_async_fixtures:
-                        # This is a problem - we have async fixtures but no event loop
-                        raise RuntimeError(
-                            "Detected async fixtures but no running event loop. "
-                            "Are you using pytest-asyncio? Make sure it's properly configured. "
-                            "Async fixtures require an event loop context.",
-                        ) from None
-                    # Normal standalone case
+                        # FIX: Instead of throwing "Detected async fixtures but no running event
+                        # loop", create a new event loop and resolve the async fixtures properly.
+                        # This enables IDE integration for tests with async fixtures.
+                        return asyncio.run(_run_with_async_fixtures_resolved(args, kwargs))
+                    # Normal standalone case (no async fixtures)
                     return asyncio.run(_run_async_evaluation(args, kwargs))
 
             async_wrapper.__signature__ = new_sig
