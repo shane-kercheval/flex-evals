@@ -6,6 +6,7 @@ multiple times and validating success rates using existing flex-evals checks.
 """
 
 import asyncio
+import concurrent.futures
 import inspect
 import traceback
 from typing import Any, TypeVar
@@ -200,10 +201,102 @@ def evaluate(  # noqa: PLR0915
 
             _evaluate_results(expanded_test_cases, outputs, exceptions)
 
+        async def _resolve_async_fixtures(kwargs: dict) -> dict:
+            """
+            Resolve async fixtures with detailed error context.
+
+            When pytest-asyncio passes async fixtures to test functions, they come
+            as coroutine objects that need to be awaited before use.
+
+            Args:
+                kwargs: Dictionary that may contain coroutine objects from async fixtures
+
+            Returns:
+                Dictionary with all coroutines awaited and resolved to actual values
+
+            Raises:
+                RuntimeError: If any async fixture fails to resolve, with detailed context
+            """
+            resolved_kwargs = {}
+            async_fixture_names = []
+
+            for key, value in kwargs.items():
+                if inspect.iscoroutine(value):
+                    async_fixture_names.append(key)
+                    try:
+                        resolved_kwargs[key] = await value
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"Failed to resolve async fixture '{key}' in flex-evals evaluation.\n"
+                            f"Error: {e!s}\n"
+                            f"Context: {type(e).__name__}\n"
+                            f"All async fixtures detected: {async_fixture_names}\n"
+                            f"This usually indicates:\n"
+                            f"  1. Event loop context mismatch\n"
+                            f"  2. pytest-asyncio configuration issue\n"
+                            f"  3. Async fixture implementation problem\n"
+                            f"Please check your pytest-asyncio setup and fixture implementation.",
+                        ) from e
+                else:
+                    resolved_kwargs[key] = value
+
+            return resolved_kwargs
+
+        def _handle_pytest_asyncio_context(args, kwargs, loop) -> None:  # noqa: ANN001
+            """
+            Handle the pytest-asyncio context explicitly.
+
+            Args:
+                args: Function arguments
+                kwargs: Function keyword arguments (may contain async fixtures)
+                loop: The running event loop
+
+            Returns:
+                The result of the async evaluation
+
+            Raises:
+                RuntimeError: If execution fails with detailed context
+            """
+            async def resolve_and_run():  # noqa: ANN202
+                return await _run_async_evaluation(args, kwargs)
+
+            try:
+                # Method 1: Try to use loop.run_until_complete if possible
+                return loop.run_until_complete(resolve_and_run())
+
+            except RuntimeError as e:
+                if "cannot be called from a running event loop" in str(e):
+                    # This is expected in some pytest-asyncio setups
+                    # Use threading approach as the designed solution, not a fallback
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, resolve_and_run())
+                        try:
+                            return future.result(timeout=300)  # 5 minute timeout
+                        except concurrent.futures.TimeoutError:
+                            raise RuntimeError(
+                                "Async evaluation timed out after 5 minutes. "
+                                "This may indicate a problem with async fixture resolution.",
+                            ) from None
+                else:
+                    # Unexpected error - don't mask it
+                    raise RuntimeError(
+                        f"Failed to execute in pytest-asyncio context: {e!s}. "
+                        f"This indicates a compatibility issue that needs investigation.",
+                    ) from e
+
         async def _run_async_evaluation(args, kwargs) -> None:  # noqa: ANN001
-            """Run evaluation for async functions."""
+            """
+            Execute async evaluation with proper fixture resolution.
+
+            This function resolves any async fixtures first, then proceeds with
+            the standard evaluation logic using the resolved values.
+            """
+            # IMPORTANT: Resolve async fixtures FIRST before any other processing
+            resolved_kwargs = await _resolve_async_fixtures(kwargs)
+
+            # Continue with existing logic but use resolved_kwargs instead of kwargs
             expanded_test_cases = test_cases * samples
-            await _execute_async_calls(expanded_test_cases, args, kwargs)
+            await _execute_async_calls(expanded_test_cases, args, resolved_kwargs)
 
         def _run_sync_evaluation(args, kwargs) -> None:  # noqa: ANN001
             """Run evaluation for sync functions."""
@@ -214,8 +307,33 @@ def evaluate(  # noqa: PLR0915
         if asyncio.iscoroutinefunction(func):
             @wraps(func)
             def async_wrapper(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
-                # Run async function using asyncio.run
-                return asyncio.run(_run_async_evaluation(args, kwargs))
+                """Handle async functions with explicit context detection."""
+                # Detect if we have any async fixtures
+                has_async_fixtures = any(inspect.iscoroutine(v) for v in kwargs.values())
+
+                try:
+                    # Check current event loop context
+                    loop = asyncio.get_running_loop()
+
+                    # We're in an event loop - this should be pytest-asyncio
+                    if has_async_fixtures:
+                        # This is the expected case for pytest-asyncio with async fixtures
+                        return _handle_pytest_asyncio_context(args, kwargs, loop)
+                    # Event loop running but no async fixtures - could be normal pytest-asyncio
+                    # usage
+                    return _handle_pytest_asyncio_context(args, kwargs, loop)
+
+                except RuntimeError:
+                    # No event loop running - standalone usage
+                    if has_async_fixtures:
+                        # This is a problem - we have async fixtures but no event loop
+                        raise RuntimeError(
+                            "Detected async fixtures but no running event loop. "
+                            "Are you using pytest-asyncio? Make sure it's properly configured. "
+                            "Async fixtures require an event loop context.",
+                        ) from None
+                    # Normal standalone case
+                    return asyncio.run(_run_async_evaluation(args, kwargs))
 
             async_wrapper.__signature__ = new_sig
             return async_wrapper
