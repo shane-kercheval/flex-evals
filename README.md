@@ -62,6 +62,37 @@ async def test_python_explanation(test_case: TestCase) -> str:
     return my_llm(test_case.input)
 ```
 
+### Fixture Limitations
+
+When using pytest fixtures with the `@evaluate` decorator, be aware that **fixture instances are reused across all test executions** within a single decorated function run. This means:
+
+- If your pytest fixture maintains state (counters, lists, etc.), that state will accumulate across multiple executions
+- Each execution does NOT get a fresh fixture instance - the same fixture is passed to all executions
+- This is standard pytest behavior when fixtures are resolved to values before being passed to the decorator
+
+**Example of problematic fixture:**
+```python
+@pytest.fixture
+async def stateful_fixture():
+    class Counter:
+        def __init__(self):
+            self.count = 0
+        def increment(self):
+            self.count += 1
+            return self.count
+    return Counter()
+
+@evaluate(test_cases=[...], samples=5)  
+async def test_func(test_case, stateful_fixture):
+    # This will return 1, 2, 3, 4, 5 across executions
+    # NOT 1, 1, 1, 1, 1 as might be expected
+    return stateful_fixture.increment()
+```
+
+For stateless fixtures or fixtures that should maintain state across executions, this behavior is expected and correct.
+
+## Examples
+
 **See `examples` directory for more detailed usage examples**:
 - **[Pytest Decorator Examples](examples/pytest_decorator_example.py)** - Complete pytest integration examples
 - **[Quickstart Notebook](examples/quickstart.ipynb)** - Introduction to FEP concepts
