@@ -19,6 +19,7 @@ class CheckType(str, Enum):
 
     CONTAINS = 'contains'
     EXACT_MATCH = 'exact_match'
+    IS_EMPTY = 'is_empty'
     REGEX = 'regex'
     THRESHOLD = 'threshold'
     SEMANTIC_SIMILARITY = 'semantic_similarity'
