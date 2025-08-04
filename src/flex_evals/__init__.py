@@ -14,7 +14,7 @@ from .schemas.check import (
     Check, CheckError, CheckResult, SchemaCheck,
 )
 from .schemas.checks import (
-    ContainsCheck, ExactMatchCheck, RegexCheck, RegexFlags, ThresholdCheck,
+    ContainsCheck, ExactMatchCheck, IsEmptyCheck, RegexCheck, RegexFlags, ThresholdCheck,
     SemanticSimilarityCheck, LLMJudgeCheck, CustomFunctionCheck, ThresholdConfig,
 )
 from .schemas.test_case import TestCase
@@ -32,6 +32,7 @@ __all__ = [
     "ErrorType",
     "EvaluationRunResult",
     "ExactMatchCheck",
+    "IsEmptyCheck",
     "LLMJudgeCheck",
     "Output",
     "RegexCheck",

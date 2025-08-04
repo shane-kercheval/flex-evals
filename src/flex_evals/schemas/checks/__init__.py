@@ -2,6 +2,7 @@
 
 from .contains import ContainsCheck
 from .exact_match import ExactMatchCheck
+from .is_empty import IsEmptyCheck
 from .regex import RegexCheck, RegexFlags
 from .threshold import ThresholdCheck
 from .semantic_similarity import SemanticSimilarityCheck, ThresholdConfig
@@ -12,6 +13,7 @@ __all__ = [
     "ContainsCheck",
     "CustomFunctionCheck",
     "ExactMatchCheck",
+    "IsEmptyCheck",
     "LLMJudgeCheck",
     "RegexCheck",
     "RegexFlags",
