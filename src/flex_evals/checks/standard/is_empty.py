@@ -17,9 +17,10 @@ class IsEmptyCheck(BaseCheck):
     Tests whether a value is empty.
 
     Arguments Schema:
-    - value: string | JSONPath - Value to test for emptiness
+    - value: any | JSONPath - Value to test for emptiness
     - negate: boolean (default: false) - If true, passes when value is not empty
     - strip_whitespace: boolean (default: true) - If true, strips whitespace before checking
+        (strings only)
 
     Results Schema:
     - passed: boolean - Whether the empty check passed
@@ -27,20 +28,20 @@ class IsEmptyCheck(BaseCheck):
 
     def __call__(  # noqa: D102
             self,
-            value: str,
+            value: Any,  # noqa: ANN401
             negate: bool = False,
             strip_whitespace: bool = True,
         ) -> dict[str, Any]:
 
-        # Convert to string, handling None
-        value_str = str(value) if value is not None else ""
-
-        # Apply whitespace stripping if requested
-        if strip_whitespace:
-            value_str = value_str.strip()
-
-        # Check if empty
-        is_empty = value_str == ""
+        # Handle None directly
+        if value is None:
+            is_empty = True
+        # Handle strings with optional whitespace stripping
+        elif isinstance(value, str):
+            is_empty = value.strip() == "" if strip_whitespace else value == ""
+        # All other types are considered non-empty
+        else:
+            is_empty = False
 
         # Apply negation
         passed = not is_empty if negate else is_empty

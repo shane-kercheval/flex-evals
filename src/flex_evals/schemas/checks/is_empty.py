@@ -1,5 +1,6 @@
 """IsEmptyCheck schema class for type-safe empty check definitions."""
 
+from typing import Any
 from pydantic import Field
 
 from ...constants import CheckType
@@ -15,13 +16,15 @@ class IsEmptyCheck(SchemaCheck):
     Fields:
     - value: value to check or JSONPath expression pointing to the value
     - negate: If true, passes when value is not empty (default: False)
-    - strip_whitespace: If true, strips whitespace before checking (default: True)
-    - version: Optional version string for the check
+    - strip_whitespace: If true, strips whitespace before checking strings only (default: True)
+    - version: Optional version string for the check\
     """
 
-    value: str = Field(..., min_length=1, description="value to check or JSONPath expression pointing to the value")  # noqa: E501
+    value: Any = Field(..., description="value to check or JSONPath expression pointing to the value")  # noqa: E501
     negate: bool = Field(False, description="If true, passes when value is not empty")
-    strip_whitespace: bool = Field(True, description="If true, strips whitespace before checking")
+    strip_whitespace: bool = Field(
+        True, description="If true, strips whitespace before checking strings only",
+    )
 
     @property
     def check_type(self) -> CheckType:

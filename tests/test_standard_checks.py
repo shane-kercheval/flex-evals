@@ -439,24 +439,74 @@ class TestIsEmptyCheck:
         assert result == {"passed": False}
 
     def test_is_empty_numeric_value(self):
-        """Test numeric value converted to string fails is_empty check."""
+        """Test numeric value is considered non-empty."""
         result = IsEmptyCheck()(value=123)
         assert result == {"passed": False}
 
     def test_is_empty_zero_value(self):
-        """Test zero value converted to string fails is_empty check."""
+        """Test zero value is considered non-empty."""
         result = IsEmptyCheck()(value=0)
         assert result == {"passed": False}
 
+    def test_is_empty_negative_value(self):
+        """Test negative value is considered non-empty."""
+        result = IsEmptyCheck()(value=-1)
+        assert result == {"passed": False}
+
+    def test_is_empty_float_value(self):
+        """Test float value is considered non-empty."""
+        result = IsEmptyCheck()(value=0.0)
+        assert result == {"passed": False}
+
     def test_is_empty_boolean_false(self):
-        """Test False value converted to string fails is_empty check."""
+        """Test False value is considered non-empty."""
         result = IsEmptyCheck()(value=False)
         assert result == {"passed": False}
 
-    def test_is_empty_object_value(self):
-        """Test object value converted to string fails is_empty check."""
+    def test_is_empty_boolean_true(self):
+        """Test True value is considered non-empty."""
+        result = IsEmptyCheck()(value=True)
+        assert result == {"passed": False}
+
+    def test_is_empty_list_empty(self):
+        """Test empty list is considered non-empty."""
+        result = IsEmptyCheck()(value=[])
+        assert result == {"passed": False}
+
+    def test_is_empty_list_with_items(self):
+        """Test list with items is considered non-empty."""
+        result = IsEmptyCheck()(value=[1, 2, 3])
+        assert result == {"passed": False}
+
+    def test_is_empty_dict_empty(self):
+        """Test empty dict is considered non-empty."""
+        result = IsEmptyCheck()(value={})
+        assert result == {"passed": False}
+
+    def test_is_empty_dict_with_items(self):
+        """Test dict with items is considered non-empty."""
         result = IsEmptyCheck()(value={"key": "value"})
         assert result == {"passed": False}
+
+    def test_is_empty_complex_type(self):
+        """Test complex data structure is considered non-empty."""
+        result = IsEmptyCheck()(value={"nested": {"list": [1, 2, {"key": None}]}})
+        assert result == {"passed": False}
+
+    def test_is_empty_negate_with_numeric(self):
+        """Test negate=True with numeric value passes (not empty check)."""
+        result = IsEmptyCheck()(value=123, negate=True)
+        assert result == {"passed": True}
+
+    def test_is_empty_negate_with_false(self):
+        """Test negate=True with False value passes (not empty check)."""
+        result = IsEmptyCheck()(value=False, negate=True)
+        assert result == {"passed": True}
+
+    def test_is_empty_negate_with_empty_list(self):
+        """Test negate=True with empty list passes (not empty check)."""
+        result = IsEmptyCheck()(value=[], negate=True)
+        assert result == {"passed": True}
 
     def test_is_empty_missing_value(self):
         """Test missing value argument raises TypeError."""
@@ -507,6 +557,43 @@ class TestIsEmptyCheck:
         assert results.results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": expected_passed}
+
+    @pytest.mark.parametrize(("output_value", "expected_passed"), [
+        (None, True),
+        (1, False),
+    ])
+    def test_none_empty_via_evaluate(self, output_value: str, expected_passed: bool):
+        """Test using JSONPath for value with various empty/non-empty combinations."""
+        # Define your test cases
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="What is your name?",
+                expected="",  # Empty expected value
+                checks=[
+                    Check(
+                        type=CheckType.IS_EMPTY,
+                        arguments={
+                            "value": "$.output.value.value",
+                        },
+                    ),
+                ],
+            ),
+        ]
+        # System outputs to evaluate
+        outputs = [
+            Output(value={"value": output_value}),
+        ]
+        # Run evaluation
+        results = evaluate(test_cases, outputs)
+        assert results.summary.total_test_cases == 1
+        assert results.summary.completed_test_cases == 1
+        assert results.summary.error_test_cases == 0
+        assert results.summary.skipped_test_cases == 0
+        assert results.results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].results == {"passed": expected_passed}
+
 
 
 class TestThresholdCheck:
