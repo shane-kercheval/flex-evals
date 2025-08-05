@@ -185,3 +185,105 @@ class EvaluationRunResult:
         if any(r.status == 'skip' for r in results):
             return 'skip'
         return 'completed'
+
+    def to_dict_list(self) -> list[dict[str, Any]]:  # noqa: PLR0912
+        """
+        Flatten evaluation results into a list of dictionaries for tabular analysis.
+
+        Each dictionary represents one check result with context from the evaluation run,
+        test case, and check execution. This format is suitable for conversion to
+        pandas DataFrame or other tabular analysis tools.
+
+        Returns:
+            List of dictionaries, one per check result, containing flattened data
+            from the evaluation run, test case, and check execution.
+        """
+        flattened_rows = []
+
+        for test_case_result in self.results:
+            # Extract common data that applies to all checks in this test case
+            test_case_data = {
+                # Evaluation run context
+                'evaluation_id': self.evaluation_id,
+                'started_at': self.started_at,
+                'completed_at': self.completed_at,
+                'evaluation_status': self.status,
+
+                # Test case context
+                'test_case_id': test_case_result.execution_context.test_case.id,
+                'test_case_status': test_case_result.status,
+
+                # Test case input data
+                'input_data': test_case_result.execution_context.test_case.input,
+                'expected_output': test_case_result.execution_context.test_case.expected,
+
+                # System output
+                'actual_output': test_case_result.execution_context.output.value,
+
+                # Test case summary stats
+                'total_checks': test_case_result.summary.total_checks,
+                'completed_checks': test_case_result.summary.completed_checks,
+                'error_checks': test_case_result.summary.error_checks,
+                'skipped_checks': test_case_result.summary.skipped_checks,
+            }
+
+            # Add test case metadata if present
+            if test_case_result.execution_context.test_case.metadata:
+                test_case_data['test_case_metadata'] = (
+                    test_case_result.execution_context.test_case.metadata
+                )
+
+            # Add output metadata if present
+            if test_case_result.execution_context.output.metadata:
+                test_case_data['output_metadata'] = (
+                    test_case_result.execution_context.output.metadata
+                )
+
+            # Add test case result metadata if present
+            if test_case_result.metadata:
+                test_case_data['test_case_result_metadata'] = test_case_result.metadata
+
+            # Add experiment metadata if present at evaluation level
+            if self.experiment:
+                if self.experiment.name:
+                    test_case_data['experiment_name'] = self.experiment.name
+                if self.experiment.metadata:
+                    test_case_data['experiment_metadata'] = self.experiment.metadata
+
+            # Add evaluation metadata if present
+            if self.metadata:
+                test_case_data['evaluation_metadata'] = self.metadata
+
+            # Create one row per check result
+            for check_result in test_case_result.check_results:
+                row = test_case_data.copy()
+
+                # Add check-specific data
+                row.update({
+                    'check_type': check_result.check_type,
+                    'check_status': check_result.status,
+                    'check_results': check_result.results,
+                    'resolved_arguments': check_result.resolved_arguments,
+                    'evaluated_at': check_result.evaluated_at,
+                })
+
+                # Extract 'passed' field from check_results if it exists
+                if (isinstance(check_result.results, dict) and
+                    'passed' in check_result.results):
+                    row['check_results_passed'] = check_result.results['passed']
+                else:
+                    row['check_results_passed'] = None
+
+                # Add check metadata if present
+                if check_result.metadata:
+                    row['check_metadata'] = check_result.metadata
+
+                # Add error details if present
+                if check_result.error:
+                    row['error_type'] = check_result.error.type
+                    row['error_message'] = check_result.error.message
+                    row['error_recoverable'] = check_result.error.recoverable
+
+                flattened_rows.append(row)
+
+        return flattened_rows

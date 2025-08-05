@@ -1,5 +1,6 @@
 """Tests for result schema implementations."""
 
+import pandas as pd
 import pytest
 from datetime import datetime, UTC
 
@@ -658,3 +659,343 @@ class TestEvaluationRunResult:
             results=[test_case_result],
         )
         assert result.status == 'completed'
+
+    def test_to_dict_list_empty_results(self):
+        """Test to_dict_list with empty results."""
+        now = datetime.now(UTC)
+        evaluation = EvaluationRunResult(
+            evaluation_id="eval-empty",
+            started_at=now,
+            completed_at=now,
+            status='completed',
+            summary=EvaluationSummary(0, 0, 0, 0),
+            results=[],
+        )
+
+        dict_list = evaluation.to_dict_list()
+        assert dict_list == []
+
+    def test_to_dict_list_single_test_case_single_check(self):
+        """Test to_dict_list with a single test case and single check."""
+        now = datetime.now(UTC)
+        check_time = datetime.now(UTC)
+
+        # Create a comprehensive test case with metadata
+        test_case = TestCase(
+            id="test-001",
+            input={"query": "test input"},
+            expected={"answer": "expected result"},
+            metadata={"test_type": "unit"},
+        )
+
+        output = Output(
+            value={"answer": "actual result"},
+            id="output-001",
+            metadata={"model": "test-model"},
+        )
+
+        check_result = CheckResult(
+            check_type="exact_match",
+            status='completed',
+            results={"passed": True, "score": 1.0},
+            resolved_arguments={"actual": "actual result", "expected": "expected result"},
+            evaluated_at=check_time,
+            metadata={"check_version": "1.0.0", "execution_time_ms": 50},
+        )
+
+        test_case_result = TestCaseResult(
+            status='completed',
+            execution_context=ExecutionContext(test_case=test_case, output=output),
+            check_results=[check_result],
+            summary=TestCaseSummary(1, 1, 0, 0),
+            metadata={"test_duration": "100ms"},
+        )
+
+        experiment = ExperimentMetadata(
+            name="test-experiment",
+            metadata={
+                "version": "1.0.0",
+                "description": "Test experiment",
+                "experiment_type": "evaluation",
+            },
+        )
+
+        evaluation = EvaluationRunResult(
+            evaluation_id="eval-001",
+            started_at=now,
+            completed_at=now,
+            status='completed',
+            summary=EvaluationSummary(1, 1, 0, 0),
+            results=[test_case_result],
+            experiment=experiment,
+            metadata={"evaluation_type": "test"},
+        )
+
+        dict_list = evaluation.to_dict_list()
+
+        assert len(dict_list) == 1
+        row = dict_list[0]
+
+        # Verify evaluation context
+        assert row['evaluation_id'] == "eval-001"
+        assert row['started_at'] == now
+        assert row['completed_at'] == now
+        assert row['evaluation_status'] == 'completed'
+
+        # Verify test case context
+        assert row['test_case_id'] == "test-001"
+        assert row['test_case_status'] == 'completed'
+        assert row['input_data'] == {"query": "test input"}
+        assert row['expected_output'] == {"answer": "expected result"}
+        assert row['actual_output'] == {"answer": "actual result"}
+
+        # Verify summary stats
+        assert row['total_checks'] == 1
+        assert row['completed_checks'] == 1
+        assert row['error_checks'] == 0
+        assert row['skipped_checks'] == 0
+
+        # Verify check-specific data
+        assert row['check_type'] == "exact_match"
+        assert row['check_status'] == 'completed'
+        assert row['check_results'] == {"passed": True, "score": 1.0}
+        assert row['check_results_passed'] is True
+        assert row['resolved_arguments'] == {
+            "actual": "actual result",
+            "expected": "expected result",
+        }
+        assert row['evaluated_at'] == check_time
+
+        # Verify metadata
+        assert row['test_case_metadata'] == {"test_type": "unit"}
+        assert row['output_metadata'] == {"model": "test-model"}
+        assert row['test_case_result_metadata'] == {"test_duration": "100ms"}
+        assert row['check_metadata'] == {"check_version": "1.0.0", "execution_time_ms": 50}
+        assert row['experiment_name'] == "test-experiment"
+        assert row['experiment_metadata'] == {
+            "version": "1.0.0",
+            "description": "Test experiment",
+            "experiment_type": "evaluation",
+        }
+        assert row['evaluation_metadata'] == {"evaluation_type": "test"}
+
+        # Verify no error fields are present for successful check
+        assert 'error_type' not in row
+        assert 'error_message' not in row
+        assert 'error_recoverable' not in row
+
+    def test_to_dict_list_multiple_checks_with_error(self):
+        """Test to_dict_list with multiple checks including an error."""
+        now = datetime.now(UTC)
+
+        test_case = TestCase(
+            id="test-002",
+            input={"query": "test input"},
+            expected={"answer": "expected result"},
+        )
+
+        output = Output(value={"answer": "actual result"}, id="output-002")
+
+        # Successful check
+        success_check = CheckResult(
+            check_type="exact_match",
+            status='completed',
+            results={"passed": True},
+            resolved_arguments={"actual": "actual result", "expected": "expected result"},
+            evaluated_at=now,
+        )
+
+        # Failed check with error
+        error_check = CheckResult(
+            check_type="semantic_similarity",
+            status='error',
+            results={},
+            resolved_arguments={"actual": "actual result", "expected": "expected result"},
+            evaluated_at=now,
+            error=CheckError(
+                type='timeout_error',
+                message="Check timed out",
+                recoverable=True,
+            ),
+        )
+
+        test_case_result = TestCaseResult(
+            status='error',
+            execution_context=ExecutionContext(test_case=test_case, output=output),
+            check_results=[success_check, error_check],
+            summary=TestCaseSummary(2, 1, 1, 0),
+        )
+
+        evaluation = EvaluationRunResult(
+            evaluation_id="eval-002",
+            started_at=now,
+            completed_at=now,
+            status='error',
+            summary=EvaluationSummary(1, 0, 1, 0),
+            results=[test_case_result],
+        )
+
+        dict_list = evaluation.to_dict_list()
+        assert len(dict_list) == 2
+
+        # First row - successful check
+        row1 = dict_list[0]
+        assert row1['check_type'] == "exact_match"
+        assert row1['check_status'] == 'completed'
+        assert row1['check_results'] == {"passed": True}
+        assert row1['check_results_passed'] is True
+        assert 'error_type' not in row1
+
+        # Second row - error check
+        row2 = dict_list[1]
+        assert row2['check_type'] == "semantic_similarity"
+        assert row2['check_status'] == 'error'
+        assert row2['check_results'] == {}
+        assert row2['check_results_passed'] is None
+        assert row2['error_type'] == 'timeout_error'
+        assert row2['error_message'] == "Check timed out"
+        assert row2['error_recoverable'] is True
+
+        # Both rows should have same test case context
+        for row in dict_list:
+            assert row['evaluation_id'] == "eval-002"
+            assert row['test_case_id'] == "test-002"
+            assert row['test_case_status'] == 'error'
+            assert row['evaluation_status'] == 'error'
+
+    def test_to_dict_list_multiple_test_cases(self):
+        """Test to_dict_list with multiple test cases."""
+        now = datetime.now(UTC)
+
+        # Test case 1
+        test_case1 = TestCase(id="test-001", input="input1", expected="expected1")
+        output1 = Output(value="output1", id="output-001")
+        check1 = CheckResult(
+            check_type="exact_match",
+            status='completed',
+            results={"passed": True},
+            resolved_arguments={"actual": "output1", "expected": "expected1"},
+            evaluated_at=now,
+        )
+        tc_result1 = TestCaseResult(
+            status='completed',
+            execution_context=ExecutionContext(test_case1, output1),
+            check_results=[check1],
+            summary=TestCaseSummary(1, 1, 0, 0),
+        )
+
+        # Test case 2
+        test_case2 = TestCase(id="test-002", input="input2", expected="expected2")
+        output2 = Output(value="output2", id="output-002")
+        check2 = CheckResult(
+            check_type="contains",
+            status='skip',
+            results={},
+            resolved_arguments={"actual": "output2", "expected": "expected2"},
+            evaluated_at=now,
+        )
+        tc_result2 = TestCaseResult(
+            status='skip',
+            execution_context=ExecutionContext(test_case2, output2),
+            check_results=[check2],
+            summary=TestCaseSummary(1, 0, 0, 1),
+        )
+
+        evaluation = EvaluationRunResult(
+            evaluation_id="eval-multi",
+            started_at=now,
+            completed_at=now,
+            status='skip',
+            summary=EvaluationSummary(2, 1, 0, 1),
+            results=[tc_result1, tc_result2],
+        )
+
+        dict_list = evaluation.to_dict_list()
+        assert len(dict_list) == 2
+
+        # Verify each row has correct test case context
+        row1 = dict_list[0]
+        assert row1['test_case_id'] == "test-001"
+        assert row1['check_type'] == "exact_match"
+        assert row1['check_status'] == 'completed'
+        assert row1['check_results_passed'] is True
+
+        row2 = dict_list[1]
+        assert row2['test_case_id'] == "test-002"
+        assert row2['check_type'] == "contains"
+        assert row2['check_status'] == 'skip'
+        assert row2['check_results_passed'] is None
+
+        # Both should have same evaluation context
+        for row in dict_list:
+            assert row['evaluation_id'] == "eval-multi"
+            assert row['evaluation_status'] == 'skip'
+        assert pd.DataFrame(dict_list).shape[0] == 2
+        pd.DataFrame(dict_list).iloc[0].transpose()
+
+    def test_to_dict_list_pandas_compatibility(self):
+        """Test that to_dict_list output can be converted to pandas DataFrame."""
+        now = datetime.now(UTC)
+
+        # Create a simple evaluation result
+        test_case = TestCase(id="test-pandas", input="test", expected="expected")
+        output = Output(value="actual", id="output-pandas")
+        check_result = CheckResult(
+            check_type="exact_match",
+            status='completed',
+            results={"passed": False, "similarity": 0.8},
+            resolved_arguments={"actual": "actual", "expected": "expected"},
+            evaluated_at=now,
+        )
+        test_case_result = TestCaseResult(
+            status='completed',
+            execution_context=ExecutionContext(test_case, output),
+            check_results=[check_result],
+            summary=TestCaseSummary(1, 1, 0, 0),
+        )
+
+        evaluation = EvaluationRunResult(
+            evaluation_id="eval-pandas",
+            started_at=now,
+            completed_at=now,
+            status='completed',
+            summary=EvaluationSummary(1, 1, 0, 0),
+            results=[test_case_result],
+        )
+
+        dict_list = evaluation.to_dict_list()
+
+        # Test that pandas can create a DataFrame from this data
+        # First verify the structure is valid regardless of pandas availability
+        assert isinstance(dict_list, list)
+        assert len(dict_list) == 1
+        assert isinstance(dict_list[0], dict)
+
+        # Verify all expected keys are present
+        expected_keys = {
+            'evaluation_id', 'started_at', 'completed_at', 'evaluation_status',
+            'test_case_id', 'test_case_status', 'input_data', 'expected_output',
+            'actual_output', 'total_checks', 'completed_checks', 'error_checks',
+            'skipped_checks', 'check_type', 'check_status', 'check_results',
+            'check_results_passed', 'resolved_arguments', 'evaluated_at',
+        }
+        assert expected_keys.issubset(dict_list[0].keys())
+
+        # Verify the check_results_passed extraction
+        assert dict_list[0]['check_results_passed'] is False
+
+        # Convert to DataFrame
+        dataframe = pd.DataFrame(dict_list)
+        # Verify DataFrame properties
+        assert len(dataframe) == 1
+        assert 'evaluation_id' in dataframe.columns
+        assert 'test_case_id' in dataframe.columns
+        assert 'check_type' in dataframe.columns
+        assert 'check_status' in dataframe.columns
+        assert 'check_results' in dataframe.columns
+
+        # Verify data types and values
+        assert dataframe.loc[0, 'evaluation_id'] == "eval-pandas"
+        assert dataframe.loc[0, 'test_case_id'] == "test-pandas"
+        assert dataframe.loc[0, 'check_type'] == "exact_match"
+        assert dataframe.loc[0, 'check_status'] == 'completed'
