@@ -11,7 +11,7 @@ from flex_evals.schemas.results import (
     EvaluationRunResult,
     ExecutionContext,
 )
-from flex_evals import TestCase, Output, Status, CheckResult, CheckError
+from flex_evals import TestCase, Output, Status, CheckResult, CheckError, Check, evaluate
 from flex_evals.schemas.experiments import ExperimentMetadata
 
 
@@ -999,3 +999,154 @@ class TestEvaluationRunResult:
         assert dataframe.loc[0, 'test_case_id'] == "test-pandas"
         assert dataframe.loc[0, 'check_type'] == "exact_match"
         assert dataframe.loc[0, 'check_status'] == 'completed'
+
+    def test_to_dict_list_with_check_metadata(self):
+        """Test to_dict_list with check metadata flowing through to results."""
+        now = datetime.now(UTC)
+
+        # Create a CheckResult with custom metadata merged from Check
+        test_case = TestCase(id="test-metadata", input="test", expected="expected")
+        output = Output(value="actual", id="output-metadata")
+
+        # Simulate what happens when a Check with metadata is executed
+        # (metadata from Check gets merged with check_version)
+        check_result = CheckResult(
+            check_type="exact_match",
+            status='completed',
+            results={"passed": True},
+            resolved_arguments={"actual": "actual", "expected": "expected"},
+            evaluated_at=now,
+            metadata={
+                "check_version": "1.0.0",  # This comes from Check.version
+                "custom_field": "custom_value",  # This comes from Check.metadata
+                "priority": "high",  # This also comes from Check.metadata
+            },
+        )
+
+        test_case_result = TestCaseResult(
+            status='completed',
+            execution_context=ExecutionContext(test_case, output),
+            check_results=[check_result],
+            summary=TestCaseSummary(1, 1, 0, 0),
+        )
+
+        evaluation = EvaluationRunResult(
+            evaluation_id="eval-metadata",
+            started_at=now,
+            completed_at=now,
+            status='completed',
+            summary=EvaluationSummary(1, 1, 0, 0),
+            results=[test_case_result],
+        )
+
+        dict_list = evaluation.to_dict_list()
+        assert len(dict_list) == 1
+
+        row = dict_list[0]
+
+        # Verify the check metadata is properly extracted
+        assert row['check_metadata'] == {
+            "check_version": "1.0.0",
+            "custom_field": "custom_value",
+            "priority": "high",
+        }
+
+        # Verify other fields work as expected
+        assert row['check_results_passed'] is True
+        assert row['check_type'] == "exact_match"
+        assert row['check_status'] == 'completed'
+
+    def test_metadata_propagation_through_evaluate(self):
+        """Test Check metadata and version propagation through evaluate to to_dict_list."""
+        # Create test cases with different types of checks
+        test_cases = [
+            TestCase(id="test-001", input="hello world", expected="hello world"),
+            TestCase(id="test-002", input="foo bar", expected="foo baz"),
+        ]
+
+        outputs = [
+            Output(value="hello world", id="output-001"),
+            Output(value="foo bar", id="output-002"),
+        ]
+
+        # Create checks with metadata and version
+        checks = [
+            Check(
+                type="exact_match",
+                arguments={
+                    "actual": "$.output.value",
+                    "expected": "$.test_case.expected",
+                },
+                version="2.0.0",
+                metadata={"priority": "high", "category": "strict"},
+            ),
+            Check(
+                type="contains",
+                arguments={
+                    "text": "$.output.value",
+                    "phrases": ["foo"],
+                },
+                version="1.5.0",
+                metadata={"priority": "medium", "timeout_ms": 1000},
+            ),
+        ]
+
+        # Execute evaluation
+        result = evaluate(test_cases, outputs, checks)
+
+        # Convert to dict list for analysis
+        dict_list = result.to_dict_list()
+
+        # Should have 4 rows: 2 test cases x 2 checks
+        assert len(dict_list) == 4
+
+        # Check first test case, first check (exact_match on test-001)
+        row1 = dict_list[0]
+        assert row1['test_case_id'] == "test-001"
+        assert row1['check_type'] == "exact_match"
+        assert row1['check_metadata'] == {
+            "check_version": "2.0.0",
+            "priority": "high",
+            "category": "strict",
+        }
+        assert row1['check_results_passed'] is True
+
+        # Check first test case, second check (contains on test-001)
+        row2 = dict_list[1]
+        assert row2['test_case_id'] == "test-001"
+        assert row2['check_type'] == "contains"
+        assert row2['check_metadata'] == {
+            "check_version": "1.5.0",
+            "priority": "medium",
+            "timeout_ms": 1000,
+        }
+        assert row2['check_results_passed'] is False  # "hello world" doesn't contain "foo"
+
+        # Check second test case, first check (exact_match on test-002)
+        row3 = dict_list[2]
+        assert row3['test_case_id'] == "test-002"
+        assert row3['check_type'] == "exact_match"
+        assert row3['check_metadata'] == {
+            "check_version": "2.0.0",
+            "priority": "high",
+            "category": "strict",
+        }
+        assert row3['check_results_passed'] is False  # "foo bar" != "foo baz"
+
+        # Check second test case, second check (contains on test-002)
+        row4 = dict_list[3]
+        assert row4['test_case_id'] == "test-002"
+        assert row4['check_type'] == "contains"
+        assert row4['check_metadata'] == {
+            "check_version": "1.5.0",
+            "priority": "medium",
+            "timeout_ms": 1000,
+        }
+        assert row4['check_results_passed'] is True  # "foo bar" contains "foo"
+
+        # Verify that all rows have the expected structure
+        for row in dict_list:
+            assert 'check_version' not in row  # Should be inside check_metadata
+            assert 'check_metadata' in row
+            assert isinstance(row['check_metadata'], dict)
+            assert 'check_version' in row['check_metadata']

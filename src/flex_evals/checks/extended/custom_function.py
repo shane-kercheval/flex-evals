@@ -35,6 +35,7 @@ class CustomFunctionCheck(BaseAsyncCheck):
         arguments: dict[str, Any],
         context: EvaluationContext,
         check_version: str | None = None,
+        check_metadata: dict[str, Any] | None = None,
     ) -> CheckResult:
         """
         Execute custom function check with JSONPath resolution for function_args.
@@ -47,6 +48,7 @@ class CustomFunctionCheck(BaseAsyncCheck):
             arguments: Raw check arguments, may contain function_args with JSONPath expressions
             context: Evaluation context with test case and output data
             check_version: Optional version string for the check definition
+            check_metadata: Optional metadata from the check definition
 
         Returns:
             CheckResult: Complete result object with execution status and results
@@ -60,6 +62,7 @@ class CustomFunctionCheck(BaseAsyncCheck):
                 resolved_arguments={},
                 evaluated_at=datetime.now(UTC),
                 check_version=check_version,
+                check_metadata=check_metadata,
                 recoverable=False,
             )
 
@@ -71,6 +74,7 @@ class CustomFunctionCheck(BaseAsyncCheck):
                 resolved_arguments={},
                 evaluated_at=datetime.now(UTC),
                 check_version=check_version,
+                check_metadata=check_metadata,
                 recoverable=False,
             )
 
@@ -102,8 +106,8 @@ class CustomFunctionCheck(BaseAsyncCheck):
                 error_message=f"Error resolving function_args: {e}",
                 resolved_arguments={},
                 evaluated_at=datetime.now(UTC),
-                context=context,
                 check_version=check_version,
+                check_metadata=check_metadata,
                 recoverable=False,
             )
 
@@ -113,6 +117,7 @@ class CustomFunctionCheck(BaseAsyncCheck):
             modified_arguments,
             context,
             check_version,
+            check_metadata,
         )
 
     async def __call__(

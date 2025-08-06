@@ -362,6 +362,7 @@ def _execute_sync_check(check: Check, context: EvaluationContext) -> CheckResult
             arguments=check.arguments,
             context=context,
             check_version=check.version,
+            check_metadata=check.metadata,
         )
 
     except Exception as e:
@@ -412,6 +413,7 @@ async def _execute_async_check(
                 arguments=check.arguments,
                 context=context,
                 check_version=check.version,
+                check_metadata=check.metadata,
             )
 
         except Exception as e:
@@ -433,15 +435,19 @@ def _create_error_check_result(
         error_message: str,
     ) -> CheckResult:
     """Create a CheckResult for unhandled errors during check execution."""
+    metadata = {}
+    if check.version:
+        metadata["check_version"] = check.version
+    if check.metadata:
+        metadata.update(check.metadata)
+
     return CheckResult(
         check_type=check.type,
         status='error',
         results={},
         resolved_arguments={},
         evaluated_at=datetime.now(UTC),
-        metadata={
-            "check_version": check.version,
-        } if check.version else None,
+        metadata=metadata if metadata else None,
         error=CheckError(
             type='unknown_error',
             message=f"Unhandled error during check execution: {error_message}",

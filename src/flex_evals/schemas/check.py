@@ -22,11 +22,13 @@ class Check:
 
     Optional Fields:
     - version: Semantic version of the check implementation
+    - metadata: Additional metadata for the check
     """
 
     type: str | CheckType
     arguments: dict[str, Any]
     version: str | None = None
+    metadata: dict[str, Any] | None = None
 
     def __post_init__(self):
         """Validate required fields and constraints."""
@@ -64,6 +66,7 @@ class SchemaCheck(BaseModel, ABC):
     """
 
     version: str | None = None
+    metadata: dict[str, Any] | None = None
 
     @property
     @abstractmethod
@@ -75,11 +78,13 @@ class SchemaCheck(BaseModel, ABC):
         """Convert to generic Check object for execution."""
         data = self.model_dump()
         version = data.pop('version', None)
+        metadata = data.pop('metadata', None)
 
         return Check(
             type=self.check_type,
             arguments=data,
             version=version,
+            metadata=metadata,
         )
 
 

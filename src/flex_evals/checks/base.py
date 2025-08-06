@@ -68,6 +68,7 @@ class BaseCheck(ABC):
         arguments: dict[str, Any],
         context: EvaluationContext,
         check_version: str | None = None,
+        check_metadata: dict[str, Any] | None = None,
     ) -> CheckResult:
         """
         Execute the check and return a complete CheckResult.
@@ -80,6 +81,7 @@ class BaseCheck(ABC):
             arguments: Raw check arguments (may contain JSONPath expressions)
             context: Evaluation context
             check_version: Version of the check definition
+            check_metadata: Additional metadata from the check definition
 
         Returns:
             Complete CheckResult with all required fields
@@ -106,15 +108,19 @@ class BaseCheck(ABC):
                 raise ValidationError(f"Invalid arguments for check: {e!s}") from e
 
             # Create successful result
+            metadata = {}
+            if check_version:
+                metadata["check_version"] = check_version
+            if check_metadata:
+                metadata.update(check_metadata)
+
             return CheckResult(
                 check_type=check_type,
                 status='completed',
                 results=results,
                 resolved_arguments=resolved_arguments,
                 evaluated_at=evaluated_at,
-                metadata={
-                    "check_version": check_version,
-                } if check_version else None,
+                metadata=metadata if metadata else None,
             )
 
         except JSONPathError as e:
@@ -125,6 +131,7 @@ class BaseCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 check_version=check_version,
+                check_metadata=check_metadata,
                 recoverable=False,
             )
 
@@ -136,6 +143,7 @@ class BaseCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 check_version=check_version,
+                check_metadata=check_metadata,
                 recoverable=False,
             )
 
@@ -147,6 +155,7 @@ class BaseCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 check_version=check_version,
+                check_metadata=check_metadata,
                 recoverable=False,
             )
 
@@ -158,6 +167,7 @@ class BaseCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 check_version=check_version,
+                check_metadata=check_metadata,
                 recoverable=False,
             )
 
@@ -169,18 +179,23 @@ class BaseCheck(ABC):
         resolved_arguments: dict[str, Any],
         evaluated_at: datetime,
         check_version: str | None,
+        check_metadata: dict[str, Any] | None = None,
         recoverable: bool = False,
     ) -> CheckResult:
         """Create a CheckResult for error cases."""
+        metadata = {}
+        if check_version:
+            metadata["check_version"] = check_version
+        if check_metadata:
+            metadata.update(check_metadata)
+
         return CheckResult(
             check_type=check_type,
             status='error',
             results={},
             resolved_arguments=resolved_arguments,
             evaluated_at=evaluated_at,
-            metadata={
-                "check_version": check_version,
-            } if check_version else None,
+            metadata=metadata if metadata else None,
             error=CheckError(
                 type=error_type,
                 message=error_message,
@@ -223,6 +238,7 @@ class BaseAsyncCheck(ABC):
         arguments: dict[str, Any],
         context: EvaluationContext,
         check_version: str | None = None,
+        check_metadata: dict[str, Any] | None = None,
     ) -> CheckResult:
         """
         Execute the check asynchronously and return a complete CheckResult.
@@ -235,6 +251,7 @@ class BaseAsyncCheck(ABC):
             arguments: check arguments (may contain JSONPath expressions that need to be resolved)
             context: Evaluation context
             check_version: Version of the check definition
+            check_metadata: Additional metadata from the check definition
 
         Returns:
             Complete CheckResult with all required fields
@@ -261,15 +278,19 @@ class BaseAsyncCheck(ABC):
                 raise ValidationError(f"Invalid arguments for check: {e!s}") from e
 
             # Create successful result
+            metadata = {}
+            if check_version:
+                metadata["check_version"] = check_version
+            if check_metadata:
+                metadata.update(check_metadata)
+
             return CheckResult(
                 check_type=check_type,
                 status='completed',
                 results=results,
                 resolved_arguments=resolved_arguments,
                 evaluated_at=evaluated_at,
-                metadata={
-                    "check_version": check_version,
-                } if check_version else None,
+                metadata=metadata if metadata else None,
             )
 
         except JSONPathError as e:
@@ -280,6 +301,7 @@ class BaseAsyncCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 check_version=check_version,
+                check_metadata=check_metadata,
                 recoverable=False,
             )
 
@@ -291,6 +313,7 @@ class BaseAsyncCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 check_version=check_version,
+                check_metadata=check_metadata,
                 recoverable=False,
             )
 
@@ -302,6 +325,7 @@ class BaseAsyncCheck(ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 check_version=check_version,
+                check_metadata=check_metadata,
                 recoverable=False,
             )
 
@@ -324,18 +348,23 @@ class BaseAsyncCheck(ABC):
         resolved_arguments: dict[str, Any],
         evaluated_at: datetime,
         check_version: str | None,
+        check_metadata: dict[str, Any] | None = None,
         recoverable: bool = False,
     ) -> CheckResult:
         """Create a CheckResult for error cases."""
+        metadata = {}
+        if check_version:
+            metadata["check_version"] = check_version
+        if check_metadata:
+            metadata.update(check_metadata)
+
         return CheckResult(
             check_type=check_type,
             status='error',
             results={},
             resolved_arguments=resolved_arguments,
             evaluated_at=evaluated_at,
-            metadata={
-                "check_version": check_version,
-            } if check_version else None,
+            metadata=metadata if metadata else None,
             error=CheckError(
                 type=error_type,
                 message=error_message,
