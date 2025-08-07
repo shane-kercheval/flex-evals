@@ -12,7 +12,14 @@ import pytest
 from pydantic import BaseModel, Field
 import time
 
-from flex_evals import TestCase, ContainsCheck, ExactMatchCheck, LLMJudgeCheck, ThresholdCheck
+from flex_evals import (
+    TestCase,
+    ContainsCheck,
+    ExactMatchCheck,
+    LLMJudgeCheck,
+    ThresholdCheck,
+    IsEmptyCheck,
+)
 from flex_evals.pytest_decorator import evaluate
 
 
@@ -260,6 +267,61 @@ def test_performance_under_threshold(test_case: TestCase) -> str:
     return f"Fast operation '{test_case.input}' completed in time"
 
 
+def failing_function(should_fail: bool = True) -> str:
+    """Function that intentionally fails for demonstration purposes."""
+    if should_fail:
+        raise ValueError("This function is designed to fail for testing purposes")
+    return "Success - this should not happen"
+
+
+# Example 10: Error detection using IsEmptyCheck with negate
+# NOTE: This example uses negate=True for demonstration purposes to make the test pass.
+# Normally you would use IsEmptyCheck without negate to verify NO errors occurred.
+@evaluate(
+    test_cases=[TestCase(id="error_detection", input="error_test")],
+    checks=[
+        # Check that an error occurred (error field should NOT be empty)
+        # NOTE: Using negate=True here for demo - normally you'd check that error IS empty
+        IsEmptyCheck(
+            value="$.output.value.error",
+            negate=True,  # NOT empty = error occurred (unusual usage for demo)
+        ),
+        # Check the specific exception type
+        ExactMatchCheck(
+            expected="ValueError",
+            actual="$.output.value.exception_type",
+        ),
+        # Check that the error message contains expected text
+        ContainsCheck(
+            text="$.output.value.exception_message",
+            phrases=["designed to fail"],
+        ),
+    ],
+    samples=2,
+    success_threshold=1.0,
+)
+def test_error_detection() -> str:
+    """
+    Demonstrate error detection using IsEmptyCheck with negate.
+
+    IMPORTANT: This test uses negate=True for demonstration purposes only.
+    In real scenarios, you would typically use IsEmptyCheck WITHOUT negate
+    to verify that NO errors occurred (error field IS empty).
+
+    This test intentionally calls a function that raises an exception,
+    then validates that:
+    1. An error occurred (error field is not empty) - using negate=True
+    2. The exception type is correct
+    3. The error message contains expected text
+
+    When a function raises an exception, the @evaluate decorator captures it
+    and creates an Output with error details in the 'error', 'exception_type',
+    'exception_message', and 'traceback' fields.
+    """
+    # This will always fail, creating error output for validation
+    return failing_function(should_fail=True)
+
+
 if __name__ == "__main__":
     print("Simple @evaluate decorator examples")
     print("Run with: pytest examples/pytest_decorator_example.py -v")
@@ -274,3 +336,4 @@ if __name__ == "__main__":
     print("  test_with_multiple_fixtures: Multiple fixtures integration")
     print("  test_async_concurrent_execution: Async with 100 concurrent samples")
     print("  test_performance_under_threshold: Performance testing with duration threshold")
+    print("  test_error_detection: Error detection using IsEmptyCheck with negate")
