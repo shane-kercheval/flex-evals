@@ -10,8 +10,9 @@ To run: pytest examples/pytest_decorator_example.py -v
 import asyncio
 import pytest
 from pydantic import BaseModel, Field
+import time
 
-from flex_evals import TestCase, ContainsCheck, ExactMatchCheck, LLMJudgeCheck
+from flex_evals import TestCase, ContainsCheck, ExactMatchCheck, LLMJudgeCheck, ThresholdCheck
 from flex_evals.pytest_decorator import evaluate
 
 
@@ -229,6 +230,35 @@ async def test_async_concurrent_execution(test_case: TestCase) -> str:
     return f"Async task '{test_case.input}' completed successfully"
 
 
+# Example 9: Performance testing with duration threshold
+@evaluate(
+    test_cases=[TestCase(id="performance", input="fast_operation")],
+    checks=[
+        ContainsCheck(
+            text="$.output.value",
+            phrases=["completed"],
+        ),
+        ThresholdCheck(
+            value="$.output.metadata.duration_seconds",
+            max_value=1.0,  # Ensure execution completes under 1 second
+        ),
+    ],
+    samples=3,
+    success_threshold=1.0,
+)
+def test_performance_under_threshold(test_case: TestCase) -> str:
+    """
+    Demonstrate performance testing using ThresholdCheck on duration metadata.
+
+    This test verifies that the function not only produces correct output but also
+    completes within the specified time threshold (1 second). The duration_seconds
+    is automatically populated in the Output metadata by the @evaluate decorator.
+    """
+    # Simulate some work that should complete quickly (under 1 second)
+    time.sleep(0.1)  # 100ms - well under the 1 second threshold
+
+    return f"Fast operation '{test_case.input}' completed in time"
+
 
 if __name__ == "__main__":
     print("Simple @evaluate decorator examples")
@@ -242,5 +272,5 @@ if __name__ == "__main__":
     print("  test_statistical_threshold: Statistical evaluation")
     print("  test_with_simple_fixture: Pytest fixture integration")
     print("  test_with_multiple_fixtures: Multiple fixtures integration")
-    print("  test_async_concurrent_execution: Async with 50 concurrent samples")
-    print("  test_async_timing_demonstration: Async timing and performance")
+    print("  test_async_concurrent_execution: Async with 100 concurrent samples")
+    print("  test_performance_under_threshold: Performance testing with duration threshold")

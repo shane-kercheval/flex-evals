@@ -1354,3 +1354,72 @@ class TestEvaluateDecoratorFailureReporting:
 
         error_message = str(exc_info.value)
         assert "Test case 0 exception: ValueError: Test exception" in error_message
+
+
+class TestEvaluateDecoratorDurationMetadata:
+    """Test that duration_seconds metadata is populated in Output objects."""
+
+    def test_sync_function_duration_populated(self):
+        """Test that sync functions populate duration_seconds."""
+
+        @evaluate(
+            test_cases=[TestCase(id="sync_duration", input="test")],
+            checks=[
+                Check(
+                    type=CheckType.CONTAINS,
+                    arguments={"text": "$.output.value", "phrases": ["result"]},
+                ),
+                Check(
+                    type=CheckType.IS_EMPTY,
+                    arguments={"value": "$.output.metadata.duration_seconds", "negate": True},
+                ),
+            ],
+            samples=2,
+            success_threshold=1.0,
+        )
+        def sync_test(test_case) -> str:  # noqa
+            return "sync result"
+
+        sync_test()
+
+    def test_async_function_duration_populated(self):
+        """Test that async functions populate duration_seconds."""
+
+        @evaluate(
+            test_cases=[TestCase(id="async_duration", input="test")],
+            checks=[
+                Check(
+                    type=CheckType.CONTAINS,
+                    arguments={"text": "$.output.value", "phrases": ["result"]},
+                ),
+                Check(
+                    type=CheckType.IS_EMPTY,
+                    arguments={"value": "$.output.metadata.duration_seconds", "negate": True},
+                ),
+            ],
+            samples=2,
+            success_threshold=1.0,
+        )
+        async def async_test(test_case) -> str:  # noqa
+            return "async result"
+
+        async_test()
+
+    def test_exception_duration_populated(self):
+        """Test that exceptions also populate duration_seconds."""
+
+        @evaluate(
+            test_cases=[TestCase(id="exception_duration", input="test")],
+            checks=[
+                Check(
+                    type=CheckType.IS_EMPTY,
+                    arguments={"value": "$.output.metadata.duration_seconds", "negate": True},
+                ),
+            ],
+            samples=1,
+            success_threshold=1.0,  # Exception outputs should still have duration
+        )
+        def exception_test(test_case) -> str:  # noqa
+            raise ValueError("Test exception")
+
+        exception_test()
