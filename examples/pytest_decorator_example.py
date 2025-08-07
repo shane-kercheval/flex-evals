@@ -237,7 +237,7 @@ async def test_async_concurrent_execution(test_case: TestCase) -> str:
     return f"Async task '{test_case.input}' completed successfully"
 
 
-# Example 9: Performance testing with duration threshold
+# Example 9: Performance testing with duration threshold (per individual execution)
 @evaluate(
     test_cases=[TestCase(id="performance", input="fast_operation")],
     checks=[
@@ -247,22 +247,30 @@ async def test_async_concurrent_execution(test_case: TestCase) -> str:
         ),
         ThresholdCheck(
             value="$.output.metadata.duration_seconds",
-            max_value=1.0,  # Ensure execution completes under 1 second
+            max_value=0.2,  # Each individual execution must complete under 0.2 seconds
         ),
     ],
-    samples=3,
+    samples=20,  # 20 concurrent executions, each timed individually
     success_threshold=1.0,
 )
-def test_performance_under_threshold(test_case: TestCase) -> str:
+async def test_performance_under_threshold(test_case: TestCase) -> str:
     """
     Demonstrate performance testing using ThresholdCheck on duration metadata.
 
-    This test verifies that the function not only produces correct output but also
-    completes within the specified time threshold (1 second). The duration_seconds
-    is automatically populated in the Output metadata by the @evaluate decorator.
+    IMPORTANT: The duration_seconds is measured PER INDIVIDUAL FUNCTION EXECUTION,
+    not for the entire test run. With 20 samples running concurrently, each async
+    sleep of 0.1 seconds will be measured individually and must pass the 0.2 second
+    threshold check.
+
+    This test verifies that each function execution:
+    1. Produces correct output (contains "completed")
+    2. Completes within the specified time threshold (0.2 seconds per execution)
+    
+    The duration_seconds is automatically populated in the Output metadata 
+    by the @evaluate decorator for each individual function call.
     """
-    # Simulate some work that should complete quickly (under 1 second)
-    time.sleep(0.1)  # 100ms - well under the 1 second threshold
+    # Simulate async work that should complete quickly (under 0.2 second threshold)
+    await asyncio.sleep(0.1)  # 100ms per execution - well under the 0.2 second threshold
 
     return f"Fast operation '{test_case.input}' completed in time"
 
