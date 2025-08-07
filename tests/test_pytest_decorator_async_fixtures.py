@@ -315,7 +315,7 @@ class TestAsyncFixtureFailureScenarios:
 
         error_message = str(exc_info.value)
         assert "Statistical evaluation failed" in error_message
-        assert "Test case 0 exception: ValueError" in error_message
+        assert "Test case 0 (id: exception_test) exception: ValueError" in error_message
 
 
 class TestNoEventLoopContext:

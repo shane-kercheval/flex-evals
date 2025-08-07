@@ -220,7 +220,7 @@ class TestEvaluateDecoratorErrorHandling:
 
         error_message = str(exc_info.value)
         assert "Success rate: 0.00%" in error_message
-        assert "Test case 0 exception: ValueError: Always fails" in error_message
+        assert "Test case 0 (id: all_exceptions) exception: ValueError: Always fails" in error_message  # noqa: E501
 
     def test_mixed_exceptions_and_failures(self):
         """Test mix of exceptions and check failures."""
@@ -1353,7 +1353,7 @@ class TestEvaluateDecoratorFailureReporting:
             exception_reporting_function()
 
         error_message = str(exc_info.value)
-        assert "Test case 0 exception: ValueError: Test exception" in error_message
+        assert "Test case 0 (id: exception_report) exception: ValueError: Test exception" in error_message  # noqa: E501
 
 
 class TestEvaluateDecoratorDurationMetadata:

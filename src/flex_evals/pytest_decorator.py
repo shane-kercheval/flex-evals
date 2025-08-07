@@ -461,19 +461,21 @@ def _generate_failure_report(
         # Report exceptions
         for i, exception in enumerate(exceptions):
             if exception:
-                report_lines.append(f"    Test case {i} exception: {type(exception).__name__}: {exception}")  # noqa: E501
+                test_case_id = test_case_results[i].execution_context.test_case.id
+                report_lines.append(f"    Test case {i} (id: {test_case_id}) exception: {type(exception).__name__}: {exception}")  # noqa: E501
 
         # Report check failures
         for i, test_case_result in enumerate(test_case_results):
+            test_case_id = test_case_result.execution_context.test_case.id
             for check_result in test_case_result.check_results:
                 if check_result.status != 'completed':
-                    report_lines.append(f"    Test case {i} check '{check_result.check_type}': {check_result.status}")  # noqa: E501
+                    report_lines.append(f"    Test case {i} (id: {test_case_id}) check '{check_result.check_type}': {check_result.status}")  # noqa: E501
                     if check_result.error:
                         report_lines.append(f"      Error: {check_result.error.message}")
                     if check_result.resolved_arguments:
                         report_lines.append(f"      Resolved arguments: {check_result.resolved_arguments}")  # noqa: E501
                 elif not check_result.results.get('passed', False):
-                    report_lines.append(f"    Test case {i} check '{check_result.check_type}': failed")  # noqa: E501
+                    report_lines.append(f"    Test case {i} (id: {test_case_id}) check '{check_result.check_type}': failed")  # noqa: E501
                     if 'reasoning' in check_result.results:
                         report_lines.append(f"      Reasoning: {check_result.results['reasoning']}")  # noqa: E501
                     if check_result.resolved_arguments:
