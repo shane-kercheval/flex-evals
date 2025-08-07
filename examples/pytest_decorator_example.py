@@ -10,15 +10,13 @@ To run: pytest examples/pytest_decorator_example.py -v
 import asyncio
 import pytest
 from pydantic import BaseModel, Field
-import time
-
 from flex_evals import (
     TestCase,
+    AttributeExistsCheck,
     ContainsCheck,
     ExactMatchCheck,
     LLMJudgeCheck,
     ThresholdCheck,
-    IsEmptyCheck,
 )
 from flex_evals.pytest_decorator import evaluate
 
@@ -265,8 +263,8 @@ async def test_performance_under_threshold(test_case: TestCase) -> str:
     This test verifies that each function execution:
     1. Produces correct output (contains "completed")
     2. Completes within the specified time threshold (0.2 seconds per execution)
-    
-    The duration_seconds is automatically populated in the Output metadata 
+
+    The duration_seconds is automatically populated in the Output metadata
     by the @evaluate decorator for each individual function call.
     """
     # Simulate async work that should complete quickly (under 0.2 second threshold)
@@ -282,19 +280,26 @@ def failing_function(should_fail: bool = True) -> str:
     return "Success - this should not happen"
 
 
-# Example 10: Error detection using IsEmptyCheck with negate
-# NOTE: This example uses negate=True for demonstration purposes to make the test pass.
-# Normally you would use IsEmptyCheck without negate to verify NO errors occurred.
+# Example 10: Error detection using AttributeExistsCheck
+# This example demonstrates how to properly check for error fields that may or may not exist
 @evaluate(
     test_cases=[TestCase(id="error_detection", input="error_test")],
     checks=[
-        # Check that an error occurred (error field should NOT be empty)
-        # NOTE: Using negate=True here for demo - normally you'd check that error IS empty
-        IsEmptyCheck(
-            value="$.output.value.error",
-            negate=True,  # NOT empty = error occurred (unusual usage for demo)
+        # Check that an error occurred (error field should exist)
+        # AttributeExistsCheck can safely check if a field exists without failing
+        # if the field is missing (unlike regular JSONPath resolution)
+        # NOTE: In normal use cases, you would typically use negate=True to check
+        # that NO error occurred. We use negate=False here for demo purposes since
+        # this test intentionally generates an error to make the test pass.
+        AttributeExistsCheck(
+            path="$.output.value.error",
+            negate=False,  # We expect the error field to exist (unusual for demo)
         ),
-        # Check the specific exception type
+        # Check the specific exception type exists and matches
+        AttributeExistsCheck(
+            path="$.output.value.exception_type",
+            negate=False,  # We expect the exception_type field to exist
+        ),
         ExactMatchCheck(
             expected="ValueError",
             actual="$.output.value.exception_type",
@@ -310,17 +315,24 @@ def failing_function(should_fail: bool = True) -> str:
 )
 def test_error_detection() -> str:
     """
-    Demonstrate error detection using IsEmptyCheck with negate.
+    Demonstrate error detection using AttributeExistsCheck.
 
-    IMPORTANT: This test uses negate=True for demonstration purposes only.
-    In real scenarios, you would typically use IsEmptyCheck WITHOUT negate
-    to verify that NO errors occurred (error field IS empty).
+    This example shows how to properly check for error fields that may or may not
+    exist in the output. Unlike using IsEmptyCheck with JSONPath (which would fail
+    if the field doesn't exist), AttributeExistsCheck can safely check for field
+    existence without throwing errors.
+
+    IMPORTANT: In typical usage, you would use AttributeExistsCheck with negate=True
+    to verify that NO errors occurred (e.g., ensure the error field doesn't exist).
+    This example uses negate=False for demonstration purposes only, since we
+    intentionally generate errors to make the test pass.
 
     This test intentionally calls a function that raises an exception,
     then validates that:
-    1. An error occurred (error field is not empty) - using negate=True
-    2. The exception type is correct
-    3. The error message contains expected text
+    1. An error field exists in the output (normally you'd check it doesn't exist)
+    2. An exception_type field exists in the output
+    3. The exception type is 'ValueError'
+    4. The error message contains expected text
 
     When a function raises an exception, the @evaluate decorator captures it
     and creates an Output with error details in the 'error', 'exception_type',
@@ -344,4 +356,4 @@ if __name__ == "__main__":
     print("  test_with_multiple_fixtures: Multiple fixtures integration")
     print("  test_async_concurrent_execution: Async with 100 concurrent samples")
     print("  test_performance_under_threshold: Performance testing with duration threshold")
-    print("  test_error_detection: Error detection using IsEmptyCheck with negate")
+    print("  test_error_detection: Error detection using AttributeExistsCheck")

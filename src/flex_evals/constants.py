@@ -17,6 +17,7 @@ class CheckType(str, Enum):
     Custom check types can still be registered using arbitrary strings.
     """
 
+    ATTRIBUTE_EXISTS = 'attribute_exists'
     CONTAINS = 'contains'
     EXACT_MATCH = 'exact_match'
     IS_EMPTY = 'is_empty'

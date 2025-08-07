@@ -2,6 +2,7 @@
 from flex_evals.checks.extended.custom_function import CustomFunctionCheck
 from flex_evals.checks.extended.llm_judge import LlmJudgeCheck
 from flex_evals.checks.extended.semantic_similarity import SemanticSimilarityCheck
+from flex_evals.checks.standard.attribute_exists import AttributeExistsCheck
 from flex_evals.checks.standard.contains import ContainsCheck
 from flex_evals.checks.standard.exact_match import ExactMatchCheck
 from flex_evals.checks.standard.is_empty import IsEmptyCheck
@@ -14,6 +15,7 @@ from flex_evals.registry import register
 def restore_standard_checks():
     """Restore standard checks to registry after clearing."""
     # Re-register them (they have @register decorators but need to be called again)
+    register(CheckType.ATTRIBUTE_EXISTS, version="1.0.0")(AttributeExistsCheck)
     register(CheckType.EXACT_MATCH, version="1.0.0")(ExactMatchCheck)
     register(CheckType.CONTAINS, version="1.0.0")(ContainsCheck)
     register(CheckType.REGEX, version="1.0.0")(RegexCheck)
