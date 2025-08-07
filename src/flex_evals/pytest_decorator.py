@@ -8,6 +8,7 @@ multiple times and validating success rates using existing flex-evals checks.
 import asyncio
 import concurrent.futures
 import inspect
+import time
 import traceback
 from typing import Any, TypeVar
 from collections.abc import Callable
@@ -86,8 +87,12 @@ def evaluate(  # noqa: PLR0915
         else:
             new_sig = sig
 
-        def _create_error_output(exception):  # noqa: ANN001, ANN202
+        def _create_error_output(exception, duration_seconds=None):  # noqa: ANN001, ANN202
             """Create an error output for an exception."""
+            metadata = {}
+            if duration_seconds is not None:
+                metadata["duration_seconds"] = duration_seconds
+
             return Output(
                 value={
                     "error": True,
@@ -96,22 +101,9 @@ def evaluate(  # noqa: PLR0915
                     "traceback": traceback.format_exc() if not isinstance(exception, type) else
                                 traceback.format_exception(type(exception), exception, exception.__traceback__),  # noqa: E501
                 },
+                metadata=metadata if metadata else None,
             )
 
-        def _process_task_results(results):  # noqa: ANN001, ANN202
-            """Process results from asyncio.gather."""
-            outputs = []
-            exceptions = []
-
-            for result in results:
-                if isinstance(result, Exception):
-                    outputs.append(_create_error_output(result))
-                    exceptions.append(result)
-                else:
-                    outputs.append(Output(value=result))
-                    exceptions.append(None)
-
-            return outputs, exceptions
 
         def _evaluate_results(expanded_test_cases, outputs, exceptions) -> None:  # noqa: ANN001
             """Evaluate results and check success threshold."""
@@ -164,22 +156,42 @@ def evaluate(  # noqa: PLR0915
 
         async def _execute_async_calls(expanded_test_cases, args, kwargs) -> None:  # noqa: ANN001
             """Execute async function calls concurrently."""
-            # Create tasks for all calls
+            # Create tasks for all calls with timing
+            async def _timed_call(test_case):  # noqa: ANN001, ANN202
+                start_time = time.time()
+                try:
+                    if expects_test_case:
+                        result = await func(test_case, *args, **kwargs)
+                    else:
+                        result = await func(*args, **kwargs)
+                    duration = time.time() - start_time
+                    return result, duration, None
+                except Exception as e:
+                    duration = time.time() - start_time
+                    return None, duration, e
+
             tasks = []
             for test_case in expanded_test_cases:
-                if expects_test_case:
-                    task = func(test_case, *args, **kwargs)
-                else:
-                    task = func(*args, **kwargs)
-                tasks.append(task)
+                tasks.append(_timed_call(test_case))
 
             # Execute concurrently and collect results
             try:
-                results = await asyncio.gather(*tasks, return_exceptions=True)
+                timed_results = await asyncio.gather(*tasks)
             except Exception as e:
                 pytest.fail(f"Function execution failed: {e}")
 
-            outputs, exceptions = _process_task_results(results)
+            # Process timed results
+            outputs = []
+            exceptions = []
+            for result, duration, exception in timed_results:
+                if exception:
+                    outputs.append(_create_error_output(exception, duration))
+                    exceptions.append(exception)
+                else:
+                    metadata = {"duration_seconds": duration}
+                    outputs.append(Output(value=result, metadata=metadata))
+                    exceptions.append(None)
+
             _evaluate_results(expanded_test_cases, outputs, exceptions)
 
         def _execute_sync_calls(expanded_test_cases, args, kwargs) -> None:  # noqa: ANN001
@@ -188,15 +200,19 @@ def evaluate(  # noqa: PLR0915
             exceptions = []
 
             for test_case in expanded_test_cases:
+                start_time = time.time()
                 try:
                     if expects_test_case:
                         result = func(test_case, *args, **kwargs)
                     else:
                         result = func(*args, **kwargs)
-                    outputs.append(Output(value=result))
+                    duration = time.time() - start_time
+                    metadata = {"duration_seconds": duration}
+                    outputs.append(Output(value=result, metadata=metadata))
                     exceptions.append(None)
                 except Exception as e:
-                    outputs.append(_create_error_output(e))
+                    duration = time.time() - start_time
+                    outputs.append(_create_error_output(e, duration))
                     exceptions.append(e)
 
             _evaluate_results(expanded_test_cases, outputs, exceptions)

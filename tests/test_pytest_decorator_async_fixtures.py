@@ -580,3 +580,26 @@ class TestMixedContextCompatibility:
         # Should work as before
         result = test_no_async()
         assert result is None
+
+    @evaluate(
+        test_cases=[TestCase(id="async_fixture_duration", input="test")],
+        checks=[
+            Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["async_fixture_value"]},
+            ),
+            Check(
+                type=CheckType.IS_EMPTY,
+                arguments={"value": "$.output.metadata.duration_seconds", "negate": True},
+            ),
+        ],
+        samples=1,
+        success_threshold=1.0,
+    )
+    async def test_async_with_fixtures_duration_populated(
+            self,
+            test_case: TestCase,  # noqa: ARG002
+            simple_async_fixture: str,
+        ) -> str:
+        """Test that async functions with fixtures populate duration_seconds."""
+        return f"Got: {simple_async_fixture}"
