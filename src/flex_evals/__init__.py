@@ -14,8 +14,8 @@ from .schemas.check import (
     Check, CheckError, CheckResult, SchemaCheck,
 )
 from .schemas.checks import (
-    ContainsCheck, ExactMatchCheck, IsEmptyCheck, RegexCheck, RegexFlags, ThresholdCheck,
-    SemanticSimilarityCheck, LLMJudgeCheck, CustomFunctionCheck, ThresholdConfig,
+    AttributeExistsCheck, ContainsCheck, ExactMatchCheck, IsEmptyCheck, RegexCheck, RegexFlags,
+    ThresholdCheck, SemanticSimilarityCheck, LLMJudgeCheck, CustomFunctionCheck, ThresholdConfig,
 )
 from .schemas.test_case import TestCase
 from .schemas.output import Output
@@ -23,6 +23,7 @@ from .schemas.results import TestCaseResult, EvaluationRunResult
 
 __version__ = "0.1.0"
 __all__ = [
+    "AttributeExistsCheck",
     "Check",
     "CheckError",
     "CheckResult",
