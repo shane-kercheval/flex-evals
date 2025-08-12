@@ -3,7 +3,7 @@
 from pydantic import Field
 
 from ...constants import CheckType
-from ..check import SchemaCheck
+from ..check import SchemaCheck, RequiredJSONPath
 
 
 class AttributeExistsCheck(SchemaCheck):
@@ -20,7 +20,9 @@ class AttributeExistsCheck(SchemaCheck):
     - version: Optional version string for the check
     """
 
-    path: str = Field(..., description="JSONPath expression pointing to the attribute to check for existence")  # noqa: E501
+    path: str = RequiredJSONPath(
+        "JSONPath expression pointing to the attribute to check for existence",
+    )
     negate: bool = Field(False, description="If true, passes when attribute does not exist")
 
     @property

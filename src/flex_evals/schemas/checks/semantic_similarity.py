@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pydantic import BaseModel, Field
 
 from ...constants import CheckType, SimilarityMetric
-from ..check import Check, SchemaCheck
+from ..check import Check, SchemaCheck, OptionalJSONPath
 
 
 class ThresholdConfig(BaseModel):
@@ -33,8 +33,14 @@ class SemanticSimilarityCheck(SchemaCheck):
     - version: Optional version string for the check
     """
 
-    text: str = Field(..., min_length=1, description="first text to compare or JSONPath expression pointing to the text")  # noqa: E501
-    reference: str = Field(..., min_length=1, description="second text to compare against or JSONPath expression pointing to the text")  # noqa: E501
+    text: str = OptionalJSONPath(
+        "first text to compare or JSONPath expression pointing to the text",
+        min_length=1,
+    )
+    reference: str = OptionalJSONPath(
+        "second text to compare against or JSONPath expression pointing to the text",
+        min_length=1,
+    )
     embedding_function: Callable = Field(..., description="User-provided function to generate embeddings")  # noqa: E501
     similarity_metric: SimilarityMetric = Field(SimilarityMetric.COSINE, description="Similarity calculation method")  # noqa: E501
     threshold: ThresholdConfig | None = Field(None, description="Optional threshold configuration for pass/fail determination")  # noqa: E501

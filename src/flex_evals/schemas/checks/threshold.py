@@ -4,7 +4,7 @@
 from pydantic import Field, model_validator
 
 from ...constants import CheckType
-from ..check import Check, SchemaCheck
+from ..check import Check, SchemaCheck, OptionalJSONPath
 
 
 class ThresholdCheck(SchemaCheck):
@@ -25,7 +25,10 @@ class ThresholdCheck(SchemaCheck):
     At least one of min_value or max_value must be specified.
     """
 
-    value: str = Field(..., min_length=1, description="numeric value to check or JSONPath expression pointing to the value")  # noqa: E501
+    value: str = OptionalJSONPath(
+        "numeric value to check or JSONPath expression pointing to the value",
+        min_length=1,
+    )
     min_value: float | None = Field(None, description="Minimum acceptable value")
     max_value: float | None = Field(None, description="Maximum acceptable value")
     min_inclusive: bool = Field(True, description="If true, min_value is inclusive (>=), if false, exclusive (>)")  # noqa: E501

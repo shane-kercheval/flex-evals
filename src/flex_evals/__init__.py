@@ -12,6 +12,8 @@ from .constants import CheckType, Status, ErrorType, SimilarityMetric
 from . import checks  # noqa: F401
 from .schemas.check import (
     Check, CheckError, CheckResult, SchemaCheck,
+    JSONPathBehavior, RequiredJSONPath, OptionalJSONPath, JSONPathValidatedModel,
+    get_jsonpath_behavior, validate_jsonpath, is_jsonpath_expression,
 )
 from .schemas.checks import (
     AttributeExistsCheck, ContainsCheck, ExactMatchCheck, IsEmptyCheck, RegexCheck, RegexFlags,
@@ -34,10 +36,14 @@ __all__ = [
     "EvaluationRunResult",
     "ExactMatchCheck",
     "IsEmptyCheck",
+    "JSONPathBehavior",
+    "JSONPathValidatedModel",
     "LLMJudgeCheck",
+    "OptionalJSONPath",
     "Output",
     "RegexCheck",
     "RegexFlags",
+    "RequiredJSONPath",
     "SchemaCheck",
     "SemanticSimilarityCheck",
     "SimilarityMetric",
@@ -47,5 +53,8 @@ __all__ = [
     "ThresholdCheck",
     "ThresholdConfig",
     "evaluate",
+    "get_jsonpath_behavior",
+    "is_jsonpath_expression",
     "schemas",
+    "validate_jsonpath",
 ]

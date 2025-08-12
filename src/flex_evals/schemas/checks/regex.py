@@ -4,7 +4,7 @@
 from pydantic import BaseModel, Field
 
 from ...constants import CheckType
-from ..check import Check, SchemaCheck
+from ..check import Check, SchemaCheck, OptionalJSONPath
 
 
 class RegexFlags(BaseModel):
@@ -29,7 +29,10 @@ class RegexCheck(SchemaCheck):
     - version: Optional version string for the check
     """
 
-    text: str = Field(..., min_length=1, description="text to test against the pattern or JSONPath expression pointing to the text")  # noqa: E501
+    text: str = OptionalJSONPath(
+        "text to test against the pattern or JSONPath expression pointing to the text",
+        min_length=1,
+    )
     pattern: str = Field(..., min_length=1, description="Regular expression pattern to match against the text")  # noqa: E501
     negate: bool = Field(False, description="If true, passes when pattern doesn't match")
     flags: RegexFlags | None = Field(None, description="Regex matching options")
