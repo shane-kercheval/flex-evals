@@ -350,6 +350,12 @@ checks:
       actual: "$.output.value"
       expected: "Paris"
       case_sensitive: false
+    version: "1.0.0"  # Optional: specify version
+  - type: contains
+    arguments:
+      text: "$.output.value"
+      phrases: ["France"]
+    # version omitted - uses latest version
 ```
 
 Load and use YAML-defined checks:
@@ -542,6 +548,21 @@ check = ContainsCheck(text="$.output", phrases=["hello"])
 # Option 2: Use specific version
 from flex_evals import ContainsCheck_v1_0_0
 check = ContainsCheck_v1_0_0(phrases=["hello"])  # v1.0.0 schema
+
+# Option 3: Use Check dataclass with version (YAML-compatible)
+from flex_evals import Check
+check = Check(
+    type="contains",
+    arguments={"text": "$.output", "phrases": ["hello"]},
+    version="1.0.0"  # Use specific version
+)
+
+# Option 4: Use Check dataclass without version (uses latest)
+check = Check(
+    type="contains", 
+    arguments={"text": "$.output", "phrases": ["hello"]},
+    version=None  # Uses latest version automatically
+)
 ```
 
 ### **Creating New Check Versions**
