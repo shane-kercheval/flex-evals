@@ -22,6 +22,7 @@ class ExactMatchCheck(SchemaCheck):
     """
 
     VERSION: ClassVar[str] = "1.0.0"
+    CHECK_TYPE: ClassVar[CheckType] = CheckType.EXACT_MATCH
 
     actual: str = OptionalJSONPath(
         "value to check or JSONPath expression pointing to the value", min_length=1,
@@ -31,8 +32,3 @@ class ExactMatchCheck(SchemaCheck):
     )
     case_sensitive: bool = Field(True, description="Whether string comparison is case-sensitive")
     negate: bool = Field(False, description="If true, passes when values don't match")
-
-    @property
-    def check_type(self) -> CheckType:
-        """Return the CheckType for this check."""
-        return CheckType.EXACT_MATCH

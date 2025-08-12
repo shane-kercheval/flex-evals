@@ -22,13 +22,9 @@ class AttributeExistsCheck(SchemaCheck):
     """
 
     VERSION: ClassVar[str] = "1.0.0"
+    CHECK_TYPE: ClassVar[CheckType] = CheckType.ATTRIBUTE_EXISTS
 
     path: str = RequiredJSONPath(
         "JSONPath expression pointing to the attribute to check for existence",
     )
     negate: bool = Field(False, description="If true, passes when attribute does not exist")
-
-    @property
-    def check_type(self) -> CheckType:
-        """Return the CheckType for this check."""
-        return CheckType.ATTRIBUTE_EXISTS

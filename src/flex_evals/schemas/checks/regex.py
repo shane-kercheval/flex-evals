@@ -30,6 +30,7 @@ class RegexCheck(SchemaCheck):
     """
 
     VERSION: ClassVar[str] = "1.0.0"
+    CHECK_TYPE: ClassVar[CheckType] = CheckType.REGEX
 
     text: str = OptionalJSONPath(
         "text to test against the pattern or JSONPath expression pointing to the text",
@@ -38,11 +39,6 @@ class RegexCheck(SchemaCheck):
     pattern: str = Field(..., min_length=1, description="Regular expression pattern to match against the text")  # noqa: E501
     negate: bool = Field(False, description="If true, passes when pattern doesn't match")
     flags: RegexFlags | None = Field(None, description="Regex matching options")
-
-    @property
-    def check_type(self) -> CheckType:
-        """Return the CheckType for this check."""
-        return CheckType.REGEX
 
     def to_check(self) -> Check:
         """Convert to generic Check object for execution."""

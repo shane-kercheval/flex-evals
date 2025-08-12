@@ -21,14 +21,10 @@ class IsEmptyCheck(SchemaCheck):
     """
 
     VERSION: ClassVar[str] = "1.0.0"
+    CHECK_TYPE: ClassVar[CheckType] = CheckType.IS_EMPTY
 
     value: str = OptionalJSONPath("value to check or JSONPath expression pointing to the value")
     negate: bool = Field(False, description="If true, passes when value is not empty")
     strip_whitespace: bool = Field(
         True, description="If true, strips whitespace before checking strings only",
     )
-
-    @property
-    def check_type(self) -> CheckType:
-        """Return the CheckType for this check."""
-        return CheckType.IS_EMPTY

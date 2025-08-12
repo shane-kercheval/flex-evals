@@ -22,6 +22,7 @@ from .schemas.checks import (
 from .schemas.test_case import TestCase
 from .schemas.output import Output
 from .schemas.results import TestCaseResult, EvaluationRunResult
+from .schema_generator import generate_checks_schema, generate_check_schema
 
 __version__ = "0.1.0"
 __all__ = [
@@ -53,6 +54,8 @@ __all__ = [
     "ThresholdCheck",
     "ThresholdConfig",
     "evaluate",
+    "generate_check_schema",
+    "generate_checks_schema",
     "get_jsonpath_behavior",
     "is_jsonpath_expression",
     "schemas",

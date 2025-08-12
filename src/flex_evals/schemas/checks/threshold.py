@@ -26,6 +26,7 @@ class ThresholdCheck(SchemaCheck):
     """
 
     VERSION: ClassVar[str] = "1.0.0"
+    CHECK_TYPE: ClassVar[CheckType] = CheckType.THRESHOLD
 
     value: str = OptionalJSONPath(
         "numeric value to check or JSONPath expression pointing to the value",
@@ -36,11 +37,6 @@ class ThresholdCheck(SchemaCheck):
     min_inclusive: bool = Field(True, description="If true, min_value is inclusive (>=), if false, exclusive (>)")  # noqa: E501
     max_inclusive: bool = Field(True, description="If true, max_value is inclusive (<=), if false, exclusive (<)")  # noqa: E501
     negate: bool = Field(False, description="If true, passes when value is outside the specified range")  # noqa: E501
-
-    @property
-    def check_type(self) -> CheckType:
-        """Return the CheckType for this check."""
-        return CheckType.THRESHOLD
 
     @model_validator(mode='after')
     def validate_thresholds(self) -> 'ThresholdCheck':

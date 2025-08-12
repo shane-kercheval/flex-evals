@@ -23,6 +23,7 @@ class ContainsCheck(SchemaCheck):
     """
 
     VERSION: ClassVar[str] = "1.0.0"
+    CHECK_TYPE: ClassVar[CheckType] = CheckType.CONTAINS
 
     text: str = OptionalJSONPath(
         "text to search or JSONPath expression pointing to the text to search",
@@ -32,10 +33,6 @@ class ContainsCheck(SchemaCheck):
     case_sensitive: bool = Field(True, description="Whether phrase matching is case-sensitive")
     negate: bool = Field(False, description="If true, passes when text contains none of the phrases")  # noqa: E501
 
-    @property
-    def check_type(self) -> CheckType:
-        """Return the CheckType for this check."""
-        return CheckType.CONTAINS
 
     @field_validator('phrases')
     @classmethod

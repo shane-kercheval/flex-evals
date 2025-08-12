@@ -35,6 +35,7 @@ class SemanticSimilarityCheck(SchemaCheck):
     """
 
     VERSION: ClassVar[str] = "1.0.0"
+    CHECK_TYPE: ClassVar[CheckType] = CheckType.SEMANTIC_SIMILARITY
 
     text: str = OptionalJSONPath(
         "first text to compare or JSONPath expression pointing to the text",
@@ -49,11 +50,6 @@ class SemanticSimilarityCheck(SchemaCheck):
     threshold: ThresholdConfig | None = Field(None, description="Optional threshold configuration for pass/fail determination")  # noqa: E501
 
     model_config = {"arbitrary_types_allowed": True}  # noqa: RUF012
-
-    @property
-    def check_type(self) -> CheckType:
-        """Return the CheckType for this check."""
-        return CheckType.SEMANTIC_SIMILARITY
 
     def to_check(self) -> Check:
         """Convert to generic Check object for execution."""

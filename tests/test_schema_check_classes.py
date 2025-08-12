@@ -69,10 +69,9 @@ class TestContainsCheck:
         assert check.arguments["case_sensitive"] is False
         assert check.arguments["negate"] is True
 
-    def test_contains_check_type_property(self):
-        """Test ContainsCheck check_type property."""
-        check = ContainsCheck(text="$.value", phrases=["test"])
-        assert check.check_type == CheckType.CONTAINS
+    def test_contains_check_type_attribute(self):
+        """Test ContainsCheck CHECK_TYPE class attribute."""
+        assert ContainsCheck.CHECK_TYPE == CheckType.CONTAINS
 
 
 class TestExactMatchCheck:
@@ -129,10 +128,9 @@ class TestExactMatchCheck:
         assert check.arguments["case_sensitive"] is False
         assert check.arguments["negate"] is True
 
-    def test_exact_match_check_type_property(self):
-        """Test ExactMatchCheck check_type property."""
-        check = ExactMatchCheck(actual="$.actual", expected="$.expected")
-        assert check.check_type == CheckType.EXACT_MATCH
+    def test_exact_match_check_type_attribute(self):
+        """Test ExactMatchCheck CHECK_TYPE class attribute."""
+        assert ExactMatchCheck.CHECK_TYPE == CheckType.EXACT_MATCH
 
 
 class TestRegexCheck:
@@ -206,10 +204,9 @@ class TestRegexCheck:
 
         assert "flags" not in check.arguments
 
-    def test_regex_check_type_property(self):
-        """Test RegexCheck check_type property."""
-        check = RegexCheck(text="$.value", pattern="test")
-        assert check.check_type == CheckType.REGEX
+    def test_regex_check_type_attribute(self):
+        """Test RegexCheck CHECK_TYPE class attribute."""
+        assert RegexCheck.CHECK_TYPE == CheckType.REGEX
 
 
 class TestThresholdCheck:
@@ -299,10 +296,9 @@ class TestThresholdCheck:
         assert check.arguments["max_value"] == 90.0
         assert check.arguments["negate"] is True
 
-    def test_threshold_check_type_property(self):
-        """Test ThresholdCheck check_type property."""
-        check = ThresholdCheck(value="$.value", min_value=0.0)
-        assert check.check_type == CheckType.THRESHOLD
+    def test_threshold_check_type_attribute(self):
+        """Test ThresholdCheck CHECK_TYPE class attribute."""
+        assert ThresholdCheck.CHECK_TYPE == CheckType.THRESHOLD
 
 
 class TestSemanticSimilarityCheck:
@@ -395,17 +391,9 @@ class TestSemanticSimilarityCheck:
 
         assert "threshold" not in check.arguments
 
-    def test_semantic_similarity_check_type_property(self):
-        """Test SemanticSimilarityCheck check_type property."""
-        def mock_embedding_function(text: str):  # noqa: ANN202, ARG001
-            return [0.1, 0.2, 0.3]
-
-        check = SemanticSimilarityCheck(
-            text="$.text",
-            reference="$.ref",
-            embedding_function=mock_embedding_function,
-        )
-        assert check.check_type == CheckType.SEMANTIC_SIMILARITY
+    def test_semantic_similarity_check_type_attribute(self):
+        """Test SemanticSimilarityCheck CHECK_TYPE class attribute."""
+        assert SemanticSimilarityCheck.CHECK_TYPE == CheckType.SEMANTIC_SIMILARITY
 
 
 class TestLLMJudgeCheck:
@@ -466,20 +454,9 @@ class TestLLMJudgeCheck:
         assert check.arguments["response_format"] == TestResponse
         assert check.arguments["llm_function"] == mock_llm_function
 
-    def test_llm_judge_check_type_property(self):
-        """Test LLMJudgeCheck check_type property."""
-        class TestResponse(BaseModel):
-            score: int
-
-        def mock_llm_function(prompt: str, response_format: type) -> tuple[BaseModel, dict]:  # noqa: ARG001
-            return TestResponse(score=8), {}
-
-        check = LLMJudgeCheck(
-            prompt="test",
-            response_format=TestResponse,
-            llm_function=mock_llm_function,
-        )
-        assert check.check_type == CheckType.LLM_JUDGE
+    def test_llm_judge_check_type_attribute(self):
+        """Test LLMJudgeCheck CHECK_TYPE class attribute."""
+        assert LLMJudgeCheck.CHECK_TYPE == CheckType.LLM_JUDGE
 
 
 class TestCustomFunctionCheck:
@@ -526,13 +503,6 @@ class TestCustomFunctionCheck:
         assert check.arguments["validation_function"] == validation_function
         assert check.arguments["function_args"] == {"text": "$.output.value"}
 
-    def test_custom_function_check_type_property(self):
-        """Test CustomFunctionCheck check_type property."""
-        def validation_function(x: int) -> dict:
-            return {"passed": x > 0}
-
-        check = CustomFunctionCheck(
-            validation_function=validation_function,
-            function_args={"x": "$.value"},
-        )
-        assert check.check_type == CheckType.CUSTOM_FUNCTION
+    def test_custom_function_check_type_attribute(self):
+        """Test CustomFunctionCheck CHECK_TYPE class attribute."""
+        assert CustomFunctionCheck.CHECK_TYPE == CheckType.CUSTOM_FUNCTION

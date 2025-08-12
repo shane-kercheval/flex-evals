@@ -1,9 +1,9 @@
 """Check and CheckResult schema implementations for FEP."""
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 import re
 from enum import Enum
 from pydantic import BaseModel, Field, model_validator
@@ -171,11 +171,13 @@ class SchemaCheck(JSONPathValidatedModel, ABC):
 
     metadata: dict[str, Any] | None = None
 
+    # Class attribute that subclasses must override
+    CHECK_TYPE: ClassVar[CheckType]
+
     @property
-    @abstractmethod
     def check_type(self) -> CheckType:
         """Return the CheckType for this check."""
-        pass
+        return self.CHECK_TYPE
 
     def to_check(self) -> Check:
         """Convert to generic Check object for execution."""
