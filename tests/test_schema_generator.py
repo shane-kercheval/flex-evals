@@ -16,6 +16,32 @@ from flex_evals.schemas.checks.attribute_exists import AttributeExistsCheck
 from flex_evals.schemas.check import SchemaCheck
 
 
+@pytest.fixture
+def mock_schema_classes():
+    """Create test schema classes for testing version handling."""
+    class TestSchemaV1(SchemaCheck):
+        CHECK_TYPE: ClassVar[str] = "test_check_v1"
+        VERSION: ClassVar[str] = "1.0.0"
+        test_field: str = "v1"
+
+    class TestSchemaV2(SchemaCheck):
+        CHECK_TYPE: ClassVar[str] = "test_check_v2"
+        VERSION: ClassVar[str] = "2.0.0"
+        test_field: str = "v2"
+        new_field: str = "only in v2"
+
+    class TestSchemaVersioned(SchemaCheck):
+        CHECK_TYPE: ClassVar[str] = "test_versioned"
+        VERSION: ClassVar[str] = "1.5.0"
+        versioned_field: str = "versioned"
+
+    return {
+        "v1": TestSchemaV1,
+        "v2": TestSchemaV2,
+        "versioned": TestSchemaVersioned,
+    }
+
+
 class TestSchemaGeneration:
     """Test dynamic schema generation functionality."""
 
@@ -208,27 +234,19 @@ class TestSchemaClassDiscovery:
         error_message = str(exc_info.value)
         assert "Available versions: ['1.0.0']" in error_message
 
-    def test_multiple_schema_versions(self):
+    def test_multiple_schema_versions(self, mock_schema_classes):  # noqa: ANN001
         """Test handling multiple schema classes with different versions."""
-        # Create mock schema classes with different check types for testing
-        class TestSchemaV1(SchemaCheck):
-            CHECK_TYPE: ClassVar[str] = "test_check_v1"
-            VERSION: ClassVar[str] = "1.0.0"
-            test_field: str = "v1"
-
-        class TestSchemaV2(SchemaCheck):
-            CHECK_TYPE: ClassVar[str] = "test_check_v2"
-            VERSION: ClassVar[str] = "2.0.0"
-            test_field: str = "v2"
-            new_field: str = "only in v2"
-
         # Should find v1 when requesting v1
         schema_class = _get_schema_class_for_check_type("test_check_v1", "1.0.0")
-        assert schema_class is TestSchemaV1
+        assert schema_class is mock_schema_classes["v1"]
 
         # Should find v2 when requesting v2
         schema_class = _get_schema_class_for_check_type("test_check_v2", "2.0.0")
-        assert schema_class is TestSchemaV2
+        assert schema_class is mock_schema_classes["v2"]
+
+        # Should find versioned when requesting versioned
+        schema_class = _get_schema_class_for_check_type("test_versioned", "1.5.0")
+        assert schema_class is mock_schema_classes["versioned"]
 
         # Should raise error for non-existent version
         with pytest.raises(ValueError, match="Available versions:"):
