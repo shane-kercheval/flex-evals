@@ -392,6 +392,7 @@ version = "0.1.10"
 source = { editable = "." }
 dependencies = [
     { name = "jsonpath-ng" },
+    { name = "packaging" },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
@@ -419,6 +420,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "jsonpath-ng", specifier = ">=1.6.0" },
+    { name = "packaging", specifier = ">=25.0" },
     { name = "pydantic", specifier = ">=2.11.6" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },

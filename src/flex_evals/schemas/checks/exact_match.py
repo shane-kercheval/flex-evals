@@ -1,5 +1,6 @@
 """ExactMatchCheck schema class for type-safe exact match check definitions."""
 
+from typing import ClassVar
 from pydantic import Field
 
 from ...constants import CheckType
@@ -19,6 +20,8 @@ class ExactMatchCheck(SchemaCheck):
     - negate: If true, passes when values don't match (default: False)
     - version: Optional version string for the check
     """
+
+    VERSION: ClassVar[str] = "1.0.0"
 
     actual: str = OptionalJSONPath(
         "value to check or JSONPath expression pointing to the value", min_length=1,

@@ -12,7 +12,7 @@ from ...constants import CheckType
 
 
 @register(CheckType.IS_EMPTY, version="1.0.0")
-class IsEmptyCheck(BaseCheck):
+class IsEmptyCheck_v1_0_0(BaseCheck):  # noqa: N801
     """
     Tests whether a value is empty.
 

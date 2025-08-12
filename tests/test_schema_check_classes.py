@@ -24,7 +24,6 @@ class TestContainsCheck:
         assert check.phrases == ["hello", "world"]
         assert check.case_sensitive is True
         assert check.negate is False
-        assert check.version is None
 
     def test_contains_check_with_options(self):
         """Test ContainsCheck with all options."""
@@ -33,12 +32,10 @@ class TestContainsCheck:
             phrases=["hello"],
             case_sensitive=False,
             negate=True,
-            version="1.0.0",
         )
 
         assert check.case_sensitive is False
         assert check.negate is True
-        assert check.version == "1.0.0"
 
     def test_contains_check_validation_empty_text(self):
         """Test ContainsCheck validation for empty text."""
@@ -62,7 +59,6 @@ class TestContainsCheck:
             phrases=["hello", "world"],
             case_sensitive=False,
             negate=True,
-            version="1.0.0",
         )
 
         check = schema_check.to_check()
@@ -72,7 +68,6 @@ class TestContainsCheck:
         assert check.arguments["phrases"] == ["hello", "world"]
         assert check.arguments["case_sensitive"] is False
         assert check.arguments["negate"] is True
-        assert check.version == "1.0.0"
 
     def test_contains_check_type_property(self):
         """Test ContainsCheck check_type property."""
@@ -102,12 +97,10 @@ class TestExactMatchCheck:
             expected="$.expected",
             case_sensitive=False,
             negate=True,
-            version="2.0.0",
         )
 
         assert check.case_sensitive is False
         assert check.negate is True
-        assert check.version == "2.0.0"
 
     def test_exact_match_check_validation_empty_actual(self):
         """Test ExactMatchCheck validation for empty actual."""
@@ -126,7 +119,6 @@ class TestExactMatchCheck:
             expected="$.expected",
             case_sensitive=False,
             negate=True,
-            version="1.0.0",
         )
 
         check = schema_check.to_check()
@@ -136,7 +128,6 @@ class TestExactMatchCheck:
         assert check.arguments["expected"] == "$.expected"
         assert check.arguments["case_sensitive"] is False
         assert check.arguments["negate"] is True
-        assert check.version == "1.0.0"
 
     def test_exact_match_check_type_property(self):
         """Test ExactMatchCheck check_type property."""
@@ -167,14 +158,12 @@ class TestRegexCheck:
             pattern="hello",
             negate=True,
             flags=flags,
-            version="1.0.0",
         )
 
         assert check.flags.case_insensitive is True
         assert check.flags.multiline is True
         assert check.flags.dot_all is False
         assert check.negate is True
-        assert check.version == "1.0.0"
 
     def test_regex_check_validation_empty_text(self):
         """Test RegexCheck validation for empty text."""
@@ -194,7 +183,6 @@ class TestRegexCheck:
             pattern=r"test\d+",
             negate=True,
             flags=flags,
-            version="1.0.0",
         )
 
         check = schema_check.to_check()
@@ -206,7 +194,6 @@ class TestRegexCheck:
         assert check.arguments["flags"]["case_insensitive"] is True
         assert check.arguments["flags"]["multiline"] is False
         assert check.arguments["flags"]["dot_all"] is True
-        assert check.version == "1.0.0"
 
     def test_regex_check_to_check_conversion_no_flags(self):
         """Test RegexCheck to_check() conversion without flags."""
@@ -261,7 +248,6 @@ class TestThresholdCheck:
             min_inclusive=False,
             max_inclusive=False,
             negate=True,
-            version="1.0.0",
         )
 
         assert check.min_value == 80.0
@@ -269,7 +255,6 @@ class TestThresholdCheck:
         assert check.min_inclusive is False
         assert check.max_inclusive is False
         assert check.negate is True
-        assert check.version == "1.0.0"
 
     def test_threshold_check_validation_empty_value(self):
         """Test ThresholdCheck validation for empty value."""
@@ -287,7 +272,6 @@ class TestThresholdCheck:
             value="$.output.score",
             min_value=80.0,
             min_inclusive=False,
-            version="1.0.0",
         )
 
         check = schema_check.to_check()
@@ -299,7 +283,6 @@ class TestThresholdCheck:
         assert check.arguments["min_inclusive"] is False
         assert check.arguments["max_inclusive"] is True
         assert check.arguments["negate"] is False
-        assert check.version == "1.0.0"
 
     def test_threshold_check_to_check_conversion_both_bounds(self):
         """Test ThresholdCheck to_check() conversion with both bounds."""
@@ -354,13 +337,11 @@ class TestSemanticSimilarityCheck:
             embedding_function=mock_embedding_function,
             similarity_metric=SimilarityMetric.DOT,
             threshold=threshold,
-            version="1.0.0",
         )
 
         assert check.similarity_metric == SimilarityMetric.DOT
         assert check.threshold.min_value == 0.8
         assert check.threshold.negate is True
-        assert check.version == "1.0.0"
 
     def test_semantic_similarity_check_validation_empty_text(self):
         """Test SemanticSimilarityCheck validation for empty text."""
@@ -386,7 +367,6 @@ class TestSemanticSimilarityCheck:
             embedding_function=mock_embedding_function,
             similarity_metric=SimilarityMetric.EUCLIDEAN,
             threshold=threshold,
-            version="1.0.0",
         )
 
         check = schema_check.to_check()
@@ -399,7 +379,6 @@ class TestSemanticSimilarityCheck:
         assert check.arguments["threshold"]["min_value"] == 0.8
         assert check.arguments["threshold"]["max_value"] == 1.0
         assert check.arguments["threshold"]["negate"] is False
-        assert check.version == "1.0.0"
 
     def test_semantic_similarity_check_to_check_conversion_no_threshold(self):
         """Test SemanticSimilarityCheck to_check() conversion without threshold."""
@@ -478,7 +457,6 @@ class TestLLMJudgeCheck:
             prompt="Evaluate: {{$.output.value}}",
             response_format=TestResponse,
             llm_function=mock_llm_function,
-            version="1.0.0",
         )
 
         check = schema_check.to_check()
@@ -487,7 +465,6 @@ class TestLLMJudgeCheck:
         assert check.arguments["prompt"] == "Evaluate: {{$.output.value}}"
         assert check.arguments["response_format"] == TestResponse
         assert check.arguments["llm_function"] == mock_llm_function
-        assert check.version == "1.0.0"
 
     def test_llm_judge_check_type_property(self):
         """Test LLMJudgeCheck check_type property."""
@@ -528,12 +505,10 @@ class TestCustomFunctionCheck:
         check = CustomFunctionCheck(
             validation_function=function_string,
             function_args={"text": "$.output.value", "min_length": 10},
-            version="1.0.0",
         )
 
         assert check.validation_function == function_string
         assert check.function_args["min_length"] == 10
-        assert check.version == "1.0.0"
 
     def test_custom_function_check_to_check_conversion(self):
         """Test CustomFunctionCheck to_check() conversion."""
@@ -543,7 +518,6 @@ class TestCustomFunctionCheck:
         schema_check = CustomFunctionCheck(
             validation_function=validation_function,
             function_args={"text": "$.output.value"},
-            version="1.0.0",
         )
 
         check = schema_check.to_check()
@@ -551,7 +525,6 @@ class TestCustomFunctionCheck:
         assert check.type == CheckType.CUSTOM_FUNCTION
         assert check.arguments["validation_function"] == validation_function
         assert check.arguments["function_args"] == {"text": "$.output.value"}
-        assert check.version == "1.0.0"
 
     def test_custom_function_check_type_property(self):
         """Test CustomFunctionCheck check_type property."""
@@ -563,56 +536,3 @@ class TestCustomFunctionCheck:
             function_args={"x": "$.value"},
         )
         assert check.check_type == CheckType.CUSTOM_FUNCTION
-
-
-class TestSchemaCheckVersionHandling:
-    """Test version handling across all schema check types."""
-
-    def test_default_version_none(self):
-        """Test that default version is None for all check types."""
-        checks = [
-            ContainsCheck(text="$.value", phrases=["test"]),
-            ExactMatchCheck(actual="$.actual", expected="$.expected"),
-            RegexCheck(text="$.value", pattern="test"),
-            ThresholdCheck(value="$.value", min_value=0.0),
-        ]
-
-        for check in checks:
-            assert check.version is None
-            converted = check.to_check()
-            assert converted.version is None
-
-    def test_version_preservation(self):
-        """Test that version is preserved in conversion."""
-        def mock_embedding_function(text: str):  # noqa: ANN202, ARG001
-            return [0.1, 0.2, 0.3]
-
-        def mock_validation_function(x: int) -> dict:
-            return {"passed": x > 0}
-
-        class TestResponse(BaseModel):
-            score: int
-
-        def mock_llm_function(prompt: str, response_format: type) -> tuple[BaseModel, dict]:  # noqa: ARG001
-            return TestResponse(score=8), {}
-
-        checks_with_versions = [
-            (ContainsCheck(text="$.value", phrases=["test"], version="1.2.3"), "1.2.3"),
-            (ExactMatchCheck(actual="$.actual", expected="$.expected", version="2.0.0"), "2.0.0"),
-            (RegexCheck(text="$.value", pattern="test", version="1.0.0-beta"), "1.0.0-beta"),
-            (ThresholdCheck(value="$.value", min_value=0.0, version="3.1.4"), "3.1.4"),
-            (SemanticSimilarityCheck(
-                text="$.text", reference="$.ref",
-                embedding_function=mock_embedding_function, version="1.1.0"), "1.1.0"),
-            (LLMJudgeCheck(
-                prompt="test", response_format=TestResponse,
-                llm_function=mock_llm_function, version="2.1.0"), "2.1.0"),
-            (CustomFunctionCheck(
-                validation_function=mock_validation_function,
-                function_args={"x": "$.value"}, version="1.0.0"), "1.0.0"),
-        ]
-
-        for schema_check, expected_version in checks_with_versions:
-            assert schema_check.version == expected_version
-            converted = schema_check.to_check()
-            assert converted.version == expected_version

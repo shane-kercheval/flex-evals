@@ -1,5 +1,6 @@
 """ContainsCheck schema class for type-safe contains check definitions."""
 
+from typing import ClassVar
 from pydantic import Field, field_validator
 
 from ...constants import CheckType
@@ -20,6 +21,8 @@ class ContainsCheck(SchemaCheck):
              If false, passes when text contains all of the phrases (default: False)
     - version: Optional version string for the check
     """
+
+    VERSION: ClassVar[str] = "1.0.0"
 
     text: str = OptionalJSONPath(
         "text to search or JSONPath expression pointing to the text to search",

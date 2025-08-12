@@ -1,6 +1,6 @@
 """CustomFunctionCheck schema class for type-safe custom function check definitions."""
 
-from typing import Any
+from typing import Any, ClassVar
 from collections.abc import Callable
 
 from pydantic import Field
@@ -20,6 +20,8 @@ class CustomFunctionCheck(SchemaCheck):
     - function_args: Arguments to pass to validation_function (JSONPath expressions allowed)
     - version: Optional version string for the check
     """
+
+    VERSION: ClassVar[str] = "1.0.0"
 
     validation_function: Callable | str = Field(..., description="User-provided function or string function definition")  # noqa: E501
     function_args: dict[str, Any] = Field(..., description="Arguments to pass to validation_function (JSONPath expressions allowed)")  # noqa: E501

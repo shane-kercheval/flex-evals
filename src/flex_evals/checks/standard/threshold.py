@@ -13,7 +13,7 @@ from ...constants import CheckType
 
 
 @register(CheckType.THRESHOLD, version="1.0.0")
-class ThresholdCheck(BaseCheck):
+class ThresholdCheck_v1_0_0(BaseCheck):  # noqa: N801
     """
     Checks if a numeric value meets minimum/maximum thresholds.
 

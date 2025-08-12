@@ -169,7 +169,6 @@ class SchemaCheck(JSONPathValidatedModel, ABC):
     - Seamless integration with existing evaluate() function
     """
 
-    version: str | None = None
     metadata: dict[str, Any] | None = None
 
     @property
@@ -181,13 +180,12 @@ class SchemaCheck(JSONPathValidatedModel, ABC):
     def to_check(self) -> Check:
         """Convert to generic Check object for execution."""
         data = self.model_dump()
-        version = data.pop('version', None)
         metadata = data.pop('metadata', None)
 
         return Check(
             type=self.check_type,
             arguments=data,
-            version=version,
+            version=getattr(self, 'VERSION', None),
             metadata=metadata,
         )
 

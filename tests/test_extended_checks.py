@@ -7,11 +7,12 @@ from typing import Any, Never
 
 from pydantic import BaseModel, Field
 
-from flex_evals.checks.extended.llm_judge import LlmJudgeCheck
-from flex_evals.checks.extended.custom_function import CustomFunctionCheck
+from flex_evals.checks.extended.llm_judge import LlmJudgeCheck_v1_0_0
+from flex_evals.checks.extended.custom_function import CustomFunctionCheck_v1_0_0
 from flex_evals.checks.base import EvaluationContext
 from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
 from flex_evals.exceptions import ValidationError, CheckExecutionError
+from flex_evals.registry import list_registered_checks
 
 
 # Test response format models for LLM judge
@@ -44,7 +45,7 @@ class TestLlmJudgeCheck:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.check = LlmJudgeCheck()
+        self.check = LlmJudgeCheck_v1_0_0()
 
         # Create test evaluation context
         self.test_case = TestCase(
@@ -1014,7 +1015,7 @@ class TestCustomFunctionCheck:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.check = CustomFunctionCheck()
+        self.check = CustomFunctionCheck_v1_0_0()
         self.test_case = TestCase(
             id="test_001",
             input="What is the capital of France?",
@@ -1358,3 +1359,32 @@ class TestCustomFunctionCheck:
             assert result.status == Status.COMPLETED
             assert result.check_results[0].status == Status.COMPLETED
             assert result.check_results[0].results["passed"] is True
+
+
+def test_schema_implementation_consistency():
+    """Test that each schema class has a properly registered implementation."""
+    # Map schema classes to their check types
+    from flex_evals import (  # noqa: PLC0415
+        LLMJudgeCheck,
+        SemanticSimilarityCheck,
+        CustomFunctionCheck,
+    )
+    schema_to_check_type = {
+        LLMJudgeCheck: CheckType.LLM_JUDGE,
+        SemanticSimilarityCheck: CheckType.SEMANTIC_SIMILARITY,
+        CustomFunctionCheck: CheckType.CUSTOM_FUNCTION,
+    }
+
+    registered_checks = list_registered_checks()
+
+    for schema_class, check_type in schema_to_check_type.items():
+        # Check schema has VERSION
+        assert hasattr(schema_class, 'VERSION'), f"{schema_class.__name__} missing VERSION"
+
+        # Check corresponding implementation is registered
+        check_type_str = check_type.value
+        assert check_type_str in registered_checks, f"No implementation registered for {check_type_str}"  # noqa: E501
+
+        # Check version matches
+        registered_version = registered_checks[check_type_str]["1.0.0"]["version"]
+        assert registered_version == schema_class.VERSION, f"Version mismatch for {check_type_str}"

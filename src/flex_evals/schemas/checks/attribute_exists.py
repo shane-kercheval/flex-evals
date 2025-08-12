@@ -1,5 +1,6 @@
 """AttributeExistsCheck schema class for type-safe attribute existence check definitions."""
 
+from typing import ClassVar
 from pydantic import Field
 
 from ...constants import CheckType
@@ -19,6 +20,8 @@ class AttributeExistsCheck(SchemaCheck):
     - negate: If true, passes when attribute does not exist (default: False)
     - version: Optional version string for the check
     """
+
+    VERSION: ClassVar[str] = "1.0.0"
 
     path: str = RequiredJSONPath(
         "JSONPath expression pointing to the attribute to check for existence",

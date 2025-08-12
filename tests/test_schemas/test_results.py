@@ -1077,7 +1077,7 @@ class TestEvaluationRunResult:
                     "actual": "$.output.value",
                     "expected": "$.test_case.expected",
                 },
-                version="2.0.0",
+                version="1.0.0",
                 metadata={"priority": "high", "category": "strict"},
             ),
             Check(
@@ -1086,7 +1086,7 @@ class TestEvaluationRunResult:
                     "text": "$.output.value",
                     "phrases": ["foo"],
                 },
-                version="1.5.0",
+                version="1.0.0",
                 metadata={"priority": "medium", "timeout_ms": 1000},
             ),
         ]
@@ -1105,7 +1105,7 @@ class TestEvaluationRunResult:
         assert row1['test_case_id'] == "test-001"
         assert row1['check_type'] == "exact_match"
         assert row1['check_metadata'] == {
-            "check_version": "2.0.0",
+            "check_version": "1.0.0",
             "priority": "high",
             "category": "strict",
         }
@@ -1116,7 +1116,7 @@ class TestEvaluationRunResult:
         assert row2['test_case_id'] == "test-001"
         assert row2['check_type'] == "contains"
         assert row2['check_metadata'] == {
-            "check_version": "1.5.0",
+            "check_version": "1.0.0",
             "priority": "medium",
             "timeout_ms": 1000,
         }
@@ -1127,7 +1127,7 @@ class TestEvaluationRunResult:
         assert row3['test_case_id'] == "test-002"
         assert row3['check_type'] == "exact_match"
         assert row3['check_metadata'] == {
-            "check_version": "2.0.0",
+            "check_version": "1.0.0",
             "priority": "high",
             "category": "strict",
         }
@@ -1138,7 +1138,7 @@ class TestEvaluationRunResult:
         assert row4['test_case_id'] == "test-002"
         assert row4['check_type'] == "contains"
         assert row4['check_metadata'] == {
-            "check_version": "1.5.0",
+            "check_version": "1.0.0",
             "priority": "medium",
             "timeout_ms": 1000,
         }

@@ -1,6 +1,6 @@
 """LLMJudgeCheck schema class for type-safe LLM judge check definitions."""
 
-from typing import Any, TypeVar
+from typing import Any, ClassVar, TypeVar
 from collections.abc import Callable
 
 from pydantic import BaseModel, Field
@@ -25,6 +25,8 @@ class LLMJudgeCheck(SchemaCheck):
         (prompt: str, response_format: type[BaseModel]) -> BaseModel | tuple[BaseModel, dict[str, Any]]
     - version: Optional version string for the check
     """  # noqa: E501
+
+    VERSION: ClassVar[str] = "1.0.0"
 
     prompt: str = Field(..., min_length=1, description="Prompt template with optional {{$.jsonpath}} placeholders")  # noqa: E501
     response_format: type[BaseModel] = Field(..., description="Pydantic model class defining expected LLM response structure")  # noqa: E501

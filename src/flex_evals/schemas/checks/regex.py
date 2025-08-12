@@ -1,6 +1,6 @@
 """RegexCheck schema class for type-safe regex check definitions."""
 
-
+from typing import ClassVar
 from pydantic import BaseModel, Field
 
 from ...constants import CheckType
@@ -29,6 +29,8 @@ class RegexCheck(SchemaCheck):
     - version: Optional version string for the check
     """
 
+    VERSION: ClassVar[str] = "1.0.0"
+
     text: str = OptionalJSONPath(
         "text to test against the pattern or JSONPath expression pointing to the text",
         min_length=1,
@@ -56,5 +58,5 @@ class RegexCheck(SchemaCheck):
         return Check(
             type=self.check_type,
             arguments=arguments,
-            version=self.version,
+            version=self.VERSION,
         )

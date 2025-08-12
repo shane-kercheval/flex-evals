@@ -516,6 +516,104 @@ class CustomAsyncCheck(BaseAsyncCheck):
             return {'score': response.json()['score']}
 ```
 
+## Check Versioning
+
+flex-evals supports versioned checks to maintain backward compatibility while allowing evolution of check schemas and implementations.
+
+### **Version Structure**
+
+Each check has two components that must be versioned together:
+- **Schema Class**:
+    - Defines the user-facing API
+        - e.g. `ContainsCheck` (*latest schema does not specify version in class name*), `ContainsCheck_v1_0_0`
+    - Inherits from `SchemaCheck`
+- **Implementation Class**:
+    - Executes the check logic
+        - e.g. `ContainsCheck_v2`, `ContainsCheck_v1`
+    - Inherits from `BaseCheck` or `BaseAsyncCheck`
+
+### **Using Versioned Checks**
+
+```python
+# Option 1: Use latest version (recommended for new code)
+from flex_evals import ContainsCheck
+check = ContainsCheck(text="$.output", phrases=["hello"])
+
+# Option 2: Use specific version
+from flex_evals import ContainsCheck_v1_0_0
+check = ContainsCheck_v1_0_0(phrases=["hello"])  # v1.0.0 schema
+```
+
+### **Creating New Check Versions**
+
+When creating a new version, create both schema and implementation:
+
+**1. Create Schema Class**
+
+- Copy the current schema and add a version suffix to the class name that corresponds to the old/current version.
+- The latest version class has no suffix. Update version string and make changes as needed.
+
+```python
+# src/flex_evals/schemas/checks/contains.py
+
+# latest version
+class ContainsCheck(SchemaCheck):
+    VERSION = "2.0.0"
+
+# old version
+class ContainsCheck_v1_0_0(SchemaCheck):
+    VERSION = "1.0.0"
+```
+
+**2. Create Implementation Class**
+
+```python
+# src/flex_evals/checks/standard/contains.py
+@register(CheckType.CONTAINS, version="2.0.0")
+class ContainsCheck_v2(BaseCheck):
+    def __call__(self, ...):
+```
+
+**3. Update Exports**
+
+
+```python
+# __init__.py
+from .contains import ContainsCheck, ContainsCheck_v1_0_0
+...
+
+__all__ = [
+    ...
+    "ContainsCheck",
+    "ContainsCheck_v1_0_0",
+    ...
+]
+
+```
+
+### **Semantic Versioning Rules**
+
+- **Major** (1.0.0 → 2.0.0): Breaking changes (remove/rename fields, change behavior)
+- **Minor** (1.0.0 → 1.1.0): Add optional fields, new functionality  
+- **Patch** (1.0.0 → 1.0.1): Bug fixes, implementation improvements
+
+### **Version Management**
+
+```python
+from flex_evals.registry import get_latest_version, list_versions
+
+# Get latest version of a check type
+latest = get_latest_version("contains")  # "2.0.0"
+
+# List all available versions
+versions = list_versions("contains")  # ["1.0.0", "2.0.0"]
+```
+
+**⚠️ Requirements:**
+- Every schema version MUST have a matching implementation version
+- Version mismatches will cause runtime errors
+- Latest version classes (e.g., `ContainsCheck`) have no version suffix in the name
+
 ## Architecture
 
 ### **Core Components**

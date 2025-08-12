@@ -205,7 +205,7 @@ def _flatten_checks_for_execution(
 
         for check_idx, check in enumerate(checks):
             try:
-                if is_async_check(check.type):
+                if is_async_check(check.type, check.version):
                     flattened_async_checks.append((check, context))
                     check_tracking.append((test_idx, check_idx, True,
                                          len(flattened_async_checks) - 1))
@@ -347,7 +347,7 @@ def _evaluate_with_registry(
 def _execute_sync_check(check: Check, context: EvaluationContext) -> CheckResult:
     """Execute a single synchronous check and return the result."""
     try:
-        check_class = get_check_class(check.type)
+        check_class = get_check_class(check.type, check.version)
         check_instance = check_class()
 
         # Ensure this is a sync check
@@ -398,7 +398,7 @@ async def _execute_async_check(
     """Execute a single asynchronous check and return the result."""
     async def _run_check() -> CheckResult:
         try:
-            check_class = get_check_class(check.type)
+            check_class = get_check_class(check.type, check.version)
             check_instance = check_class()
 
             # Ensure this is an async check

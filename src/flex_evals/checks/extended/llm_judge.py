@@ -91,7 +91,7 @@ T = TypeVar('T', bound=BaseModel)
 
 
 @register(CheckType.LLM_JUDGE, version="1.0.0")
-class LlmJudgeCheck(BaseAsyncCheck):
+class LlmJudgeCheck_v1_0_0(BaseAsyncCheck):  # noqa: N801
     """
     Uses an LLM to evaluate outputs against complex, nuanced criteria.
 

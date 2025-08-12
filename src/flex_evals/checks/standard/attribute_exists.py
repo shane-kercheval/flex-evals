@@ -16,7 +16,7 @@ from ...schemas import CheckResult
 
 
 @register(CheckType.ATTRIBUTE_EXISTS, version="1.0.0")
-class AttributeExistsCheck(BaseCheck):
+class AttributeExistsCheck_v1_0_0(BaseCheck):  # noqa: N801
     """
     Tests whether an attribute exists in the evaluation context.
 

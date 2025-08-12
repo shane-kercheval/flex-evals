@@ -1,5 +1,6 @@
 """SemanticSimilarityCheck schema class for type-safe semantic similarity check definitions."""
 
+from typing import ClassVar
 from collections.abc import Callable
 
 from pydantic import BaseModel, Field
@@ -32,6 +33,8 @@ class SemanticSimilarityCheck(SchemaCheck):
     - threshold: Optional threshold configuration for pass/fail determination
     - version: Optional version string for the check
     """
+
+    VERSION: ClassVar[str] = "1.0.0"
 
     text: str = OptionalJSONPath(
         "first text to compare or JSONPath expression pointing to the text",
@@ -67,5 +70,5 @@ class SemanticSimilarityCheck(SchemaCheck):
         return Check(
             type=self.check_type,
             arguments=arguments,
-            version=self.version,
+            version=self.VERSION,
         )

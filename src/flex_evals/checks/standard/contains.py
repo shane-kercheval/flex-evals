@@ -13,7 +13,7 @@ from ...constants import CheckType
 
 
 @register(CheckType.CONTAINS, version="1.0.0")
-class ContainsCheck(BaseCheck):
+class ContainsCheck_v1_0_0(BaseCheck):  # noqa: N801
     """
     Checks if text contains all specific phrases or patterns.
 
