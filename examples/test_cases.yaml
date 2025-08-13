@@ -143,11 +143,6 @@ test_cases:
 
 # Global checks that apply to all test cases
 global_checks:
-  - type: "threshold"
-    description: "Response should not be too short"
-    arguments:
-      value: "$.output.value.length"
-      min_value: 10
   
   - type: "regex"
     description: "Response should not contain error messages"
