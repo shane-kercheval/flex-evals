@@ -210,7 +210,6 @@ class LlmJudgeCheck_v1_0_0(BaseAsyncCheck):  # noqa: N801
         check_type: str,
         arguments: dict[str, Any],
         context: EvaluationContext,
-        check_version: str | None = None,
         check_metadata: dict[str, Any] | None = None,
     ) -> CheckResult:
         """
@@ -260,6 +259,9 @@ class LlmJudgeCheck_v1_0_0(BaseAsyncCheck):  # noqa: N801
             No exceptions - all errors are captured and returned as CheckResult
             objects with appropriate error status and details
         """
+        # Get version from registry using the class
+        check_version = self._get_version()
+
         # PHASE 1: Template processing (if needed)
         if "prompt" in arguments and isinstance(arguments["prompt"], str):
             try:
@@ -295,7 +297,6 @@ class LlmJudgeCheck_v1_0_0(BaseAsyncCheck):  # noqa: N801
             check_type,
             modified_arguments,
             context,
-            check_version,
             check_metadata,
         )
 

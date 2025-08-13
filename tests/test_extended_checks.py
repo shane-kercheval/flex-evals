@@ -304,7 +304,6 @@ class TestLlmJudgeCheck:
             check_type="llm_judge",
             arguments=raw_arguments,
             context=self.context,
-            check_version="1.0.0",
         )
 
         assert result.status == Status.COMPLETED
@@ -349,7 +348,6 @@ class TestLlmJudgeCheck:
             check_type="llm_judge",
             arguments=raw_arguments,
             context=self.context,
-            check_version="1.0.0",
         )
 
         assert result.status == Status.COMPLETED
@@ -406,7 +404,6 @@ class TestLlmJudgeCheck:
             check_type="llm_judge",
             arguments=raw_arguments,
             context=complex_context,
-            check_version="1.0.0",
         )
 
         assert result.status == Status.COMPLETED
@@ -432,7 +429,6 @@ class TestLlmJudgeCheck:
             check_type="llm_judge",
             arguments=raw_arguments,
             context=self.context,
-            check_version="1.0.0",
         )
 
         assert result.status == Status.ERROR
@@ -454,7 +450,6 @@ class TestLlmJudgeCheck:
             check_type="llm_judge",
             arguments=raw_arguments,
             context=self.context,
-            check_version="1.0.0",
         )
 
         assert result.status == Status.COMPLETED
@@ -477,7 +472,6 @@ class TestLlmJudgeCheck:
             check_type="llm_judge",
             arguments=raw_arguments,
             context=self.context,
-            check_version="1.0.0",
         )
 
         assert result.status == Status.COMPLETED
@@ -496,11 +490,10 @@ class TestLlmJudgeCheck:
             check_type="llm_judge",
             arguments=raw_arguments,
             context=self.context,
-            check_version="2.0.0",
         )
 
         assert result.check_type == "llm_judge"
-        assert result.metadata["check_version"] == "2.0.0"
+        assert result.check_version == "1.0.0"
         assert isinstance(result.evaluated_at, datetime)
         assert result.evaluated_at.tzinfo == UTC
 
@@ -844,7 +837,7 @@ class TestLlmJudgeCheck:
                 check_type="llm_judge",
                 arguments=raw_arguments,
                 context=self.context,
-            )
+                )
 
             # Should either complete successfully or error gracefully
             assert result.status in [Status.COMPLETED, Status.ERROR]

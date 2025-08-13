@@ -23,6 +23,8 @@ class CheckRegistry:
 
     def __init__(self):
         self._checks: dict[str, dict[str, dict[str, Any]]] = {}
+        # Reverse mapping: class -> (check_type, version)
+        self._class_to_version: dict[type, tuple[str, str]] = {}
 
     def register(
         self,
@@ -54,6 +56,9 @@ class CheckRegistry:
             "version": version,
             "is_async": self._is_async_check(check_class),
         }
+
+        # Update reverse mapping
+        self._class_to_version[check_class] = (check_type_str, version)
 
     def get_check_class(
         self, check_type: str, version: str | None = None,
@@ -186,9 +191,44 @@ class CheckRegistry:
             for check_type, versions in self._checks.items()
         }
 
+    def get_version_for_class(self, cls: type) -> str:
+        """
+        Get the version for a registered check class.
+
+        Args:
+            cls: Check class to look up
+
+        Returns:
+            Version string for the class
+
+        Raises:
+            ValueError: If class is not registered
+        """
+        if cls not in self._class_to_version:
+            raise ValueError(f"Class {cls} is not registered")
+        return self._class_to_version[cls][1]  # Return version part
+
+    def get_check_type_for_class(self, cls: type) -> str:
+        """
+        Get the check type for a registered check class.
+
+        Args:
+            cls: Check class to look up
+
+        Returns:
+            Check type string for the class
+
+        Raises:
+            ValueError: If class is not registered
+        """
+        if cls not in self._class_to_version:
+            raise ValueError(f"Class {cls} is not registered")
+        return self._class_to_version[cls][0]  # Return check_type part
+
     def clear(self) -> None:
         """Clear all registered checks (useful for testing)."""
         self._checks.clear()
+        self._class_to_version.clear()
 
     def _is_async_check(self, check_class: type[BaseCheck | BaseAsyncCheck]) -> bool:
         """Determine if a check class is asynchronous."""
@@ -327,6 +367,38 @@ def list_versions(check_type: str) -> list[str]:
         ValueError: If check type is not registered
     """
     return _global_registry.list_versions(check_type)
+
+
+def get_version_for_class(cls: type) -> str:
+    """
+    Get the version for a registered check class.
+
+    Args:
+        cls: Check class to look up
+
+    Returns:
+        Version string for the class
+
+    Raises:
+        ValueError: If class is not registered
+    """
+    return _global_registry.get_version_for_class(cls)
+
+
+def get_check_type_for_class(cls: type) -> str:
+    """
+    Get the check type for a registered check class.
+
+    Args:
+        cls: Check class to look up
+
+    Returns:
+        Check type string for the class
+
+    Raises:
+        ValueError: If class is not registered
+    """
+    return _global_registry.get_check_type_for_class(cls)
 
 
 def clear_registry() -> None:

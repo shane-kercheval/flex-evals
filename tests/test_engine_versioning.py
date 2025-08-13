@@ -3,6 +3,8 @@
 
 from flex_evals.engine import evaluate
 from flex_evals.schemas import TestCase, Output, Check
+from flex_evals.schemas.checks.contains import ContainsCheck
+from flex_evals.schemas.checks.exact_match import ExactMatchCheck
 from flex_evals.registry import register, clear_registry
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck
 from tests.conftest import restore_standard_checks
@@ -208,7 +210,127 @@ class TestEngineVersioning:
         check_result = result.results[0].check_results[0]
 
         assert check_result.status == "completed"
-        # The version should be included in metadata by the check execution
-        assert check_result.metadata is not None
-        assert "check_version" in check_result.metadata
-        assert check_result.metadata["check_version"] == "1.5.0"
+        # The version should be included as first-class field
+        assert check_result.check_version == "1.5.0"
+
+    def test_engine_with_check_no_version_uses_latest(self):
+        """Test that engine uses latest version when Check has no version specified."""
+        @register("latest_check", version="1.0.0")
+        class LatestCheck_v1(BaseCheck):  # noqa: N801
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True, "version": "1.0.0"}
+
+        @register("latest_check", version="2.1.0")
+        class LatestCheck_v2_1(BaseCheck):  # noqa: N801
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True, "version": "2.1.0"}
+
+        # Create test case and output
+        test_case = TestCase(id="test1", input="test input")
+        output = Output(value="test output")
+
+        # Create check WITHOUT version (should use latest)
+        check_no_version = Check(type="latest_check", arguments={})
+
+        result = evaluate([test_case], [output], [check_no_version])
+        check_result = result.results[0].check_results[0]
+
+        assert check_result.status == "completed"
+        # Should use latest version (2.1.0)
+        assert check_result.results["version"] == "2.1.0"
+        # Version should be recorded as first-class field
+        assert check_result.check_version == "2.1.0"
+
+    def test_engine_with_schema_check_includes_version(self):
+        """Test that engine properly handles SchemaCheck objects with version."""
+        # Need standard checks for SchemaCheck objects
+        restore_standard_checks()
+
+        # Create test case and output
+        test_case = TestCase(id="test1", input="hello world")
+        output = Output(value="hello world")
+
+        # Create SchemaCheck (has VERSION = "1.0.0")
+        schema_check = ContainsCheck(
+            text="$.output.value",
+            phrases=["hello"],
+        )
+
+        result = evaluate([test_case], [output], [schema_check])
+        check_result = result.results[0].check_results[0]
+
+        assert check_result.status == "completed"
+        assert check_result.results["passed"] is True
+        # Version from SchemaCheck.VERSION should be recorded as first-class field
+        assert check_result.check_version == "1.0.0"
+
+    def test_engine_mixed_check_types_with_versions(self):
+        """Test engine handles mix of Check (no version) and SchemaCheck together."""
+        @register("mixed_check", version="1.0.0")
+        class MixedCheck_v1(BaseCheck):  # noqa: N801
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True, "custom_field": "v1_result"}
+
+        # Need standard checks for SchemaCheck objects
+        restore_standard_checks()
+
+        # Create test case and output
+        test_case = TestCase(id="test1", input="test", expected="test")
+        output = Output(value="test")
+
+        # Mix of different check types
+        check_no_version = Check(type="mixed_check", arguments={})
+        schema_check = ExactMatchCheck(actual="$.output.value", expected="$.test_case.expected")
+
+        result = evaluate([test_case], [output], [check_no_version, schema_check])
+
+        # Check first result (Check with no version - should get latest version)
+        check_result_1 = result.results[0].check_results[0]
+        assert check_result_1.status == "completed"
+        assert check_result_1.results["custom_field"] == "v1_result"
+        assert check_result_1.check_version == "1.0.0"
+
+        # Check second result (SchemaCheck with version)
+        check_result_2 = result.results[0].check_results[1]
+        assert check_result_2.status == "completed"
+        assert check_result_2.results["passed"] is True
+        assert check_result_2.check_version == "1.0.0"
+
+    def test_engine_with_testcase_checks_field(self):
+        """Test engine handles checks defined in TestCase.checks field."""
+        @register("testcase_check", version="1.5.0")
+        class TestCaseCheck(BaseCheck):
+            def __call__(self, text: str, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True, "text_length": len(text)}
+
+        # Need standard checks for SchemaCheck objects
+        restore_standard_checks()
+
+        # Create test case with checks field containing both Check and SchemaCheck
+        test_case = TestCase(
+            id="test1",
+            input="hello world",
+            checks=[
+                Check(type="testcase_check", arguments={"text": "$.test_case.input"}),  # No version  # noqa: E501
+                ContainsCheck(text="$.test_case.input", phrases=["hello"]),  # SchemaCheck with version  # noqa: E501
+            ],
+        )
+        output = Output(value="output not used in this test")
+
+        # Pass checks=None to use TestCase.checks
+        result = evaluate([test_case], [output], checks=None)
+
+        # Should have 2 check results
+        assert len(result.results[0].check_results) == 2
+
+        # First check (no version specified - should get latest version)
+        check_result_1 = result.results[0].check_results[0]
+        assert check_result_1.status == "completed"
+        assert check_result_1.results["text_length"] == 11
+        assert check_result_1.check_version == "1.5.0"
+
+        # Second check (SchemaCheck with version)
+        check_result_2 = result.results[0].check_results[1]
+        assert check_result_2.status == "completed"
+        assert check_result_2.results["passed"] is True
+        assert check_result_2.check_version == "1.0.0"

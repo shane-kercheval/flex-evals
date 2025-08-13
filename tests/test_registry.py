@@ -7,6 +7,7 @@ from flex_evals.registry import (
     CheckRegistry, register, get_check_class, get_check_info,
     is_async_check, list_registered_checks, clear_registry,
     get_registry_state, restore_registry_state, get_latest_version, list_versions,
+    get_version_for_class, get_check_type_for_class, _global_registry,
 )
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
 from flex_evals import CheckType, Output, TestCase
@@ -694,3 +695,222 @@ class TestRegistryStateSerialization:
         # Should be retrievable by string
         check_class = get_check_class("exact_match")
         assert check_class == EnumTestCheck
+
+
+class TestRegistryReverseMapping:
+    """Test registry reverse mapping functionality (class -> version/type)."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        clear_registry()
+
+    def teardown_method(self):
+        """Clean up after tests."""
+        clear_registry()
+        restore_standard_checks()
+
+    def test_get_version_for_class_basic(self):
+        """Test getting version for registered class."""
+        @register("version_lookup_test", version="2.1.0")
+        class VersionLookupTest(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Should be able to get version from class
+        version = get_version_for_class(VersionLookupTest)
+        assert version == "2.1.0"
+
+        # Should also work with registry method
+        version_registry = _global_registry.get_version_for_class(VersionLookupTest)
+        assert version_registry == "2.1.0"
+
+    def test_get_check_type_for_class_basic(self):
+        """Test getting check type for registered class."""
+        @register("type_lookup_test", version="1.0.0")
+        class TypeLookupTest(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Should be able to get check type from class
+        check_type = get_check_type_for_class(TypeLookupTest)
+        assert check_type == "type_lookup_test"
+
+        # Should also work with registry method
+        check_type_registry = _global_registry.get_check_type_for_class(TypeLookupTest)
+        assert check_type_registry == "type_lookup_test"
+
+    def test_reverse_mapping_with_multiple_versions(self):
+        """Test reverse mapping works correctly with multiple versions of same type."""
+        class CheckV1(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"version": "1.0.0"}
+
+        class CheckV2(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"version": "2.0.0"}
+
+        register("multi_version_test", version="1.0.0")(CheckV1)
+        register("multi_version_test", version="2.0.0")(CheckV2)
+
+        # Each class should map to its specific version
+        assert get_version_for_class(CheckV1) == "1.0.0"
+        assert get_version_for_class(CheckV2) == "2.0.0"
+
+        # Both should map to same check type
+        assert get_check_type_for_class(CheckV1) == "multi_version_test"
+        assert get_check_type_for_class(CheckV2) == "multi_version_test"
+
+    def test_reverse_mapping_with_async_checks(self):
+        """Test reverse mapping works with async checks."""
+        @register("async_reverse_test", version="1.5.0")
+        class AsyncReverseTest(BaseAsyncCheck):
+            async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        assert get_version_for_class(AsyncReverseTest) == "1.5.0"
+        assert get_check_type_for_class(AsyncReverseTest) == "async_reverse_test"
+
+    def test_reverse_mapping_with_enum_types(self):
+        """Test reverse mapping works with CheckType enums."""
+        @register(CheckType.EXACT_MATCH, version="3.0.0")
+        class EnumReverseTest(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Should work with enum registration
+        assert get_version_for_class(EnumReverseTest) == "3.0.0"
+        assert get_check_type_for_class(EnumReverseTest) == "exact_match"  # String form
+
+    def test_reverse_mapping_error_cases(self):
+        """Test error cases for reverse mapping."""
+        class UnregisteredCheck(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Should raise ValueError for unregistered class
+        with pytest.raises(ValueError, match="Class .* is not registered"):
+            get_version_for_class(UnregisteredCheck)
+
+        with pytest.raises(ValueError, match="Class .* is not registered"):
+            get_check_type_for_class(UnregisteredCheck)
+
+        # Should also raise for registry methods
+        with pytest.raises(ValueError, match="Class .* is not registered"):
+            _global_registry.get_version_for_class(UnregisteredCheck)
+
+        with pytest.raises(ValueError, match="Class .* is not registered"):
+            _global_registry.get_check_type_for_class(UnregisteredCheck)
+
+    def test_reverse_mapping_with_re_registration(self):
+        """Test reverse mapping updates correctly with re-registration."""
+        class ReRegisteredCheck(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Register first time
+        register("re_register_test", version="1.0.0")(ReRegisteredCheck)
+        assert get_version_for_class(ReRegisteredCheck) == "1.0.0"
+
+        # Re-register same version (should work)
+        register("re_register_test", version="1.0.0")(ReRegisteredCheck)
+        assert get_version_for_class(ReRegisteredCheck) == "1.0.0"
+
+        # Register with different version (should update)
+        register("re_register_test", version="2.0.0")(ReRegisteredCheck)
+        assert get_version_for_class(ReRegisteredCheck) == "2.0.0"
+        assert get_check_type_for_class(ReRegisteredCheck) == "re_register_test"
+
+    def test_reverse_mapping_cleared_with_registry(self):
+        """Test reverse mapping is cleared when registry is cleared."""
+        @register("clear_test", version="1.0.0")
+        class ClearTest(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Should work before clear
+        assert get_version_for_class(ClearTest) == "1.0.0"
+
+        # Clear registry
+        clear_registry()
+
+        # Should no longer work after clear
+        with pytest.raises(ValueError, match="Class .* is not registered"):
+            get_version_for_class(ClearTest)
+
+    def test_reverse_mapping_consistency(self):
+        """Test that forward and reverse mappings are consistent."""
+        @register("consistency_test", version="1.2.3")
+        class ConsistencyTest(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Forward mapping
+        forward_class = get_check_class("consistency_test", "1.2.3")
+        forward_info = get_check_info("consistency_test", "1.2.3")
+
+        # Reverse mapping
+        reverse_version = get_version_for_class(ConsistencyTest)
+        reverse_type = get_check_type_for_class(ConsistencyTest)
+
+        # Should be consistent
+        assert forward_class == ConsistencyTest
+        assert forward_info["version"] == reverse_version == "1.2.3"
+        assert reverse_type == "consistency_test"
+
+    def test_reverse_mapping_with_different_check_types(self):
+        """Test reverse mapping works correctly with different check types."""
+        @register("type_a", version="1.0.0")
+        class CheckTypeA(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"type": "A"}
+
+        @register("type_b", version="1.0.0")
+        class CheckTypeB(BaseAsyncCheck):
+            async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"type": "B"}
+
+        # Each should map to its own type and version
+        assert get_version_for_class(CheckTypeA) == "1.0.0"
+        assert get_check_type_for_class(CheckTypeA) == "type_a"
+
+        assert get_version_for_class(CheckTypeB) == "1.0.0"
+        assert get_check_type_for_class(CheckTypeB) == "type_b"
+
+    def test_reverse_mapping_integration_with_existing_registry(self):
+        """Test reverse mapping integrates properly with all existing registry features."""
+        @register("integration_test", version="1.0.0")
+        class IntegrationTestV1(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"version": "1.0.0"}
+
+        @register("integration_test", version="2.0.0")
+        class IntegrationTestV2(BaseAsyncCheck):
+            async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"version": "2.0.0"}
+
+        # Test all registry functions still work
+        assert len(list_registered_checks()) == 1
+        assert "integration_test" in list_registered_checks()
+        assert get_latest_version("integration_test") == "2.0.0"
+        assert list_versions("integration_test") == ["1.0.0", "2.0.0"]
+        assert is_async_check("integration_test", "1.0.0") is False
+        assert is_async_check("integration_test", "2.0.0") is True
+
+        # Test reverse mapping works
+        assert get_version_for_class(IntegrationTestV1) == "1.0.0"
+        assert get_check_type_for_class(IntegrationTestV1) == "integration_test"
+        assert get_version_for_class(IntegrationTestV2) == "2.0.0"
+        assert get_check_type_for_class(IntegrationTestV2) == "integration_test"
+
+        # Test state serialization/restoration preserves reverse mapping
+        state = get_registry_state()
+        clear_registry()
+
+        # Should fail after clear
+        with pytest.raises(ValueError, match="Class .* is not registered"):
+            get_version_for_class(IntegrationTestV1)
+
+        # Restore and test again
+        restore_registry_state(state)
+        assert get_version_for_class(IntegrationTestV1) == "1.0.0"
+        assert get_version_for_class(IntegrationTestV2) == "2.0.0"

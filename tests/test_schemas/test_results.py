@@ -93,6 +93,7 @@ class TestTestCaseResult:
         """Helper to create CheckResult for testing."""
         return CheckResult(
             check_type=check_type,
+            check_version='1.0.0',
             status=status,
             results={},
             resolved_arguments={},
@@ -181,6 +182,7 @@ class TestTestCaseResult:
         """Test that summary completed count mismatch raises ValueError."""
         error_check = CheckResult(
             check_type="test_check",
+            check_version='1.0.0',
             status='error',
             results={},
             resolved_arguments={},
@@ -205,6 +207,7 @@ class TestTestCaseResult:
         """Test that incorrect status raises ValueError when should be error."""
         error_check = CheckResult(
             check_type="test_check",
+            check_version='1.0.0',
             status='error',
             results={},
             resolved_arguments={},
@@ -246,6 +249,7 @@ class TestTestCaseResult:
         """Test that error status takes priority over skip."""
         error_check = CheckResult(
             check_type="test_check",
+            check_version='1.0.0',
             status='error',
             results={},
             resolved_arguments={},
@@ -372,6 +376,7 @@ class TestEvaluationRunResult:
             check_results = [
                 CheckResult(
                     check_type="test_check",
+                    check_version='1.0.0',
                     status='completed',
                     results={},
                     resolved_arguments={},
@@ -384,6 +389,7 @@ class TestEvaluationRunResult:
             check_results = [
                 CheckResult(
                     check_type="test_check",
+                    check_version='1.0.0',
                     status='error',
                     results={},
                     resolved_arguments={},
@@ -397,6 +403,7 @@ class TestEvaluationRunResult:
             check_results = [
                 CheckResult(
                     check_type="test_check",
+                    check_version='1.0.0',
                     status='skip',
                     results={},
                     resolved_arguments={},
@@ -585,6 +592,7 @@ class TestEvaluationRunResult:
         metadata = {"check_version": "1.0.0"}
         result = CheckResult(
             check_type='exact_match',
+            check_version='1.0.0',
             status=Status.COMPLETED,
             results={"passed": True},
             resolved_arguments={"actual": "test", "expected": "test"},
@@ -604,6 +612,7 @@ class TestEvaluationRunResult:
         metadata = {"check_version": "1.0.0"}
         check_result = CheckResult(
             check_type='exact_match',
+            check_version='1.0.0',
             status='completed',
             results={"passed": True},
             resolved_arguments={"actual": "test", "expected": "test"},
@@ -636,6 +645,7 @@ class TestEvaluationRunResult:
         metadata = {"check_version": "1.0.0"}
         check_result = CheckResult(
             check_type='exact_match',
+            check_version='1.0.0',
             status='completed',
             results={"passed": True},
             resolved_arguments={"actual": "test", "expected": "test"},
@@ -696,6 +706,7 @@ class TestEvaluationRunResult:
 
         check_result = CheckResult(
             check_type="exact_match",
+            check_version='1.0.0',
             status='completed',
             results={"passed": True, "score": 1.0},
             resolved_arguments={"actual": "actual result", "expected": "expected result"},
@@ -799,6 +810,7 @@ class TestEvaluationRunResult:
         # Successful check
         success_check = CheckResult(
             check_type="exact_match",
+            check_version='1.0.0',
             status='completed',
             results={"passed": True},
             resolved_arguments={"actual": "actual result", "expected": "expected result"},
@@ -808,6 +820,7 @@ class TestEvaluationRunResult:
         # Failed check with error
         error_check = CheckResult(
             check_type="semantic_similarity",
+            check_version='1.0.0',
             status='error',
             results={},
             resolved_arguments={"actual": "actual result", "expected": "expected result"},
@@ -872,6 +885,7 @@ class TestEvaluationRunResult:
         output1 = Output(value="output1", id="output-001")
         check1 = CheckResult(
             check_type="exact_match",
+            check_version='1.0.0',
             status='completed',
             results={"passed": True},
             resolved_arguments={"actual": "output1", "expected": "expected1"},
@@ -889,6 +903,7 @@ class TestEvaluationRunResult:
         output2 = Output(value="output2", id="output-002")
         check2 = CheckResult(
             check_type="contains",
+            check_version='1.0.0',
             status='skip',
             results={},
             resolved_arguments={"actual": "output2", "expected": "expected2"},
@@ -942,6 +957,7 @@ class TestEvaluationRunResult:
         output = Output(value="actual", id="output-pandas")
         check_result = CheckResult(
             check_type="exact_match",
+            check_version='1.0.0',
             status='completed',
             results={"passed": False, "similarity": 0.8},
             resolved_arguments={"actual": "actual", "expected": "expected"},
@@ -1012,6 +1028,7 @@ class TestEvaluationRunResult:
         # (metadata from Check gets merged with check_version)
         check_result = CheckResult(
             check_type="exact_match",
+            check_version='1.0.0',
             status='completed',
             results={"passed": True},
             resolved_arguments={"actual": "actual", "expected": "expected"},
@@ -1105,7 +1122,6 @@ class TestEvaluationRunResult:
         assert row1['test_case_id'] == "test-001"
         assert row1['check_type'] == "exact_match"
         assert row1['check_metadata'] == {
-            "check_version": "1.0.0",
             "priority": "high",
             "category": "strict",
         }
@@ -1116,7 +1132,6 @@ class TestEvaluationRunResult:
         assert row2['test_case_id'] == "test-001"
         assert row2['check_type'] == "contains"
         assert row2['check_metadata'] == {
-            "check_version": "1.0.0",
             "priority": "medium",
             "timeout_ms": 1000,
         }
@@ -1127,7 +1142,6 @@ class TestEvaluationRunResult:
         assert row3['test_case_id'] == "test-002"
         assert row3['check_type'] == "exact_match"
         assert row3['check_metadata'] == {
-            "check_version": "1.0.0",
             "priority": "high",
             "category": "strict",
         }
@@ -1138,7 +1152,6 @@ class TestEvaluationRunResult:
         assert row4['test_case_id'] == "test-002"
         assert row4['check_type'] == "contains"
         assert row4['check_metadata'] == {
-            "check_version": "1.0.0",
             "priority": "medium",
             "timeout_ms": 1000,
         }
@@ -1149,4 +1162,3 @@ class TestEvaluationRunResult:
             assert 'check_version' not in row  # Should be inside check_metadata
             assert 'check_metadata' in row
             assert isinstance(row['check_metadata'], dict)
-            assert 'check_version' in row['check_metadata']

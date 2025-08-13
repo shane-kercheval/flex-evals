@@ -214,6 +214,7 @@ class CheckResult:
 
     Required Fields:
     - check_type: The type of check that was executed
+    - check_version: The version of the check that was executed
     - status: Execution status of the check
     - results: Check outcome data (structure defined by check type)
     - resolved_arguments: Arguments after JSONPath resolution
@@ -221,11 +222,11 @@ class CheckResult:
 
     Optional Fields:
     - metadata: Dictionary containing check-specific metadata
-      (e.g., check_version, execution_time_ms)
     - error: Error details (only present when status is 'error')
     """
 
     check_type: str
+    check_version: str
     status: Status | Literal['completed', 'error', 'skip']
     results: dict[str, Any]
     resolved_arguments: dict[str, Any]

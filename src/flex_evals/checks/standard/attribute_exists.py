@@ -48,7 +48,6 @@ class AttributeExistsCheck_v1_0_0(BaseCheck):  # noqa: N801
         check_type: str,
         arguments: dict[str, Any],
         context: EvaluationContext,
-        check_version: str | None = None,
         check_metadata: dict[str, Any] | None = None,
     ) -> CheckResult:
         """
@@ -59,6 +58,9 @@ class AttributeExistsCheck_v1_0_0(BaseCheck):  # noqa: N801
         attribute existence.
         """
         evaluated_at = datetime.now(UTC)
+
+        # Get version from registry using the class
+        check_version = self._get_version()
 
         try:
             # Validate arguments
@@ -107,6 +109,7 @@ class AttributeExistsCheck_v1_0_0(BaseCheck):  # noqa: N801
 
             return CheckResult(
                 check_type=check_type,
+                check_version=check_version,
                 status='completed',
                 results=results,
                 resolved_arguments=resolved_arguments,
