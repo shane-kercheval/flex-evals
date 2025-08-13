@@ -45,6 +45,12 @@ class BaseCheck(ABC):
     def __init__(self):
         self._resolver = get_shared_resolver()
 
+    def _get_version(self) -> str:
+        """Get the registered version for this check class."""
+        # Import here to avoid circular import
+        from ..registry import get_version_for_class  # noqa: PLC0415
+        return get_version_for_class(self.__class__)
+
     @abstractmethod
     def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
         """
@@ -67,7 +73,6 @@ class BaseCheck(ABC):
         check_type: str,
         arguments: dict[str, Any],
         context: EvaluationContext,
-        check_version: str | None = None,
         check_metadata: dict[str, Any] | None = None,
     ) -> CheckResult:
         """
@@ -80,13 +85,15 @@ class BaseCheck(ABC):
             check_type: The type identifier for this check
             arguments: Raw check arguments (may contain JSONPath expressions)
             context: Evaluation context
-            check_version: Version of the check definition
             check_metadata: Additional metadata from the check definition
 
         Returns:
             Complete CheckResult with all required fields
         """
         evaluated_at = datetime.now(UTC)
+
+        # Get version from registry using the class
+        check_version = self._get_version()
 
         try:
             # Resolve arguments
@@ -108,19 +115,14 @@ class BaseCheck(ABC):
                 raise ValidationError(f"Invalid arguments for check: {e!s}") from e
 
             # Create successful result
-            metadata = {}
-            if check_version:
-                metadata["check_version"] = check_version
-            if check_metadata:
-                metadata.update(check_metadata)
-
             return CheckResult(
                 check_type=check_type,
+                check_version=check_version,
                 status='completed',
                 results=results,
                 resolved_arguments=resolved_arguments,
                 evaluated_at=evaluated_at,
-                metadata=metadata if metadata else None,
+                metadata=check_metadata,
             )
 
         except JSONPathError as e:
@@ -178,24 +180,20 @@ class BaseCheck(ABC):
         error_message: str,
         resolved_arguments: dict[str, Any],
         evaluated_at: datetime,
-        check_version: str | None,
+        check_version: str,
         check_metadata: dict[str, Any] | None = None,
         recoverable: bool = False,
     ) -> CheckResult:
         """Create a CheckResult for error cases."""
-        metadata = {}
-        if check_version:
-            metadata["check_version"] = check_version
-        if check_metadata:
-            metadata.update(check_metadata)
-
+        # Create metadata that includes check_version
         return CheckResult(
             check_type=check_type,
+            check_version=check_version,
             status='error',
             results={},
             resolved_arguments=resolved_arguments,
             evaluated_at=evaluated_at,
-            metadata=metadata if metadata else None,
+            metadata=check_metadata,
             error=CheckError(
                 type=error_type,
                 message=error_message,
@@ -214,6 +212,12 @@ class BaseAsyncCheck(ABC):
 
     def __init__(self):
         self._resolver = get_shared_resolver()
+
+    def _get_version(self) -> str:
+        """Get the registered version for this check class."""
+        # Import here to avoid circular import
+        from ..registry import get_version_for_class  # noqa: PLC0415
+        return get_version_for_class(self.__class__)
 
     @abstractmethod
     async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
@@ -237,7 +241,6 @@ class BaseAsyncCheck(ABC):
         check_type: str,
         arguments: dict[str, Any],
         context: EvaluationContext,
-        check_version: str | None = None,
         check_metadata: dict[str, Any] | None = None,
     ) -> CheckResult:
         """
@@ -250,13 +253,15 @@ class BaseAsyncCheck(ABC):
             check_type: The type identifier for this check
             arguments: check arguments (may contain JSONPath expressions that need to be resolved)
             context: Evaluation context
-            check_version: Version of the check definition
             check_metadata: Additional metadata from the check definition
 
         Returns:
             Complete CheckResult with all required fields
         """
         evaluated_at = datetime.now(UTC)
+
+        # Get version from registry using the class
+        check_version = self._get_version()
 
         try:
             # Resolve arguments
@@ -278,19 +283,14 @@ class BaseAsyncCheck(ABC):
                 raise ValidationError(f"Invalid arguments for check: {e!s}") from e
 
             # Create successful result
-            metadata = {}
-            if check_version:
-                metadata["check_version"] = check_version
-            if check_metadata:
-                metadata.update(check_metadata)
-
             return CheckResult(
                 check_type=check_type,
+                check_version=check_version,
                 status='completed',
                 results=results,
                 resolved_arguments=resolved_arguments,
                 evaluated_at=evaluated_at,
-                metadata=metadata if metadata else None,
+                metadata=check_metadata,
             )
 
         except JSONPathError as e:
@@ -347,24 +347,20 @@ class BaseAsyncCheck(ABC):
         error_message: str,
         resolved_arguments: dict[str, Any],
         evaluated_at: datetime,
-        check_version: str | None,
+        check_version: str,
         check_metadata: dict[str, Any] | None = None,
         recoverable: bool = False,
     ) -> CheckResult:
         """Create a CheckResult for error cases."""
-        metadata = {}
-        if check_version:
-            metadata["check_version"] = check_version
-        if check_metadata:
-            metadata.update(check_metadata)
-
+        # Create metadata that includes check_version
         return CheckResult(
             check_type=check_type,
+            check_version=check_version,
             status='error',
             results={},
             resolved_arguments=resolved_arguments,
             evaluated_at=evaluated_at,
-            metadata=metadata if metadata else None,
+            metadata=check_metadata,
             error=CheckError(
                 type=error_type,
                 message=error_message,

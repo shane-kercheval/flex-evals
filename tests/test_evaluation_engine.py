@@ -323,7 +323,7 @@ class TestEvaluationEngine:
         result = evaluate(self.test_cases, self.outputs, checks_with_version)
 
         check_result = result.results[0].check_results[0]
-        assert check_result.metadata["check_version"] == "2.1.0"
+        assert check_result.check_version == "2.1.0"
 
     def test_evaluate_jsonpath_resolution(self):
         """Test JSONPath expressions are resolved correctly."""

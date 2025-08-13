@@ -12,7 +12,7 @@ from ...constants import CheckType
 
 
 @register(CheckType.EXACT_MATCH, version="1.0.0")
-class ExactMatchCheck(BaseCheck):
+class ExactMatchCheck_v1_0_0(BaseCheck):  # noqa: N801
     """
     Compares two text values for exact equality.
 

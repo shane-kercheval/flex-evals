@@ -6,7 +6,8 @@ from typing import Any
 from flex_evals.registry import (
     CheckRegistry, register, get_check_class, get_check_info,
     is_async_check, list_registered_checks, clear_registry,
-    get_registry_state, restore_registry_state,
+    get_registry_state, restore_registry_state, get_latest_version, list_versions,
+    get_version_for_class, get_check_type_for_class, _global_registry,
 )
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
 from flex_evals import CheckType, Output, TestCase
@@ -55,17 +56,26 @@ class TestCheckRegistry:
         info = self.registry.get_check_info("test_check")
         assert info["version"] == "2.1.0"
 
-    def test_register_conflict_handling(self):
-        """Test duplicate registration behavior."""
+    def test_register_multiple_versions(self):
+        """Test multiple version registration behavior."""
         # First registration
         self.registry.register("test_check", SampleSyncCheck, "1.0.0")
 
         # Same version - should allow re-registration
         self.registry.register("test_check", SampleSyncCheck, "1.0.0")
 
-        # Different version - should raise error
-        with pytest.raises(ValueError, match="already registered with version 1.0.0"):
-            self.registry.register("test_check", SampleSyncCheck, "2.0.0")
+        # Different version - should now be allowed (new behavior)
+        self.registry.register("test_check", SampleSyncCheck, "2.0.0")
+
+        # Verify both versions exist
+        v1_class = self.registry.get_check_class("test_check", "1.0.0")
+        v2_class = self.registry.get_check_class("test_check", "2.0.0")
+        assert v1_class == SampleSyncCheck
+        assert v2_class == SampleSyncCheck
+
+        # Latest should return v2.0.0
+        latest_class = self.registry.get_check_class("test_check")
+        assert latest_class == SampleSyncCheck
 
     def test_get_check_class_success(self):
         """Test successful check class retrieval."""
@@ -102,13 +112,16 @@ class TestCheckRegistry:
         assert "check1" in checks
         assert "check2" in checks
 
-        assert checks["check1"]["class"] == SampleSyncCheck
-        assert checks["check1"]["version"] == "1.0.0"
-        assert checks["check1"]["is_async"] is False
+        # Verify nested structure: {check_type: {version: info}}
+        assert "1.0.0" in checks["check1"]
+        assert checks["check1"]["1.0.0"]["class"] == SampleSyncCheck
+        assert checks["check1"]["1.0.0"]["version"] == "1.0.0"
+        assert checks["check1"]["1.0.0"]["is_async"] is False
 
-        assert checks["check2"]["class"] == SampleAsyncCheck
-        assert checks["check2"]["version"] == "2.0.0"
-        assert checks["check2"]["is_async"] is True
+        assert "2.0.0" in checks["check2"]
+        assert checks["check2"]["2.0.0"]["class"] == SampleAsyncCheck
+        assert checks["check2"]["2.0.0"]["version"] == "2.0.0"
+        assert checks["check2"]["2.0.0"]["is_async"] is True
 
     def test_registry_clear(self):
         """Test clearing registry."""
@@ -120,6 +133,77 @@ class TestCheckRegistry:
 
         with pytest.raises(ValueError, match="is not registered"):
             self.registry.get_check_class("test_check")
+
+    def test_get_latest_version(self):
+        """Test getting latest version using semantic versioning."""
+        # Register versions in non-sorted order
+        self.registry.register("version_test", SampleSyncCheck, "1.0.0")
+        self.registry.register("version_test", SampleSyncCheck, "2.1.0")
+        self.registry.register("version_test", SampleSyncCheck, "1.10.0")
+        self.registry.register("version_test", SampleSyncCheck, "2.0.0")
+
+        latest = self.registry.get_latest_version("version_test")
+        assert latest == "2.1.0"
+
+        # Latest should be returned by default
+        latest_class = self.registry.get_check_class("version_test")
+        explicit_latest = self.registry.get_check_class("version_test", "2.1.0")
+        assert latest_class == explicit_latest
+
+    def test_list_versions_sorted(self):
+        """Test listing versions in sorted order."""
+        # Register versions in non-sorted order
+        versions = ["1.0.0", "2.1.0", "1.10.0", "2.0.0"]
+        for version in versions:
+            self.registry.register("sort_test", SampleSyncCheck, version)
+
+        sorted_versions = self.registry.list_versions("sort_test")
+        expected = ["1.0.0", "1.10.0", "2.0.0", "2.1.0"]
+        assert sorted_versions == expected
+
+    def test_version_specific_retrieval(self):
+        """Test retrieving specific versions."""
+        class CheckV1(BaseCheck):
+            def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:  # noqa: ARG002, E501
+                return {"passed": True, "version": "1.0.0"}
+
+        class CheckV2(BaseCheck):
+            def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:  # noqa: ARG002, E501
+                return {"passed": True, "version": "2.0.0"}
+
+        self.registry.register("multi_version", CheckV1, "1.0.0")
+        self.registry.register("multi_version", CheckV2, "2.0.0")
+
+        # Test specific version retrieval
+        v1_class = self.registry.get_check_class("multi_version", "1.0.0")
+        v2_class = self.registry.get_check_class("multi_version", "2.0.0")
+        latest_class = self.registry.get_check_class("multi_version")
+
+        assert v1_class == CheckV1
+        assert v2_class == CheckV2
+        assert latest_class == CheckV2  # Should be latest (2.0.0)
+
+        # Test info retrieval
+        v1_info = self.registry.get_check_info("multi_version", "1.0.0")
+        v2_info = self.registry.get_check_info("multi_version", "2.0.0")
+
+        assert v1_info["version"] == "1.0.0"
+        assert v2_info["version"] == "2.0.0"
+
+    def test_version_error_cases(self):
+        """Test error cases for versioned registry."""
+        self.registry.register("error_test", SampleSyncCheck, "1.0.0")
+
+        # Test non-existent version
+        with pytest.raises(ValueError, match="Version '2.0.0' not found for check type 'error_test'"):  # noqa: E501
+            self.registry.get_check_class("error_test", "2.0.0")
+
+        # Test non-existent check type for version functions
+        with pytest.raises(ValueError, match="Check type 'nonexistent' is not registered"):
+            self.registry.get_latest_version("nonexistent")
+
+        with pytest.raises(ValueError, match="Check type 'nonexistent' is not registered"):
+            self.registry.list_versions("nonexistent")
 
 
 class TestRegistryDecorator:
@@ -220,12 +304,20 @@ class TestRegistryDecorator:
             def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 return {"passed": True}
 
-        # Attempt to register same type with different version should fail
-        with pytest.raises(ValueError, match="already registered with version 1.0.0"):
-            @register("conflict_test", version="2.0.0")
-            class SecondCheck(BaseCheck):
-                def __call__(self, arguments, context):  # noqa: ANN001, ARG002
-                    return {"passed": False}
+        # Registering different version should now be allowed
+        @register("conflict_test", version="2.0.0")
+        class SecondCheck(BaseCheck):
+            def __call__(self, arguments, context):  # noqa: ANN001, ARG002
+                return {"passed": False}
+
+        # Both versions should be available
+        v1_class = get_check_class("conflict_test", "1.0.0")
+        v2_class = get_check_class("conflict_test", "2.0.0")
+        latest_class = get_check_class("conflict_test")
+
+        assert v1_class == FirstCheck
+        assert v2_class == SecondCheck
+        assert latest_class == SecondCheck  # Latest should be 2.0.0
 
     def test_decorator_preserves_class(self):
         """Test decorator returns the original class unchanged."""
@@ -268,12 +360,19 @@ class TestRegistryDecorator:
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": False}
 
-        # Different version should raise error
-        with pytest.raises(ValueError, match="already registered"):
-            @register(CheckType.EXACT_MATCH, version="2.0.0")
-            class TestCheck3(BaseCheck):
-                def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
-                    return {"passed": True}
+        # Different version should now be allowed
+        @register(CheckType.EXACT_MATCH, version="2.0.0")
+        class TestCheck3(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Verify multiple versions exist
+        get_check_class('exact_match', '1.0.0')
+        v2_class = get_check_class('exact_match', '2.0.0')
+        latest_class = get_check_class('exact_match')
+
+        assert v2_class == TestCheck3
+        assert latest_class == TestCheck3  # Latest should be 2.0.0
 
     def test_register_async_check_with_enum(self):
         """Test registering async check with enum."""
@@ -285,6 +384,54 @@ class TestRegistryDecorator:
         check_class = get_check_class('semantic_similarity')
         assert check_class == TestAsyncCheck
         assert is_async_check('semantic_similarity')
+
+    def test_module_level_versioning_functions(self):
+        """Test module-level version management functions."""
+        @register("version_func_test", version="1.0.0")
+        class TestCheck_v1(BaseCheck):  # noqa: N801
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True, "version": "1.0.0"}
+
+        @register("version_func_test", version="1.5.0")
+        class TestCheck_v1_5(BaseCheck):  # noqa: N801
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True, "version": "1.5.0"}
+
+        @register("version_func_test", version="2.0.0")
+        class TestCheck_v2(BaseCheck):  # noqa: N801
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True, "version": "2.0.0"}
+
+        # Test get_latest_version
+        latest = get_latest_version("version_func_test")
+        assert latest == "2.0.0"
+
+        # Test list_versions (should be sorted)
+        versions = list_versions("version_func_test")
+        assert versions == ["1.0.0", "1.5.0", "2.0.0"]
+
+        # Test version-aware retrieval
+        v1_class = get_check_class("version_func_test", "1.0.0")
+        v2_class = get_check_class("version_func_test", "2.0.0")
+        latest_class = get_check_class("version_func_test")
+
+        assert v1_class == TestCheck_v1
+        assert v2_class == TestCheck_v2
+        assert latest_class == TestCheck_v2
+
+        # Test version-aware info
+        v1_info = get_check_info("version_func_test", "1.0.0")
+        v2_info = get_check_info("version_func_test", "2.0.0")
+        latest_info = get_check_info("version_func_test")
+
+        assert v1_info["version"] == "1.0.0"
+        assert v2_info["version"] == "2.0.0"
+        assert latest_info["version"] == "2.0.0"
+
+        # Test version-aware async check
+        assert not is_async_check("version_func_test", "1.0.0")
+        assert not is_async_check("version_func_test", "2.0.0")
+        assert not is_async_check("version_func_test")  # Latest
 
 
 class TestRegistryStateSerialization:
@@ -327,14 +474,18 @@ class TestRegistryStateSerialization:
         assert "test_sync" in state
         assert "test_async" in state
 
-        # Verify sync check state
-        sync_state = state["test_sync"]
+        # Verify sync check state (nested structure)
+        sync_versions = state["test_sync"]
+        assert "1.0.0" in sync_versions
+        sync_state = sync_versions["1.0.0"]
         assert sync_state["class"] == TestSyncCheck
         assert sync_state["version"] == "1.0.0"
         assert sync_state["is_async"] is False
 
-        # Verify async check state
-        async_state = state["test_async"]
+        # Verify async check state (nested structure)
+        async_versions = state["test_async"]
+        assert "2.0.0" in async_versions
+        async_state = async_versions["2.0.0"]
         assert async_state["class"] == TestAsyncCheck
         assert async_state["version"] == "2.0.0"
         assert async_state["is_async"] is True
@@ -369,17 +520,21 @@ class TestRegistryStateSerialization:
             async def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
                 return {"passed": True, "type": "async"}
 
-        # Create state to restore
+        # Create state to restore (nested structure)
         state_to_restore = {
             "restored_sync": {
-                "class": RestoredSyncCheck,
-                "version": "1.5.0",
-                "is_async": False,
+                "1.5.0": {
+                    "class": RestoredSyncCheck,
+                    "version": "1.5.0",
+                    "is_async": False,
+                },
             },
             "restored_async": {
-                "class": RestoredAsyncCheck,
-                "version": "2.5.0",
-                "is_async": True,
+                "2.5.0": {
+                    "class": RestoredAsyncCheck,
+                    "version": "2.5.0",
+                    "is_async": True,
+                },
             },
         }
 
@@ -468,16 +623,18 @@ class TestRegistryStateSerialization:
         assert len(list_registered_checks()) == 1
         assert "initial_check" in list_registered_checks()
 
-        # Create new state with different checks
+        # Create new state with different checks (nested structure)
         class NewCheck(BaseCheck):
             def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
                 return {"passed": False}
 
         new_state = {
             "new_check": {
-                "class": NewCheck,
-                "version": "3.0.0",
-                "is_async": False,
+                "3.0.0": {
+                    "class": NewCheck,
+                    "version": "3.0.0",
+                    "is_async": False,
+                },
             },
         }
 
@@ -505,14 +662,16 @@ class TestRegistryStateSerialization:
 
         state = get_registry_state()
 
-        # Verify all values are serializable types
+        # Verify all values are serializable types (nested structure)
         assert isinstance(state, dict)
         assert isinstance(state["type_test"], dict)
-        assert isinstance(state["type_test"]["version"], str)
-        assert isinstance(state["type_test"]["is_async"], bool)
+        assert "1.2.3" in state["type_test"]
+        version_state = state["type_test"]["1.2.3"]
+        assert isinstance(version_state["version"], str)
+        assert isinstance(version_state["is_async"], bool)
 
         # Class should be the actual class object (this is what gets serialized)
-        assert state["type_test"]["class"] == TypeTestCheck
+        assert version_state["class"] == TypeTestCheck
 
     def test_restore_registry_state_with_enum_types(self):
         """Test restoring state with CheckType enum compatibility."""
@@ -520,12 +679,14 @@ class TestRegistryStateSerialization:
             def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
-        # Create state using string key (how it's stored internally)
+        # Create state using string key (how it's stored internally) with nested structure
         state_with_enum = {
             "exact_match": {  # CheckType.EXACT_MATCH string value
-                "class": EnumTestCheck,
-                "version": "1.0.0",
-                "is_async": False,
+                "1.0.0": {
+                    "class": EnumTestCheck,
+                    "version": "1.0.0",
+                    "is_async": False,
+                },
             },
         }
 
@@ -534,3 +695,222 @@ class TestRegistryStateSerialization:
         # Should be retrievable by string
         check_class = get_check_class("exact_match")
         assert check_class == EnumTestCheck
+
+
+class TestRegistryReverseMapping:
+    """Test registry reverse mapping functionality (class -> version/type)."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        clear_registry()
+
+    def teardown_method(self):
+        """Clean up after tests."""
+        clear_registry()
+        restore_standard_checks()
+
+    def test_get_version_for_class_basic(self):
+        """Test getting version for registered class."""
+        @register("version_lookup_test", version="2.1.0")
+        class VersionLookupTest(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Should be able to get version from class
+        version = get_version_for_class(VersionLookupTest)
+        assert version == "2.1.0"
+
+        # Should also work with registry method
+        version_registry = _global_registry.get_version_for_class(VersionLookupTest)
+        assert version_registry == "2.1.0"
+
+    def test_get_check_type_for_class_basic(self):
+        """Test getting check type for registered class."""
+        @register("type_lookup_test", version="1.0.0")
+        class TypeLookupTest(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Should be able to get check type from class
+        check_type = get_check_type_for_class(TypeLookupTest)
+        assert check_type == "type_lookup_test"
+
+        # Should also work with registry method
+        check_type_registry = _global_registry.get_check_type_for_class(TypeLookupTest)
+        assert check_type_registry == "type_lookup_test"
+
+    def test_reverse_mapping_with_multiple_versions(self):
+        """Test reverse mapping works correctly with multiple versions of same type."""
+        class CheckV1(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"version": "1.0.0"}
+
+        class CheckV2(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"version": "2.0.0"}
+
+        register("multi_version_test", version="1.0.0")(CheckV1)
+        register("multi_version_test", version="2.0.0")(CheckV2)
+
+        # Each class should map to its specific version
+        assert get_version_for_class(CheckV1) == "1.0.0"
+        assert get_version_for_class(CheckV2) == "2.0.0"
+
+        # Both should map to same check type
+        assert get_check_type_for_class(CheckV1) == "multi_version_test"
+        assert get_check_type_for_class(CheckV2) == "multi_version_test"
+
+    def test_reverse_mapping_with_async_checks(self):
+        """Test reverse mapping works with async checks."""
+        @register("async_reverse_test", version="1.5.0")
+        class AsyncReverseTest(BaseAsyncCheck):
+            async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        assert get_version_for_class(AsyncReverseTest) == "1.5.0"
+        assert get_check_type_for_class(AsyncReverseTest) == "async_reverse_test"
+
+    def test_reverse_mapping_with_enum_types(self):
+        """Test reverse mapping works with CheckType enums."""
+        @register(CheckType.EXACT_MATCH, version="3.0.0")
+        class EnumReverseTest(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Should work with enum registration
+        assert get_version_for_class(EnumReverseTest) == "3.0.0"
+        assert get_check_type_for_class(EnumReverseTest) == "exact_match"  # String form
+
+    def test_reverse_mapping_error_cases(self):
+        """Test error cases for reverse mapping."""
+        class UnregisteredCheck(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Should raise ValueError for unregistered class
+        with pytest.raises(ValueError, match="Class .* is not registered"):
+            get_version_for_class(UnregisteredCheck)
+
+        with pytest.raises(ValueError, match="Class .* is not registered"):
+            get_check_type_for_class(UnregisteredCheck)
+
+        # Should also raise for registry methods
+        with pytest.raises(ValueError, match="Class .* is not registered"):
+            _global_registry.get_version_for_class(UnregisteredCheck)
+
+        with pytest.raises(ValueError, match="Class .* is not registered"):
+            _global_registry.get_check_type_for_class(UnregisteredCheck)
+
+    def test_reverse_mapping_with_re_registration(self):
+        """Test reverse mapping updates correctly with re-registration."""
+        class ReRegisteredCheck(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Register first time
+        register("re_register_test", version="1.0.0")(ReRegisteredCheck)
+        assert get_version_for_class(ReRegisteredCheck) == "1.0.0"
+
+        # Re-register same version (should work)
+        register("re_register_test", version="1.0.0")(ReRegisteredCheck)
+        assert get_version_for_class(ReRegisteredCheck) == "1.0.0"
+
+        # Register with different version (should update)
+        register("re_register_test", version="2.0.0")(ReRegisteredCheck)
+        assert get_version_for_class(ReRegisteredCheck) == "2.0.0"
+        assert get_check_type_for_class(ReRegisteredCheck) == "re_register_test"
+
+    def test_reverse_mapping_cleared_with_registry(self):
+        """Test reverse mapping is cleared when registry is cleared."""
+        @register("clear_test", version="1.0.0")
+        class ClearTest(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Should work before clear
+        assert get_version_for_class(ClearTest) == "1.0.0"
+
+        # Clear registry
+        clear_registry()
+
+        # Should no longer work after clear
+        with pytest.raises(ValueError, match="Class .* is not registered"):
+            get_version_for_class(ClearTest)
+
+    def test_reverse_mapping_consistency(self):
+        """Test that forward and reverse mappings are consistent."""
+        @register("consistency_test", version="1.2.3")
+        class ConsistencyTest(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"passed": True}
+
+        # Forward mapping
+        forward_class = get_check_class("consistency_test", "1.2.3")
+        forward_info = get_check_info("consistency_test", "1.2.3")
+
+        # Reverse mapping
+        reverse_version = get_version_for_class(ConsistencyTest)
+        reverse_type = get_check_type_for_class(ConsistencyTest)
+
+        # Should be consistent
+        assert forward_class == ConsistencyTest
+        assert forward_info["version"] == reverse_version == "1.2.3"
+        assert reverse_type == "consistency_test"
+
+    def test_reverse_mapping_with_different_check_types(self):
+        """Test reverse mapping works correctly with different check types."""
+        @register("type_a", version="1.0.0")
+        class CheckTypeA(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"type": "A"}
+
+        @register("type_b", version="1.0.0")
+        class CheckTypeB(BaseAsyncCheck):
+            async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"type": "B"}
+
+        # Each should map to its own type and version
+        assert get_version_for_class(CheckTypeA) == "1.0.0"
+        assert get_check_type_for_class(CheckTypeA) == "type_a"
+
+        assert get_version_for_class(CheckTypeB) == "1.0.0"
+        assert get_check_type_for_class(CheckTypeB) == "type_b"
+
+    def test_reverse_mapping_integration_with_existing_registry(self):
+        """Test reverse mapping integrates properly with all existing registry features."""
+        @register("integration_test", version="1.0.0")
+        class IntegrationTestV1(BaseCheck):
+            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"version": "1.0.0"}
+
+        @register("integration_test", version="2.0.0")
+        class IntegrationTestV2(BaseAsyncCheck):
+            async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+                return {"version": "2.0.0"}
+
+        # Test all registry functions still work
+        assert len(list_registered_checks()) == 1
+        assert "integration_test" in list_registered_checks()
+        assert get_latest_version("integration_test") == "2.0.0"
+        assert list_versions("integration_test") == ["1.0.0", "2.0.0"]
+        assert is_async_check("integration_test", "1.0.0") is False
+        assert is_async_check("integration_test", "2.0.0") is True
+
+        # Test reverse mapping works
+        assert get_version_for_class(IntegrationTestV1) == "1.0.0"
+        assert get_check_type_for_class(IntegrationTestV1) == "integration_test"
+        assert get_version_for_class(IntegrationTestV2) == "2.0.0"
+        assert get_check_type_for_class(IntegrationTestV2) == "integration_test"
+
+        # Test state serialization/restoration preserves reverse mapping
+        state = get_registry_state()
+        clear_registry()
+
+        # Should fail after clear
+        with pytest.raises(ValueError, match="Class .* is not registered"):
+            get_version_for_class(IntegrationTestV1)
+
+        # Restore and test again
+        restore_registry_state(state)
+        assert get_version_for_class(IntegrationTestV1) == "1.0.0"
+        assert get_version_for_class(IntegrationTestV2) == "2.0.0"

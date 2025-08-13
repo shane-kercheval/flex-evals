@@ -67,6 +67,7 @@ class TestCheckResult:
 
         result = CheckResult(
             check_type='exact_match',
+            check_version='1.0.0',
             status='completed',
             results={"passed": True},
             resolved_arguments={
@@ -95,12 +96,12 @@ class TestCheckResult:
 
         # Test completed and skip statuses
         for status in ['completed', 'skip']:
-            result = CheckResult(status=status, **base_args)
+            result = CheckResult(status=status, check_version='1.0.0', **base_args)
             assert result.status == status
 
         # Test error status with error object
         error = CheckError(type='validation_error', message="Test error")
-        result = CheckResult(status='error', error=error, **base_args)
+        result = CheckResult(status='error', error=error, check_version='1.0.0', **base_args)
         assert result.status == 'error'
 
     def test_check_result_resolved_args_jsonpath(self):
@@ -109,6 +110,7 @@ class TestCheckResult:
 
         result = CheckResult(
             check_type='exact_match',
+            check_version='1.0.0',
             status='completed',
             results={"passed": True},
             resolved_arguments={
@@ -136,6 +138,7 @@ class TestCheckResult:
 
         result = CheckResult(
             check_type='exact_match',
+            check_version='1.0.0',
             status='completed',
             results={"passed": True},
             resolved_arguments={
@@ -161,6 +164,7 @@ class TestCheckResult:
 
         result = CheckResult(
             check_type='exact_match',
+            check_version='1.0.0',
             status='completed',
             results={"passed": True},
             resolved_arguments={"actual": {"value": "test"}},
@@ -181,6 +185,7 @@ class TestCheckResult:
 
         result = CheckResult(
             check_type='exact_match',
+            check_version='1.0.0',
             status='completed',
             results={"passed": True},
             resolved_arguments={"actual": {"value": "test"}},
@@ -194,6 +199,7 @@ class TestCheckResult:
         metadata_with_version = {"check_version": "2.0.0"}
         result_with_version = CheckResult(
             check_type='exact_match',
+            check_version='1.0.0',
             status='completed',
             results={"passed": True},
             resolved_arguments={"actual": {"value": "test"}},
@@ -211,6 +217,7 @@ class TestCheckResult:
             error = CheckError(type=error_type, message="Test error")
             result = CheckResult(
                 check_type='exact_match',
+                check_version='1.0.0',
                 status='error',
                 results={},
                 resolved_arguments={"actual": {"value": "test"}},
@@ -227,6 +234,7 @@ class TestCheckResult:
         # No error when status is completed
         result1 = CheckResult(
             check_type='exact_match',
+            check_version='1.0.0',
             status='completed',
             results={"passed": True},
             resolved_arguments={"actual": {"value": "test"}},
@@ -239,6 +247,7 @@ class TestCheckResult:
         with pytest.raises(ValueError, match="CheckResult.error is required when status is 'error'"):  # noqa: E501
             CheckResult(
                 check_type='exact_match',
+                check_version='1.0.0',
                 status='error',
                 results={},
                 resolved_arguments={"actual": {"value": "test"}},
@@ -266,6 +275,7 @@ class TestCheckResult:
 
         result = CheckResult(
             check_type='exact_match',
+            check_version='1.0.0',
             status='completed',
             results={"passed": True},
             resolved_arguments={

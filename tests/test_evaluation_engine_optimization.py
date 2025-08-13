@@ -110,6 +110,7 @@ class TestFlattenUnflatten:
         # Create mock results
         sync_result1 = CheckResult(
             check_type="exact_match",
+            check_version="1.0.0",
             status="completed",
             results={"matched": True},
             resolved_arguments={},
@@ -117,6 +118,7 @@ class TestFlattenUnflatten:
         )
         sync_result2 = CheckResult(
             check_type="exact_match",
+            check_version="1.0.0",
             status="completed",
             results={"matched": False},
             resolved_arguments={},
@@ -151,9 +153,9 @@ class TestFlattenUnflatten:
         work_items = [(test_case, output, [])]
 
         # Create results in scrambled order
-        result1 = CheckResult(check_type="check1", status="completed", results={}, resolved_arguments={}, evaluated_at=datetime.now(UTC))  # noqa: E501
-        result2 = CheckResult(check_type="check2", status="completed", results={}, resolved_arguments={}, evaluated_at=datetime.now(UTC))  # noqa: E501
-        result3 = CheckResult(check_type="check3", status="completed", results={}, resolved_arguments={}, evaluated_at=datetime.now(UTC))  # noqa: E501
+        result1 = CheckResult(check_type="check1", check_version="1.0.0", status="completed", results={}, resolved_arguments={}, evaluated_at=datetime.now(UTC))  # noqa: E501
+        result2 = CheckResult(check_type="check2", check_version="1.0.0", status="completed", results={}, resolved_arguments={}, evaluated_at=datetime.now(UTC))  # noqa: E501
+        result3 = CheckResult(check_type="check3", check_version="1.0.0", status="completed", results={}, resolved_arguments={}, evaluated_at=datetime.now(UTC))  # noqa: E501
 
         # Tracking with checks out of order in flattened lists
         tracking = [
@@ -267,6 +269,7 @@ class TestFlattenUnflatten:
         sync_results = [
             CheckResult(
                 check_type="exact_match",
+                check_version="1.0.0",
                 status="completed",
                 results={"matched": True, "check_id": f"sync_{i}"},
                 resolved_arguments={},
@@ -278,6 +281,7 @@ class TestFlattenUnflatten:
         async_results = [
             CheckResult(
                 check_type="async_sleep",
+                check_version="1.0.0",
                 status="completed",
                 results={"slept_for": 0.01 * (i + 1), "check_id": f"async_{i}"},
                 resolved_arguments={},

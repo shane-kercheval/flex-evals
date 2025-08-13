@@ -15,7 +15,7 @@ from ...constants import CheckType, SimilarityMetric
 
 
 @register(CheckType.SEMANTIC_SIMILARITY, version="1.0.0")
-class SemanticSimilarityCheck(BaseAsyncCheck):
+class SemanticSimilarityCheck_v1_0_0(BaseAsyncCheck):  # noqa: N801
     """
     Computes semantic similarity between two texts using embeddings.
 

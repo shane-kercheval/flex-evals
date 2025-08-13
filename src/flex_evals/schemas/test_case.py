@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Any
-from ..schemas.check import Check
+from ..schemas.check import Check, SchemaCheck
 
 
 @dataclass
@@ -24,7 +24,7 @@ class TestCase:
     input: str | dict[str, Any]
     expected: str | dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
-    checks: list[Check] | None = None  # Forward reference, convenience extension
+    checks: list[Check | SchemaCheck] | None = None  # Forward reference, convenience extension
 
     def __post_init__(self):
         """Validate required fields and constraints."""

@@ -17,7 +17,13 @@ from .schemas import (
 from .schemas.results import ExecutionContext
 from .schemas.check import CheckError, SchemaCheck
 from .checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
-from .registry import get_check_class, is_async_check, get_registry_state, restore_registry_state
+from .registry import (
+    get_check_class,
+    is_async_check,
+    get_registry_state,
+    restore_registry_state,
+    get_latest_version,
+)
 from .exceptions import ValidationError
 
 
@@ -205,7 +211,7 @@ def _flatten_checks_for_execution(
 
         for check_idx, check in enumerate(checks):
             try:
-                if is_async_check(check.type):
+                if is_async_check(check.type, check.version):
                     flattened_async_checks.append((check, context))
                     check_tracking.append((test_idx, check_idx, True,
                                          len(flattened_async_checks) - 1))
@@ -347,7 +353,12 @@ def _evaluate_with_registry(
 def _execute_sync_check(check: Check, context: EvaluationContext) -> CheckResult:
     """Execute a single synchronous check and return the result."""
     try:
-        check_class = get_check_class(check.type)
+        # Resolve version - if None, get latest version
+        resolved_version = check.version
+        if resolved_version is None:
+            resolved_version = get_latest_version(check.type)
+
+        check_class = get_check_class(check.type, resolved_version)
         check_instance = check_class()
 
         # Ensure this is a sync check
@@ -356,12 +367,11 @@ def _execute_sync_check(check: Check, context: EvaluationContext) -> CheckResult
                 f"Check type '{check.type}' is async but was categorized as sync",
             )
 
-        # Execute the check
+        # Execute the check (version is determined automatically from registry)
         return check_instance.execute(
             check_type=check.type,
             arguments=check.arguments,
             context=context,
-            check_version=check.version,
             check_metadata=check.metadata,
         )
 
@@ -398,7 +408,12 @@ async def _execute_async_check(
     """Execute a single asynchronous check and return the result."""
     async def _run_check() -> CheckResult:
         try:
-            check_class = get_check_class(check.type)
+            # Resolve version - if None, get latest version
+            resolved_version = check.version
+            if resolved_version is None:
+                resolved_version = get_latest_version(check.type)
+
+            check_class = get_check_class(check.type, resolved_version)
             check_instance = check_class()
 
             # Ensure this is an async check
@@ -407,12 +422,11 @@ async def _execute_async_check(
                     f"Check type '{check.type}' is sync but was categorized as async",
                 )
 
-            # Execute the check
+            # Execute the check (version is determined automatically from registry)
             return await check_instance.execute(
                 check_type=check.type,
                 arguments=check.arguments,
                 context=context,
-                check_version=check.version,
                 check_metadata=check.metadata,
             )
 
@@ -435,19 +449,23 @@ def _create_error_check_result(
         error_message: str,
     ) -> CheckResult:
     """Create a CheckResult for unhandled errors during check execution."""
-    metadata = {}
-    if check.version:
-        metadata["check_version"] = check.version
-    if check.metadata:
-        metadata.update(check.metadata)
+    # Resolve version for error result
+    resolved_version = check.version
+    if resolved_version is None:
+        try:
+            resolved_version = get_latest_version(check.type)
+        except ValueError:
+            # If we can't resolve version, use "unknown"
+            resolved_version = "unknown"
 
     return CheckResult(
         check_type=check.type,
+        check_version=resolved_version,
         status='error',
         results={},
         resolved_arguments={},
         evaluated_at=datetime.now(UTC),
-        metadata=metadata if metadata else None,
+        metadata=check.metadata,
         error=CheckError(
             type='unknown_error',
             message=f"Unhandled error during check execution: {error_message}",

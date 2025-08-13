@@ -1,11 +1,12 @@
 """SemanticSimilarityCheck schema class for type-safe semantic similarity check definitions."""
 
+from typing import ClassVar
 from collections.abc import Callable
 
 from pydantic import BaseModel, Field
 
 from ...constants import CheckType, SimilarityMetric
-from ..check import Check, SchemaCheck
+from ..check import Check, SchemaCheck, OptionalJSONPath
 
 
 class ThresholdConfig(BaseModel):
@@ -33,18 +34,22 @@ class SemanticSimilarityCheck(SchemaCheck):
     - version: Optional version string for the check
     """
 
-    text: str = Field(..., min_length=1, description="first text to compare or JSONPath expression pointing to the text")  # noqa: E501
-    reference: str = Field(..., min_length=1, description="second text to compare against or JSONPath expression pointing to the text")  # noqa: E501
+    VERSION: ClassVar[str] = "1.0.0"
+    CHECK_TYPE: ClassVar[CheckType] = CheckType.SEMANTIC_SIMILARITY
+
+    text: str = OptionalJSONPath(
+        "first text to compare or JSONPath expression pointing to the text",
+        min_length=1,
+    )
+    reference: str = OptionalJSONPath(
+        "second text to compare against or JSONPath expression pointing to the text",
+        min_length=1,
+    )
     embedding_function: Callable = Field(..., description="User-provided function to generate embeddings")  # noqa: E501
     similarity_metric: SimilarityMetric = Field(SimilarityMetric.COSINE, description="Similarity calculation method")  # noqa: E501
     threshold: ThresholdConfig | None = Field(None, description="Optional threshold configuration for pass/fail determination")  # noqa: E501
 
     model_config = {"arbitrary_types_allowed": True}  # noqa: RUF012
-
-    @property
-    def check_type(self) -> CheckType:
-        """Return the CheckType for this check."""
-        return CheckType.SEMANTIC_SIMILARITY
 
     def to_check(self) -> Check:
         """Convert to generic Check object for execution."""
@@ -61,5 +66,5 @@ class SemanticSimilarityCheck(SchemaCheck):
         return Check(
             type=self.check_type,
             arguments=arguments,
-            version=self.version,
+            version=self.VERSION,
         )

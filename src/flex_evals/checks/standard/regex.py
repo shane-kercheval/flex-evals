@@ -14,7 +14,7 @@ from ...constants import CheckType
 
 
 @register(CheckType.REGEX, version="1.0.0")
-class RegexCheck(BaseCheck):
+class RegexCheck_v1_0_0(BaseCheck):  # noqa: N801
     """
     Tests text against regular expression patterns.
 

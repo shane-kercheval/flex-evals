@@ -17,7 +17,7 @@ from ...schemas import CheckResult
 
 
 @register("custom_function", version="1.0.0")
-class CustomFunctionCheck(BaseAsyncCheck):
+class CustomFunctionCheck_v1_0_0(BaseAsyncCheck):  # noqa: N801
     """
     Executes user-provided validation functions for flexible argument checking.
 
@@ -34,7 +34,6 @@ class CustomFunctionCheck(BaseAsyncCheck):
         check_type: str,
         arguments: dict[str, Any],
         context: EvaluationContext,
-        check_version: str | None = None,
         check_metadata: dict[str, Any] | None = None,
     ) -> CheckResult:
         """
@@ -53,6 +52,9 @@ class CustomFunctionCheck(BaseAsyncCheck):
         Returns:
             CheckResult: Complete result object with execution status and results
         """
+        # Get version from registry using the class
+        check_version = self._get_version()
+
         # Validate that function_args is provided and is a dict
         if "function_args" not in arguments:
             return self._create_error_result(
@@ -116,7 +118,6 @@ class CustomFunctionCheck(BaseAsyncCheck):
             check_type,
             modified_arguments,
             context,
-            check_version,
             check_metadata,
         )
 

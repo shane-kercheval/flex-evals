@@ -1,10 +1,10 @@
 """ThresholdCheck schema class for type-safe threshold check definitions."""
 
-
+from typing import ClassVar
 from pydantic import Field, model_validator
 
 from ...constants import CheckType
-from ..check import Check, SchemaCheck
+from ..check import Check, SchemaCheck, OptionalJSONPath
 
 
 class ThresholdCheck(SchemaCheck):
@@ -25,17 +25,18 @@ class ThresholdCheck(SchemaCheck):
     At least one of min_value or max_value must be specified.
     """
 
-    value: str = Field(..., min_length=1, description="numeric value to check or JSONPath expression pointing to the value")  # noqa: E501
+    VERSION: ClassVar[str] = "1.0.0"
+    CHECK_TYPE: ClassVar[CheckType] = CheckType.THRESHOLD
+
+    value: str = OptionalJSONPath(
+        "numeric value to check or JSONPath expression pointing to the value",
+        min_length=1,
+    )
     min_value: float | None = Field(None, description="Minimum acceptable value")
     max_value: float | None = Field(None, description="Maximum acceptable value")
     min_inclusive: bool = Field(True, description="If true, min_value is inclusive (>=), if false, exclusive (>)")  # noqa: E501
     max_inclusive: bool = Field(True, description="If true, max_value is inclusive (<=), if false, exclusive (<)")  # noqa: E501
     negate: bool = Field(False, description="If true, passes when value is outside the specified range")  # noqa: E501
-
-    @property
-    def check_type(self) -> CheckType:
-        """Return the CheckType for this check."""
-        return CheckType.THRESHOLD
 
     @model_validator(mode='after')
     def validate_thresholds(self) -> 'ThresholdCheck':
@@ -62,5 +63,5 @@ class ThresholdCheck(SchemaCheck):
         return Check(
             type=self.check_type,
             arguments=arguments,
-            version=self.version,
+            version=self.VERSION,
         )
