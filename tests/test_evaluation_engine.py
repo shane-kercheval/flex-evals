@@ -1148,3 +1148,176 @@ class TestEvaluationEngine:
         # Verify "$.test_case.input.user_id" extracted different user IDs:
         assert geo_check2.resolved_arguments["expected"]["value"] == 1001  # Geography user
         # Math test doesn't use user_id in checks, but we verified it has 2002 in input
+
+    def test_evaluate_combined_testcase_and_global_checks_basic(self):
+        """Test that both TestCase.checks and global checks parameter are executed."""
+        # Create test cases with their own checks
+        test_cases_with_checks = [
+            TestCase(
+                id="test_001",
+                input="What is the capital of France?",
+                expected="Paris",
+                checks=[
+                    Check(
+                        type="test_check",
+                        arguments={"expected": "Paris", "actual": "$.output.value"},
+                    ),
+                ],
+            ),
+            TestCase(
+                id="test_002",
+                input="What is 2 + 2?",
+                expected="4",
+                checks=[
+                    Check(
+                        type="test_check",
+                        arguments={"expected": "4", "actual": "$.output.value"},
+                    ),
+                ],
+            ),
+        ]
+
+        # Define global checks (applied to all test cases)
+        global_checks = [
+            Check(
+                type="test_check",
+                arguments={"expected": "global_check", "actual": "global_check"},
+            ),
+        ]
+
+        result = evaluate(test_cases_with_checks, self.outputs, global_checks)
+
+        assert result.status == 'completed'
+        assert len(result.results) == 2
+
+        # Each test case should have BOTH TestCase-specific checks AND global checks
+        for test_result in result.results:
+            # Should have 2 checks: 1 from TestCase + 1 from global checks
+            assert len(test_result.check_results) == 2
+
+            # Verify check types
+            check_types = [cr.check_type for cr in test_result.check_results]
+            assert "test_check" in check_types
+
+            # Verify that we have both the TestCase-specific check and global check
+            testcase_check = None
+            global_check = None
+            for check_result in test_result.check_results:
+                expected_value = check_result.resolved_arguments.get("expected", {}).get("value")
+                if expected_value == "global_check":
+                    global_check = check_result
+                else:
+                    testcase_check = check_result
+
+            assert testcase_check is not None, "TestCase-specific check should be present"
+            assert global_check is not None, "Global check should be present"
+
+    def test_evaluate_combined_testcase_and_global_checks_multiple_each(self):
+        """Test multiple TestCase checks and multiple global checks are all executed."""
+        # Create test cases with multiple checks each
+        test_cases_with_checks = [
+            TestCase(
+                id="test_001",
+                input="test",
+                expected="Paris",
+                checks=[
+                    Check(type="test_check", arguments={"expected": "testcase1_check1", "actual": "testcase1_check1"}),  # noqa: E501
+                    Check(type="test_check", arguments={"expected": "testcase1_check2", "actual": "testcase1_check2"}),  # noqa: E501
+                ],
+            ),
+            TestCase(
+                id="test_002",
+                input="test",
+                expected="4",
+                checks=[
+                    Check(type="test_check", arguments={"expected": "testcase2_check1", "actual": "testcase2_check1"}),  # noqa: E501
+                ],
+            ),
+        ]
+
+        # Multiple global checks
+        global_checks = [
+            Check(type="test_check", arguments={"expected": "global_check_1", "actual": "global_check_1"}),  # noqa: E501
+            Check(type="test_check", arguments={"expected": "global_check_2", "actual": "global_check_2"}),  # noqa: E501
+        ]
+
+        result = evaluate(test_cases_with_checks, self.outputs, global_checks)
+
+        assert result.status == 'completed'
+        assert len(result.results) == 2
+
+        # Test case 1 should have: 2 TestCase checks + 2 global checks = 4 total
+        test1_result = result.results[0]
+        assert len(test1_result.check_results) == 4
+
+        # Verify all expected checks are present
+        expected_values = {"testcase1_check1", "testcase1_check2", "global_check_1", "global_check_2"}  # noqa: E501
+        actual_values = {
+            cr.resolved_arguments.get("expected", {}).get("value")
+            for cr in test1_result.check_results
+        }
+        assert expected_values == actual_values
+
+        # Test case 2 should have: 1 TestCase check + 2 global checks = 3 total
+        test2_result = result.results[1]
+        assert len(test2_result.check_results) == 3
+
+        expected_values = {"testcase2_check1", "global_check_1", "global_check_2"}
+        actual_values = {
+            cr.resolved_arguments.get("expected", {}).get("value")
+            for cr in test2_result.check_results
+        }
+        assert expected_values == actual_values
+
+    def test_evaluate_combined_checks_with_per_testcase_checks_list(self):
+        """Test that both per-test-case checks list and TestCase.checks are executed."""
+        # Test cases with their own checks
+        test_cases_with_checks = [
+            TestCase(
+                id="test_001",
+                input="test",
+                expected="Paris",
+                checks=[
+                    Check(type="test_check", arguments={"expected": "embedded_check", "actual": "embedded_check"}),  # noqa: E501
+                ],
+            ),
+            TestCase(
+                id="test_002",
+                input="test",
+                expected="4",
+                checks=[
+                    Check(type="test_check", arguments={"expected": "embedded_check", "actual": "embedded_check"}),  # noqa: E501
+                ],
+            ),
+        ]
+
+        # Per-test-case checks (different for each test case)
+        per_testcase_checks = [
+            [Check(type="test_check", arguments={"expected": "per_test_1", "actual": "per_test_1"})],  # For test case 1  # noqa: E501
+            [Check(type="test_check", arguments={"expected": "per_test_2", "actual": "per_test_2"})],  # For test case 2  # noqa: E501
+        ]
+
+        result = evaluate(test_cases_with_checks, self.outputs, per_testcase_checks)
+
+        assert result.status == 'completed'
+        assert len(result.results) == 2
+
+        # Test case 1 should have: embedded check + per-test-case check
+        test1_result = result.results[0]
+        assert len(test1_result.check_results) == 2
+        expected_values = {"embedded_check", "per_test_1"}
+        actual_values = {
+            cr.resolved_arguments.get("expected", {}).get("value")
+            for cr in test1_result.check_results
+        }
+        assert expected_values == actual_values
+
+        # Test case 2 should have: embedded check + per-test-case check
+        test2_result = result.results[1]
+        assert len(test2_result.check_results) == 2
+        expected_values = {"embedded_check", "per_test_2"}
+        actual_values = {
+            cr.resolved_arguments.get("expected", {}).get("value")
+            for cr in test2_result.check_results
+        }
+        assert expected_values == actual_values

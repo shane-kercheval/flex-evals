@@ -261,6 +261,7 @@ class EvaluationRunResult:
                 # Add check-specific data
                 row.update({
                     'check_type': check_result.check_type,
+                    'check_version': check_result.check_version,
                     'check_status': check_result.status,
                     'check_results': check_result.results,
                     'resolved_arguments': check_result.resolved_arguments,

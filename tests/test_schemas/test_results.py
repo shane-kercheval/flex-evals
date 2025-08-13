@@ -1159,6 +1159,6 @@ class TestEvaluationRunResult:
 
         # Verify that all rows have the expected structure
         for row in dict_list:
-            assert 'check_version' not in row  # Should be inside check_metadata
+            assert 'check_version' in row  # Should be inside check_metadata
             assert 'check_metadata' in row
             assert isinstance(row['check_metadata'], dict)

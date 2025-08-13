@@ -157,34 +157,47 @@ def _resolve_checks(
 
     Converts SchemaCheck objects to Check objects and returns List[List[Check]]
     where result[i] contains checks for test_cases[i].
-    """
-    if checks is None:
-        # Extract from TestCase.checks (convenience pattern)
-        resolved = []
-        for test_case in test_cases:
-            if test_case.checks is not None:
-                # Convert any SchemaCheck objects to Check objects
-                converted_checks = [_convert_check_input(check) for check in test_case.checks]
-                resolved.append(converted_checks)
-            else:
-                resolved.append([])  # No checks for this test case
-        return resolved
 
+    When both TestCase.checks and the checks parameter are provided, both sets of checks
+    are executed for each test case.
+    """
+    # Start by extracting TestCase-specific checks
+    testcase_checks_per_case = []
+    for test_case in test_cases:
+        if test_case.checks is not None:
+            # Convert any SchemaCheck objects to Check objects
+            converted_checks = [_convert_check_input(check) for check in test_case.checks]
+            testcase_checks_per_case.append(converted_checks)
+        else:
+            testcase_checks_per_case.append([])  # No checks for this test case
+
+    if checks is None:
+        # Only TestCase.checks (convenience pattern)
+        return testcase_checks_per_case
+
+    # Now handle the checks parameter and combine with TestCase checks
     if len(checks) > 0 and isinstance(checks[0], Check | SchemaCheck):
         # Shared checks pattern: same checks for all test cases
         shared_checks = [_convert_check_input(check) for check in checks]  # type: ignore
-        return [shared_checks for _ in test_cases]
+        # Combine TestCase checks + shared checks for each test case
+        resolved = []
+        for i in range(len(test_cases)):
+            combined_checks = testcase_checks_per_case[i] + shared_checks
+            resolved.append(combined_checks)
+        return resolved
 
     if len(checks) > 0 and isinstance(checks[0], list):
         # Per-test-case checks pattern
         resolved = []
-        for check_list in checks:  # type: ignore
+        for i, check_list in enumerate(checks):  # type: ignore
             converted_checks = [_convert_check_input(check) for check in check_list]
-            resolved.append(converted_checks)
+            # Combine TestCase checks + per-test-case checks
+            combined_checks = testcase_checks_per_case[i] + converted_checks
+            resolved.append(combined_checks)
         return resolved
 
-    # Empty checks list
-    return [[] for _ in test_cases]
+    # Empty checks list - only TestCase checks
+    return testcase_checks_per_case
 
 
 def _flatten_checks_for_execution(

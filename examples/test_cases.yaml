@@ -145,13 +145,16 @@ test_cases:
 global_checks:
   
   - type: "regex"
-    description: "Response should not contain error messages"
     arguments:
       text: "$.output.value"
       pattern: "(error|failed|exception|invalid)"
       negate: true
       flags:
         case_insensitive: true
+    metadata:
+      type: "global"
+      description: "Response should not contain error messages"
+
 
 # Quality thresholds for evaluation
 quality_thresholds:
