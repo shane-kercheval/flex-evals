@@ -19,6 +19,7 @@ class CheckType(str, Enum):
 
     ATTRIBUTE_EXISTS = 'attribute_exists'
     CONTAINS = 'contains'
+    EQUALS = 'equals'
     EXACT_MATCH = 'exact_match'
     IS_EMPTY = 'is_empty'
     REGEX = 'regex'

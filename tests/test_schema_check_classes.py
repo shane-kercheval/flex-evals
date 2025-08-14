@@ -4,7 +4,7 @@ import pytest
 from pydantic import BaseModel, Field, ValidationError
 
 from flex_evals import (
-    ContainsCheck, ExactMatchCheck, RegexCheck, ThresholdCheck,
+    ContainsCheck, EqualsCheck, ExactMatchCheck, RegexCheck, ThresholdCheck,
     SemanticSimilarityCheck, LLMJudgeCheck, CustomFunctionCheck,
     RegexFlags, ThresholdConfig, CheckType, SimilarityMetric,
 )
@@ -131,6 +131,60 @@ class TestExactMatchCheck:
     def test_exact_match_check_type_attribute(self):
         """Test ExactMatchCheck CHECK_TYPE class attribute."""
         assert ExactMatchCheck.CHECK_TYPE == CheckType.EXACT_MATCH
+
+
+class TestEqualsCheck:
+    """Test EqualsCheck schema class."""
+
+    def test_equals_check_creation(self):
+        """Test basic EqualsCheck creation."""
+        check = EqualsCheck(
+            actual="$.output.value",
+            expected="$.expected",
+        )
+
+        assert check.actual == "$.output.value"
+        assert check.expected == "$.expected"
+        assert check.negate is False
+
+    def test_equals_check_with_options(self):
+        """Test EqualsCheck with all options."""
+        check = EqualsCheck(
+            actual="$.output.value",
+            expected="$.expected",
+            negate=True,
+        )
+
+        assert check.negate is True
+
+    def test_equals_check_validation_empty_actual(self):
+        """Test EqualsCheck validation for empty actual."""
+        with pytest.raises(ValidationError):
+            EqualsCheck(actual="", expected="$.expected")
+
+    def test_equals_check_validation_empty_expected(self):
+        """Test EqualsCheck validation for empty expected."""
+        with pytest.raises(ValidationError):
+            EqualsCheck(actual="$.actual", expected="")
+
+    def test_equals_check_to_check_conversion(self):
+        """Test EqualsCheck to_check() conversion."""
+        schema_check = EqualsCheck(
+            actual="$.output.value",
+            expected="$.expected",
+            negate=True,
+        )
+
+        check = schema_check.to_check()
+
+        assert check.type == CheckType.EQUALS
+        assert check.arguments["actual"] == "$.output.value"
+        assert check.arguments["expected"] == "$.expected"
+        assert check.arguments["negate"] is True
+
+    def test_equals_check_type_attribute(self):
+        """Test EqualsCheck CHECK_TYPE class attribute."""
+        assert EqualsCheck.CHECK_TYPE == CheckType.EQUALS
 
 
 class TestRegexCheck:

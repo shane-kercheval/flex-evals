@@ -10,16 +10,7 @@ from ..check import SchemaCheck
 
 
 class CustomFunctionCheck(SchemaCheck):
-    """
-    Type-safe schema for custom function check.
-
-    Executes user-provided validation functions for flexible argument checking.
-
-    Fields:
-    - validation_function: User-provided function or string function definition
-    - function_args: Arguments to pass to validation_function (JSONPath expressions allowed)
-    - version: Optional version string for the check
-    """
+    """Executes user-provided python validation functions."""
 
     VERSION: ClassVar[str] = "1.0.0"
     CHECK_TYPE: ClassVar[CheckType] = CheckType.CUSTOM_FUNCTION

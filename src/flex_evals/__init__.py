@@ -16,8 +16,9 @@ from .schemas.check import (
     get_jsonpath_behavior, validate_jsonpath, is_jsonpath_expression,
 )
 from .schemas.checks import (
-    AttributeExistsCheck, ContainsCheck, ExactMatchCheck, IsEmptyCheck, RegexCheck, RegexFlags,
-    ThresholdCheck, SemanticSimilarityCheck, LLMJudgeCheck, CustomFunctionCheck, ThresholdConfig,
+    AttributeExistsCheck, ContainsCheck, EqualsCheck, ExactMatchCheck, IsEmptyCheck,
+    RegexCheck, RegexFlags, ThresholdCheck, SemanticSimilarityCheck, LLMJudgeCheck,
+    CustomFunctionCheck, ThresholdConfig,
 )
 from .schemas.test_case import TestCase
 from .schemas.output import Output
@@ -34,6 +35,7 @@ __all__ = [
     "CheckType",
     "ContainsCheck",
     "CustomFunctionCheck",
+    "EqualsCheck",
     "ErrorType",
     "EvaluationRunResult",
     "ExactMatchCheck",

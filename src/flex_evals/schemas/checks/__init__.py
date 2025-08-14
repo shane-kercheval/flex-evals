@@ -2,6 +2,7 @@
 
 from .attribute_exists import AttributeExistsCheck
 from .contains import ContainsCheck
+from .equals import EqualsCheck
 from .exact_match import ExactMatchCheck
 from .is_empty import IsEmptyCheck
 from .regex import RegexCheck, RegexFlags
@@ -14,6 +15,7 @@ __all__ = [
     "AttributeExistsCheck",
     "ContainsCheck",
     "CustomFunctionCheck",
+    "EqualsCheck",
     "ExactMatchCheck",
     "IsEmptyCheck",
     "LLMJudgeCheck",
