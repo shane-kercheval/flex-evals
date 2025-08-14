@@ -10,6 +10,10 @@ from flex_evals import (
     evaluate, TestCase, Output, Check, EvaluationRunResult,
 )
 from flex_evals.schemas import ExperimentMetadata
+from flex_evals.schemas.checks import (
+    AttributeExistsCheck, ContainsCheck, EqualsCheck,
+    ExactMatchCheck, IsEmptyCheck, RegexCheck, ThresholdCheck,
+)
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck
 from flex_evals.registry import register, clear_registry
 from flex_evals.exceptions import ValidationError
@@ -1321,3 +1325,344 @@ class TestEvaluationEngine:
             for cr in test2_result.check_results
         }
         assert expected_values == actual_values
+
+
+class TestSchemaCheckTypes:
+    """Test evaluation engine with schema-based check types for type-safe evaluations."""
+
+    def setup_method(self):
+        """Set up test fixtures with schema-based checks."""
+        # Restore standard checks to ensure SchemaCheck types work
+        restore_standard_checks()
+
+        # Create test data for schema check demonstrations
+        self.test_cases = [
+            TestCase(id="test_001", input="What is the capital of France?", expected="Paris"),
+            TestCase(id="test_002", input="What is 2 + 2?", expected="4"),
+        ]
+
+        # Outputs with complex structures to test various schema checks
+        self.outputs = [
+            Output(
+                value={
+                    "answer": "Paris",
+                    "confidence": 0.95,
+                    "metadata": {"source": "geography_db", "timestamp": "2023-01-01"},
+                },
+                id="output_001",
+            ),
+            Output(
+                value={
+                    "result": "4",
+                    "calculation": "2 + 2 = 4",
+                    "metadata": {"operation": "addition"},
+                },
+                id="output_002",
+            ),
+        ]
+
+    def test_attribute_exists_check_schema(self):
+        """Test AttributeExistsCheck schema type via evaluate()."""
+        # Create schema checks using AttributeExistsCheck
+        schema_checks = [
+            AttributeExistsCheck(path="$.output.value.answer"),
+            AttributeExistsCheck(path="$.output.value.confidence"),
+            AttributeExistsCheck(path="$.output.value.nonexistent", negate=True),
+        ]
+
+        result = evaluate(self.test_cases, self.outputs, schema_checks)
+
+        assert result.status == 'completed'
+        assert len(result.results) == 2
+
+        # First test case should have all attribute checks pass
+        test1_result = result.results[0]
+        assert len(test1_result.check_results) == 3
+
+        # answer exists
+        assert test1_result.check_results[0].check_type == "attribute_exists"
+        assert test1_result.check_results[0].results["passed"] is True
+
+        # confidence exists
+        assert test1_result.check_results[1].results["passed"] is True
+
+        # nonexistent doesn't exist (negate=True means this should pass)
+        assert test1_result.check_results[2].results["passed"] is True
+
+    def test_contains_check_schema(self):
+        """Test ContainsCheck schema type via evaluate()."""
+        # Use per-test-case checks since data structures are different
+        per_case_checks = [
+            # Test case 1: Check answer field
+            [ContainsCheck(
+                text="$.output.value.answer",
+                phrases=["Paris"],
+                case_sensitive=True,
+            )],
+            # Test case 2: Check calculation field
+            [ContainsCheck(
+                text="$.output.value.calculation",
+                phrases=["2", "+", "="],
+                case_sensitive=False,
+            )],
+        ]
+
+        result = evaluate(self.test_cases, self.outputs, per_case_checks)
+
+        assert result.status == 'completed'
+
+        # First test case: "Paris" should contain "Paris"
+        test1_result = result.results[0]
+        assert test1_result.check_results[0].results["passed"] is True
+
+        # Second test case: "2 + 2 = 4" should contain "2", "+", "="
+        test2_result = result.results[1]
+        assert test2_result.check_results[0].results["passed"] is True
+
+    def test_equals_check_schema(self):
+        """Test EqualsCheck schema type via evaluate()."""
+        # Use per-test-case checks for different field structures
+        per_case_checks = [
+            # Test case 1: Check answer field matches expected
+            [EqualsCheck(
+                actual="$.output.value.answer",
+                expected="$.test_case.expected",
+            )],
+            # Test case 2: Check result field matches literal "4"
+            [EqualsCheck(
+                actual="$.output.value.result",
+                expected="4",
+            )],
+        ]
+
+        result = evaluate(self.test_cases, self.outputs, per_case_checks)
+
+        assert result.status == 'completed'
+
+        # Both test cases should pass their equality checks
+        for test_result in result.results:
+            assert len(test_result.check_results) == 1
+            assert test_result.check_results[0].check_type == "equals"
+            assert test_result.check_results[0].results["passed"] is True
+
+    def test_exact_match_check_schema(self):
+        """Test ExactMatchCheck schema type via evaluate()."""
+        # Use per-test-case checks for different field structures
+        per_case_checks = [
+            # Test case 1: Check answer field matches "Paris" exactly
+            [ExactMatchCheck(
+                actual="$.output.value.answer",
+                expected="Paris",
+                case_sensitive=True,
+            )],
+            # Test case 2: Check result field matches "4" exactly
+            [ExactMatchCheck(
+                actual="$.output.value.result",
+                expected="4",
+                case_sensitive=False,
+            )],
+        ]
+
+        result = evaluate(self.test_cases, self.outputs, per_case_checks)
+
+        assert result.status == 'completed'
+
+        # Both test cases should match exactly
+        for test_result in result.results:
+            assert len(test_result.check_results) == 1
+            assert test_result.check_results[0].results["passed"] is True
+
+    def test_is_empty_check_schema(self):
+        """Test IsEmptyCheck schema type via evaluate()."""
+        # Create output with empty values to test
+        empty_outputs = [
+            Output(value={"answer": "", "list": [], "dict": {}}, id="empty_001"),
+            Output(value={"result": "4", "empty_field": None}, id="empty_002"),
+        ]
+
+        # Use per-test-case checks for different field structures
+        per_case_checks = [
+            # Test case 1: Check empty values
+            [
+                IsEmptyCheck(value="$.output.value.answer"),
+                IsEmptyCheck(value="$.output.value.list"),
+                IsEmptyCheck(value="$.output.value.dict"),
+            ],
+            # Test case 2: Check non-empty result (negate=True should pass)
+            [
+                IsEmptyCheck(value="$.output.value.result", negate=True),
+            ],
+        ]
+
+        result = evaluate(self.test_cases, empty_outputs, per_case_checks)
+
+        assert result.status == 'completed'
+
+        # First test case: empty string, list, dict should be empty
+        test1_result = result.results[0]
+        assert len(test1_result.check_results) == 3
+        assert test1_result.check_results[0].results["passed"] is True  # empty string
+        assert test1_result.check_results[1].results["passed"] is True  # empty list
+        assert test1_result.check_results[2].results["passed"] is True  # empty dict
+
+        # Second test case: "4" is not empty (negate=True should pass)
+        test2_result = result.results[1]
+        assert len(test2_result.check_results) == 1
+        assert test2_result.check_results[0].results["passed"] is True
+
+    def test_regex_check_schema(self):
+        """Test RegexCheck schema type via evaluate()."""
+        # Use per-test-case checks for different field structures
+        per_case_checks = [
+            # Test case 1: Check answer field matches capital + lowercase pattern
+            [RegexCheck(
+                text="$.output.value.answer",
+                pattern=r"^[A-Z][a-z]+$",  # Capital letter followed by lowercase
+            )],
+            # Test case 2: Check calculation field matches math expression pattern
+            [RegexCheck(
+                text="$.output.value.calculation",
+                pattern=r"\d+\s*\+\s*\d+\s*=\s*\d+",  # Math expression pattern
+            )],
+        ]
+
+        result = evaluate(self.test_cases, self.outputs, per_case_checks)
+
+        assert result.status == 'completed'
+
+        # "Paris" should match capital + lowercase pattern
+        test1_result = result.results[0]
+        assert test1_result.check_results[0].results["passed"] is True
+
+        # "2 + 2 = 4" should match math expression pattern
+        test2_result = result.results[1]
+        assert test2_result.check_results[0].results["passed"] is True
+
+    def test_threshold_check_schema(self):
+        """Test ThresholdCheck schema type via evaluate()."""
+        # Only test first case since only it has confidence field
+        schema_checks = [
+            ThresholdCheck(
+                value="$.output.value.confidence",
+                min_value=0.8,
+                max_value=1.0,
+            ),
+            ThresholdCheck(
+                value="$.output.value.confidence",
+                min_value=0.9,  # No max_value
+            ),
+        ]
+
+        # Test just the first test case and output that has confidence
+        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+
+        assert result.status == 'completed'
+
+        # Confidence of 0.95 should pass both threshold checks
+        test1_result = result.results[0]
+        assert len(test1_result.check_results) == 2
+        assert test1_result.check_results[0].results["passed"] is True  # 0.8 <= 0.95 <= 1.0
+        assert test1_result.check_results[1].results["passed"] is True  # 0.95 >= 0.9
+
+    def test_mixed_schema_and_generic_checks(self):
+        """Test mixing schema checks with generic Check objects."""
+        # Test that schema checks work alongside standard checks
+        mixed_checks = [
+            EqualsCheck(actual="$.output.value.answer", expected="Paris"),
+            AttributeExistsCheck(path="$.output.value.metadata"),
+            # Use a standard check that should be available
+            Check(
+                type="exact_match",
+                arguments={"expected": "Paris", "actual": "$.output.value.answer"},
+            ),
+        ]
+
+        result = evaluate(self.test_cases[:1], self.outputs[:1], mixed_checks)
+
+        assert result.status == 'completed'
+
+        # Single test case should have 3 checks (2 schema + 1 standard)
+        assert len(result.results) == 1
+        test_result = result.results[0]
+        assert len(test_result.check_results) == 3
+
+        # Verify we have the expected check types
+        check_types = [cr.check_type for cr in test_result.check_results]
+        assert "equals" in check_types
+        assert "attribute_exists" in check_types
+        assert "exact_match" in check_types
+
+    def test_schema_check_jsonpath_validation(self):
+        """Test that schema checks properly validate JSONPath expressions."""
+        # Test with invalid JSONPath (should work but give unexpected results)
+        try:
+            schema_check = EqualsCheck(
+                actual="invalid_jsonpath",  # Not a JSONPath, treated as literal
+                expected="Paris",
+            )
+
+            result = evaluate(self.test_cases, self.outputs, [schema_check])
+
+            # Should complete but fail the equality check (literal "invalid_jsonpath" != "Paris")
+            assert result.status == 'completed'
+            assert result.results[0].check_results[0].results["passed"] is False
+
+        except Exception as e:
+            # If validation catches this, that's also acceptable
+            assert "jsonpath" in str(e).lower() or "path" in str(e).lower()  # noqa: PT017
+
+    def test_schema_check_type_safety(self):
+        """Test that schema checks provide type safety and validation."""
+        # Test that schema checks validate their arguments
+        with pytest.raises((ValueError, TypeError)):
+            # phrases must be a list, not a string
+            ContainsCheck(text="$.output.value.answer", phrases="Paris")  # Should be ["Paris"]
+
+        with pytest.raises((ValueError, TypeError)):
+            # min_value should be numeric
+            ThresholdCheck(value="$.output.value.confidence", min_value="not_a_number")
+
+    def test_schema_check_with_per_testcase_checks(self):
+        """Test schema checks used as per-test-case checks."""
+        # Create different schema checks for each test case
+        per_testcase_schema_checks = [
+            # Test case 1: Check for geography-specific attributes
+            [
+                AttributeExistsCheck(path="$.output.value.answer"),
+                ContainsCheck(text="$.output.value.answer", phrases=["Paris"]),
+            ],
+            # Test case 2: Check for math-specific attributes
+            [
+                AttributeExistsCheck(path="$.output.value.result"),
+                RegexCheck(text="$.output.value.calculation", pattern=r"\d+.*=.*\d+"),
+            ],
+        ]
+
+        result = evaluate(self.test_cases, self.outputs, per_testcase_schema_checks)
+
+        assert result.status == 'completed'
+        assert len(result.results) == 2
+
+        # Each test case should have 2 checks
+        for test_result in result.results:
+            assert len(test_result.check_results) == 2
+            assert all(cr.status == 'completed' for cr in test_result.check_results)
+            assert all(cr.results["passed"] is True for cr in test_result.check_results)
+
+    def test_schema_check_metadata_preservation(self):
+        """Test that schema check metadata is preserved through evaluation."""
+        schema_check = EqualsCheck(
+            actual="$.output.value.answer",
+            expected="Paris",
+            metadata={"test_category": "geography", "difficulty": "easy"},
+        )
+
+        result = evaluate(self.test_cases[:1], self.outputs[:1], [schema_check])
+
+        assert result.status == 'completed'
+        check_result = result.results[0].check_results[0]
+
+        # Metadata should be preserved in the check result
+        assert check_result.metadata is not None
+        assert check_result.metadata.get("test_category") == "geography"
+        assert check_result.metadata.get("difficulty") == "easy"
