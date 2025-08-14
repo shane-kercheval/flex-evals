@@ -2,13 +2,14 @@
 
 import json
 import pytest
-from typing import Optional, ClassVar
+from typing import Any, Optional, ClassVar
 from flex_evals.schema_generator import (
     generate_checks_schema,
     generate_check_schema,
     _get_schema_class_for_check_type,
     _extract_field_schema,
     _get_python_type_string,
+    _extract_class_description,
 )
 from flex_evals.schemas.checks.contains import ContainsCheck
 from flex_evals.schemas.checks.exact_match import ExactMatchCheck
@@ -65,10 +66,12 @@ class TestSchemaGeneration:
         version_schema = contains_schema["1.0.0"]
         assert "version" in version_schema
         assert "is_async" in version_schema
+        assert "description" in version_schema
         assert "fields" in version_schema
 
         assert version_schema["version"] == "1.0.0"
         assert isinstance(version_schema["is_async"], bool)
+        assert isinstance(version_schema["description"], str)
         assert isinstance(version_schema["fields"], dict)
 
     def test_generate_checks_schema_latest_only(self):
@@ -91,6 +94,7 @@ class TestSchemaGeneration:
         assert schema is not None
         assert schema["version"] == "1.0.0"
         assert "is_async" in schema
+        assert "description" in schema
         assert "fields" in schema
 
         # Contains check should have expected fields
@@ -315,6 +319,257 @@ class TestTypeStringGeneration:
         assert result == "any"
 
 
+class TestClassDescriptionExtraction:
+    """Test class description extraction functionality."""
+
+    def test_extract_class_description_with_docstring(self):
+        """Test extracting description from class with docstring."""
+        class TestSchema(SchemaCheck):
+            """
+            This is a test schema class.
+
+            It has multiple lines in its docstring
+            to test proper extraction.
+            """
+
+            CHECK_TYPE: ClassVar[str] = "test"
+            VERSION: ClassVar[str] = "1.0.0"
+
+        description = _extract_class_description(TestSchema)
+
+        # Test that inspect.getdoc() properly dedents the docstring
+        expected = (
+            "This is a test schema class.\n"
+            "\n"
+            "It has multiple lines in its docstring\n"
+            "to test proper extraction."
+        )
+        assert description == expected
+
+        # Test key content is preserved
+        assert "This is a test schema class." in description
+        assert "It has multiple lines in its docstring" in description
+        assert "to test proper extraction." in description
+        assert description.startswith("This is a test schema class.")
+        assert description.endswith("to test proper extraction.")
+
+        # Test that it's properly dedented (no leading whitespace)
+        lines = description.split('\n')
+        assert len(lines) == 4  # Should have 4 lines total
+        assert not lines[0].startswith(" ")  # First line should not have leading spaces
+        assert not lines[2].startswith(" ")  # Third line should not have leading spaces
+
+    def test_extract_class_description_single_line(self):
+        """Test extracting description from class with single-line docstring."""
+        class TestSchema(SchemaCheck):
+            """Single line description."""
+
+            CHECK_TYPE: ClassVar[str] = "test"
+            VERSION: ClassVar[str] = "1.0.0"
+
+        description = _extract_class_description(TestSchema)
+        assert description == "Single line description."
+
+    def test_extract_class_description_no_docstring(self):
+        """Test extracting description from class without docstring."""
+        class TestSchema(SchemaCheck):
+            CHECK_TYPE: ClassVar[str] = "test"
+            VERSION: ClassVar[str] = "1.0.0"
+
+        description = _extract_class_description(TestSchema)
+        assert description == ""
+
+    def test_extract_class_description_empty_docstring(self):
+        """Test extracting description from class with empty docstring."""
+        class TestSchema(SchemaCheck):
+            """"""  # noqa: D419
+            CHECK_TYPE: ClassVar[str] = "test"
+            VERSION: ClassVar[str] = "1.0.0"
+
+        description = _extract_class_description(TestSchema)
+        assert description == ""
+
+    def test_extract_class_description_whitespace_only(self):
+        """Test extracting description from class with whitespace-only docstring."""
+        class TestSchema(SchemaCheck):
+            """
+
+            """  # noqa: D419
+            CHECK_TYPE: ClassVar[str] = "test"
+            VERSION: ClassVar[str] = "1.0.0"
+
+        description = _extract_class_description(TestSchema)
+        assert description == ""
+
+    def test_extract_class_description_real_schema_class(self):
+        """Test extracting description from real schema class."""
+        description = _extract_class_description(ContainsCheck)
+
+        # Should contain the actual docstring
+        assert description != ""
+        assert "Type-safe schema for contains check" in description
+        assert "Fields:" in description
+
+    def test_schema_generation_includes_description(self):
+        """Test that generated schemas include class descriptions."""
+        schema = generate_check_schema("contains", "1.0.0")
+
+        assert "description" in schema
+        assert schema["description"] != ""
+        assert "Type-safe schema for contains check" in schema["description"]
+
+    def test_schema_generation_includes_description_all_checks(self):
+        """Test that all generated schemas include class descriptions."""
+        schemas = generate_checks_schema(include_latest_only=True)
+
+        for check_type, versions in schemas.items():
+            for version, schema in versions.items():
+                assert "description" in schema, f"Missing description for {check_type} v{version}"
+                # Description should be a string (may be empty for checks without schema classes)
+                assert isinstance(schema["description"], str), f"Invalid description type for {check_type} v{version}"  # noqa: E501
+
+
+class TestDescriptionIntegrationWithMockClasses:
+    """Test description extraction with mock schema classes."""
+
+    @pytest.fixture
+    def mock_schema_classes_with_descriptions(self):
+        """Create test schema classes with various docstring formats."""
+        class DetailedDocstringSchema(SchemaCheck):
+            """
+            Comprehensive test schema class.
+
+            This schema class demonstrates the following features:
+            - Field validation
+            - Type checking
+            - Error handling
+
+            Fields:
+            - field1: First test field
+            - field2: Second test field with complex validation
+
+            Usage:
+                check = DetailedDocstringSchema(field1="value", field2=123)
+                result = check.validate()
+
+            Returns:
+                ValidationResult containing success/failure information
+            """
+
+            CHECK_TYPE: ClassVar[str] = "detailed_test"
+            VERSION: ClassVar[str] = "1.0.0"
+            field1: str = "test"
+            field2: int = 42
+
+        class MinimalDocstringSchema(SchemaCheck):
+            """Minimal test schema for basic validation."""
+
+            CHECK_TYPE: ClassVar[str] = "minimal_test"
+            VERSION: ClassVar[str] = "1.0.0"
+            simple_field: bool = True
+
+        class NoDocstringSchema(SchemaCheck):
+            CHECK_TYPE: ClassVar[str] = "no_docstring_test"
+            VERSION: ClassVar[str] = "1.0.0"
+            basic_field: str = "default"
+
+        return {
+            "detailed": DetailedDocstringSchema,
+            "minimal": MinimalDocstringSchema,
+            "none": NoDocstringSchema,
+        }
+
+    def test_detailed_docstring_extraction(self, mock_schema_classes_with_descriptions):  # noqa: ANN001
+        """Test extraction of detailed multi-line docstring."""
+        detailed_class = mock_schema_classes_with_descriptions["detailed"]
+        description = _extract_class_description(detailed_class)
+
+        # Should contain key parts of the docstring
+        assert "Comprehensive test schema class" in description
+        assert "This schema class demonstrates the following features" in description
+        assert "Field validation" in description
+        assert "Usage:" in description
+        assert "Returns:" in description
+
+    def test_minimal_docstring_extraction(self, mock_schema_classes_with_descriptions):  # noqa: ANN001
+        """Test extraction of minimal single-line docstring."""
+        minimal_class = mock_schema_classes_with_descriptions["minimal"]
+        description = _extract_class_description(minimal_class)
+
+        assert description == "Minimal test schema for basic validation."
+
+    def test_no_docstring_extraction(self, mock_schema_classes_with_descriptions: dict[str, Any]):
+        """Test extraction from class without docstring."""
+        no_docstring_class = mock_schema_classes_with_descriptions["none"]
+        description = _extract_class_description(no_docstring_class)
+
+        assert description == ""
+
+    def test_docstring_preserves_formatting(self):
+        """Test that docstring formatting (indentation, newlines) is preserved."""
+        class FormattedSchema(SchemaCheck):
+            """
+            Test schema with specific formatting.
+
+                - Indented list item 1
+                - Indented list item 2
+
+            Code example:
+                result = FormattedSchema().validate()
+                assert result.passed
+            """
+
+            CHECK_TYPE: ClassVar[str] = "formatted_test"
+            VERSION: ClassVar[str] = "1.0.0"
+
+        description = _extract_class_description(FormattedSchema)
+
+        # Should preserve the indentation and structure relative to base indentation
+        assert "- Indented list item 1" in description
+        assert "- Indented list item 2" in description
+        assert "Code example:" in description
+        assert "result = FormattedSchema().validate()" in description
+
+        # Test that the base text is properly dedented but relative indentation is preserved
+        lines = description.split('\n')
+        assert lines[0] == "Test schema with specific formatting."  # No leading spaces
+        assert "    - Indented list item 1" in description  # 4 spaces relative indent preserved
+        # 4 spaces relative indent preserved
+        assert "    result = FormattedSchema().validate()" in description
+
+    def test_docstring_dedenting_behavior(self):
+        """Test that inspect.getdoc() properly handles docstring dedenting."""
+        class IndentedSchema(SchemaCheck):
+            """
+            Base description starts here.
+
+                This line is indented 4 spaces.
+                This line is also indented 4 spaces.
+
+            Back to base level.
+                And indented again.
+            """
+
+            CHECK_TYPE: ClassVar[str] = "indented_test"
+            VERSION: ClassVar[str] = "1.0.0"
+
+        description = _extract_class_description(IndentedSchema)
+        lines = description.split('\n')
+
+        # Base lines should have no leading whitespace
+        assert lines[0] == "Base description starts here."
+        assert lines[5] == "Back to base level."
+
+        # Relatively indented lines should preserve their relative indentation
+        assert lines[2] == "    This line is indented 4 spaces."
+        assert lines[3] == "    This line is also indented 4 spaces."
+        assert lines[6] == "    And indented again."
+
+        # Empty lines should be preserved
+        assert lines[1] == ""
+        assert lines[4] == ""
+
+
 class TestEndToEndIntegration:
     """Test end-to-end integration with real check schemas."""
 
@@ -338,8 +593,10 @@ class TestEndToEndIntegration:
             for version, version_schema in schema[check_type].items():
                 assert "version" in version_schema
                 assert "is_async" in version_schema
+                assert "description" in version_schema
                 assert "fields" in version_schema
                 assert isinstance(version_schema["fields"], dict)
+                assert isinstance(version_schema["description"], str)
 
     def test_schema_json_serializable(self):
         """Test that generated schemas are JSON serializable."""

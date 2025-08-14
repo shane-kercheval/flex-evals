@@ -62,7 +62,7 @@ class TestLlmJudgeCheck:
 
         self.context = EvaluationContext(self.test_case, self.output)
 
-    def create_sync_llm_function(self, response: Any, metadata: dict[str, Any] | None = None):  # noqa
+    def create_sync_llm_function(self, response: Any, metadata: dict[str, Any] | None = None):
         """Create a synchronous mock LLM function that returns the given response."""
         def mock_llm(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict[str, Any]]:  # noqa
             if isinstance(response, BaseModel):
@@ -84,7 +84,7 @@ class TestLlmJudgeCheck:
             return parsed, mock_metadata
         return mock_llm
 
-    def create_async_llm_function(self, response: Any, metadata: dict[str, Any] | None = None):  # noqa
+    def create_async_llm_function(self, response: Any, metadata: dict[str, Any] | None = None):
         """Create an asynchronous mock LLM function that returns the given response."""
         async def mock_llm(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict[str, Any]]:  # noqa
             if isinstance(response, BaseModel):

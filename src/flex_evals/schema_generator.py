@@ -7,6 +7,7 @@ with schema class introspection (field definitions, types, descriptions).
 
 from typing import Any, Union, get_args, get_origin
 import types
+import inspect
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
 
@@ -76,6 +77,17 @@ def _get_schema_class_for_check_type(check_type: str, version: str) -> type[Sche
         f"No schema class found for check type '{check_type}' version '{version}'. "
         f"Available versions: {available_versions}",
     )
+
+
+def _extract_class_description(schema_class: type[SchemaCheck]) -> str:
+    """Extract class description from docstring of the specific class only."""
+    # Use the class's own __doc__ to avoid fallback to parent class
+    if schema_class.__doc__:
+        # Use inspect.cleandoc to get proper dedenting without parent fallback
+        cleaned = inspect.cleandoc(schema_class.__doc__)
+        # Return empty string if the cleaned docstring is only whitespace
+        return cleaned if cleaned.strip() else ""
+    return ""
 
 
 def _is_nullable_type(annotation: Any) -> bool:  # noqa: ANN401
@@ -262,6 +274,7 @@ def _get_version_schemas_for_check_type(check_type: str) -> dict[str, dict[str, 
         version_schemas[version] = {
             "version": version,
             "is_async": registry_info["is_async"],
+            "description": _extract_class_description(schema_class),
             "fields": fields_schema,
             "schema_class": schema_class.__name__,
         }
