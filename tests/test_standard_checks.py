@@ -565,10 +565,6 @@ class TestContainsCheck:
         with pytest.raises(TypeError):
             ContainsCheck_v1_0_0()(text="test text")
 
-    def test_contains_invalid_phrases_type(self):
-        """Test non-list phrases argument raises ValueError."""
-        with pytest.raises(ValidationError, match="must be a list"):
-            ContainsCheck_v1_0_0()(text="test", phrases="not a list")
 
     @pytest.mark.parametrize(("output_value", "phrases", "expected_passed"), [
         ("The capital of France is Paris.", ["Paris", "France"], True),  # All phrases found
@@ -611,6 +607,59 @@ class TestContainsCheck:
         assert results.results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": expected_passed}
+
+    def test_contains_single_string_phrase_found(self):
+        """Test single string phrase that is found."""
+        result = ContainsCheck_v1_0_0()(
+            text="Paris is the capital of France",
+            phrases="Paris",  # Single string instead of list
+        )
+        assert result == {"passed": True}
+
+    def test_contains_single_string_phrase_not_found(self):
+        """Test single string phrase that is not found."""
+        result = ContainsCheck_v1_0_0()(
+            text="Paris is the capital of France",
+            phrases="Spain",  # Single string not found
+        )
+        assert result == {"passed": False}
+
+    def test_contains_single_string_case_sensitive(self):
+        """Test single string phrase with case sensitivity."""
+        result = ContainsCheck_v1_0_0()(
+            text="Paris is the capital of France",
+            phrases="paris",  # Lowercase
+            case_sensitive=True,
+        )
+        assert result == {"passed": False}
+
+    def test_contains_single_string_case_insensitive(self):
+        """Test single string phrase case insensitive."""
+        result = ContainsCheck_v1_0_0()(
+            text="Paris is the capital of France",
+            phrases="paris",  # Lowercase
+            case_sensitive=False,
+        )
+        assert result == {"passed": True}
+
+    def test_contains_single_string_with_negate(self):
+        """Test single string phrase with negate=True."""
+        result = ContainsCheck_v1_0_0()(
+            text="Paris is the capital of France",
+            phrases="Spain",  # Not found
+            negate=True,
+        )
+        assert result == {"passed": True}
+
+    def test_contains_empty_string_phrase(self):
+        """Test empty string phrase raises ValidationError."""
+        with pytest.raises(ValidationError, match="must not be empty"):
+            ContainsCheck_v1_0_0()(text="test text", phrases="")
+
+    def test_contains_invalid_phrases_type(self):
+        """Test invalid phrases type raises ValidationError."""
+        with pytest.raises(ValidationError, match="must be a string or list"):
+            ContainsCheck_v1_0_0()(text="test", phrases=123)
 
 
 class TestRegexCheck:

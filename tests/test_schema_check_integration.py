@@ -316,8 +316,9 @@ class TestSchemaCheckValidation:
         with pytest.raises(ValidationError):
             ContainsCheck(text="$.output.value", phrases=[])
 
-        with pytest.raises(ValueError, match="all phrases must be non-empty strings"):
-            ContainsCheck(text="$.output.value", phrases=["valid", ""])
+        # Empty strings in phrase lists are now allowed
+        check = ContainsCheck(text="$.output.value", phrases=["valid", ""])
+        assert check.phrases == ["valid", ""]
 
     def test_threshold_check_validation_errors(self):
         """Test ThresholdCheck validation errors."""
@@ -326,11 +327,12 @@ class TestSchemaCheckValidation:
 
     def test_exact_match_check_validation_errors(self):
         """Test ExactMatchCheck validation errors."""
-        with pytest.raises(ValidationError):
-            ExactMatchCheck(actual="", expected="$.expected")
+        # Empty strings are now allowed as valid literal values
+        check1 = ExactMatchCheck(actual="", expected="$.expected")
+        assert check1.actual == ""
 
-        with pytest.raises(ValidationError):
-            ExactMatchCheck(actual="$.actual", expected="")
+        check2 = ExactMatchCheck(actual="$.actual", expected="")
+        assert check2.expected == ""
 
     def test_equals_check_validation_errors(self):
         """Test EqualsCheck allows empty strings as valid literal values."""

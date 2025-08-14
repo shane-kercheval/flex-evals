@@ -27,11 +27,9 @@ class SemanticSimilarityCheck(SchemaCheck):
 
     text: str = OptionalJSONPath(
         "first text to compare or JSONPath expression pointing to the text",
-        min_length=1,
     )
     reference: str = OptionalJSONPath(
         "second text to compare against or JSONPath expression pointing to the text",
-        min_length=1,
     )
     embedding_function: Callable = Field(..., description="User-provided function to generate embeddings")  # noqa: E501
     similarity_metric: SimilarityMetric = Field(SimilarityMetric.COSINE, description="Similarity calculation method")  # noqa: E501

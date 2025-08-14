@@ -1615,12 +1615,14 @@ class TestSchemaCheckTypes:
         """Test that schema checks provide type safety and validation."""
         # Test that schema checks validate their arguments
         with pytest.raises((ValueError, TypeError)):
-            # phrases must be a list, not a string
-            ContainsCheck(text="$.output.value.answer", phrases="Paris")  # Should be ["Paris"]
+            # phrases must be a string or list, not a number
+            ContainsCheck(text="$.output.value.answer", phrases=123)  # type: ignore
 
         with pytest.raises((ValueError, TypeError)):
-            # min_value should be numeric
-            ThresholdCheck(value="$.output.value.confidence", min_value="not_a_number")
+            # min_value should be numeric, string, or None (but "not_a_number" is valid as a
+            # JSONPath)
+            # So let's test with an invalid type instead
+            ThresholdCheck(value="$.output.value.confidence", min_value=["invalid"])  # type: ignore
 
     def test_schema_check_with_per_testcase_checks(self):
         """Test schema checks used as per-test-case checks."""
