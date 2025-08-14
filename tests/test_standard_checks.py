@@ -1307,14 +1307,9 @@ class TestAttributeExistsCheck:
             Output(value={"result": "success"}),
         ]
 
-        results = evaluate(test_cases, outputs)
-        assert results.summary.total_test_cases == 1
-        assert results.summary.completed_test_cases == 0
-        assert results.summary.error_test_cases == 1
-        assert results.summary.skipped_test_cases == 0
-        assert results.results[0].status == Status.ERROR
-        assert results.results[0].check_results[0].status == Status.ERROR
-        assert "JSONPath expression" in results.results[0].check_results[0].error.message
+        # Should raise validation error for invalid JSONPath
+        with pytest.raises(ValidationError, match=r"Check arguments validation failed"):
+            evaluate(test_cases, outputs)
 
     def test_attribute_exists_missing_path_argument(self):
         """Test missing path argument raises validation error."""
@@ -1338,10 +1333,9 @@ class TestAttributeExistsCheck:
             Output(value={"result": "success"}),
         ]
 
-        results = evaluate(test_cases, outputs)
-        assert results.summary.error_test_cases == 1
-        assert results.results[0].status == Status.ERROR
-        assert "requires 'path' argument" in results.results[0].check_results[0].error.message
+        # Should raise validation error for missing required field
+        with pytest.raises(ValidationError, match=r"Check arguments validation failed"):
+            evaluate(test_cases, outputs)
 
     def test_attribute_exists_various_data_types(self):
         """Test attribute existence with various data types."""

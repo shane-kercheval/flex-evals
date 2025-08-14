@@ -577,7 +577,7 @@ class TestEvaluateDecoratorEdgeCases:
         @evaluate(
             test_cases=[TestCase(id="none_test", input="test")],
             checks=[Check(
-                type=CheckType.EXACT_MATCH,
+                type=CheckType.EQUALS,
                 arguments={"expected": None, "actual": "$.output.value.result"},
             )],
             samples=2,
@@ -612,7 +612,7 @@ class TestEvaluateDecoratorEdgeCases:
         @evaluate(
             test_cases=[TestCase(id="list_test", input="test")],
             checks=[Check(
-                type=CheckType.EXACT_MATCH,
+                type=CheckType.EQUALS,
                 arguments={"expected": [1, 2, 3], "actual": "$.output.value.items"},
             )],
             samples=2,

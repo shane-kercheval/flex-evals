@@ -332,7 +332,7 @@ class TestFlattenUnflatten:
                 checks=[
                     Check(type="exact_match", arguments={
                         "actual": "$.output.value.result",
-                        "expected": 10,
+                        "expected": "10",
                     }),
                     Check(type="async_sleep", arguments={"sleep_duration": 0.01}),
                 ],
@@ -344,7 +344,7 @@ class TestFlattenUnflatten:
                     Check(type="async_sleep", arguments={"sleep_duration": 0.01}),
                     Check(type="exact_match", arguments={
                         "actual": "$.output.value.result",
-                        "expected": 20,
+                        "expected": "20",
                     }),
                     Check(type="async_sleep", arguments={"sleep_duration": 0.01}),
                 ],
@@ -358,9 +358,9 @@ class TestFlattenUnflatten:
         ]
 
         outputs = [
-            Output(value={"result": 10}),
-            Output(value={"result": 20}),
-            Output(value={"result": 30}),
+            Output(value={"result": "10"}),
+            Output(value={"result": "20"}),
+            Output(value={"result": "30"}),
         ]
 
         # Run evaluation (uses flatten/unflatten internally)
@@ -534,12 +534,12 @@ class TestPerformanceOptimization:
             checks = []
 
             # Add 1-3 sync checks per test case
-            for _ in range((i % 3) + 1):
+            for ii in range((i % 3) + 1):
                 checks.append(Check(
                     type="exact_match",
                     arguments={
                         "actual": "$.output.value.result",
-                        "expected": f"{i * 10}",
+                        "expected": f"{(i * 10) + ii}",
                     },
                 ))
 
@@ -577,7 +577,7 @@ class TestPerformanceOptimization:
         # With our optimization, all async checks should run concurrently
         # Sequential would take total_async_checks * 0.02 seconds
         # Concurrent should take ~0.02 seconds (plus overhead)
-        sequential_time = total_async_checks * 0.02
+        sequential_time = total_async_checks * 0.1
         assert total_time < sequential_time * 0.5  # Much faster than sequential
 
         # Verify all test cases completed

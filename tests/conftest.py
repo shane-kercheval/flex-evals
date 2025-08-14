@@ -12,6 +12,17 @@ from flex_evals.checks.standard.threshold import ThresholdCheck_v1_0_0
 from flex_evals import CheckType
 from flex_evals.registry import register
 
+# Import test utility SchemaCheck classes to ensure they're available for validation
+from tests.schemas_for_test_checks import (  # noqa: F401
+    TestCheck, TestAsyncCheck, TestFailingCheck, SlowAsyncCheck,
+    CustomUserCheck, AsyncSleepCheck,
+    # Engine versioning test schemas
+    VersionTestV1, VersionTestV2, LatestTestV1, LatestTestV2_1, LatestTestV2_0,
+    AsyncVersionTestV1, AsyncVersionTestV2, MixedTestV1Sync, MixedTestV2Async,
+    ErrorTestV1, ErrorTestV2, MetadataTestV1_5, LatestCheckV1, LatestCheckV2_1,
+    MixedCheckV1, TestCaseCheckV1, TestCaseCheckV1_5,
+)
+
 
 def restore_standard_checks():
     """Restore standard checks to registry after clearing."""

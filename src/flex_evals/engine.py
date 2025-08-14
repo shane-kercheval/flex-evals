@@ -23,8 +23,10 @@ from .registry import (
     get_registry_state,
     restore_registry_state,
     get_latest_version,
+    list_registered_checks,
 )
 from .exceptions import ValidationError
+from .schema_generator import _get_schema_class_for_check_type
 
 
 def evaluate(
@@ -105,9 +107,41 @@ def evaluate(
 
 
 def _convert_check_input(check_input: Check | SchemaCheck) -> Check:
-    """Convert a Check | SchemaCheck (Check or SchemaCheck) to a Check object."""
+    """
+    Convert a Check | SchemaCheck to a Check object with full Pydantic validation.
+
+    For SchemaCheck objects: Convert to Check via .to_check() (validation already done)
+    For Check objects: Validate arguments against corresponding SchemaCheck using full Pydantic
+    validation
+    """
     if isinstance(check_input, SchemaCheck):
         return check_input.to_check()
+
+    # For Check objects, perform full Pydantic validation against corresponding SchemaCheck
+    check_type_str = str(check_input.type)
+
+    # Check registry first - better error messages
+    registered_checks = list_registered_checks()
+    if check_type_str not in registered_checks:
+        raise ValueError(f"Check type '{check_type_str}' is not registered")
+
+    # Determine version to use for schema lookup
+    version = check_input.version
+    if version is None:
+        version = get_latest_version(check_type_str)
+
+    # Get the corresponding SchemaCheck class
+    schema_class = _get_schema_class_for_check_type(check_type_str, version)
+
+    # Perform full Pydantic validation by attempting to create the SchemaCheck instance
+    try:
+        schema_class(**check_input.arguments)
+    except Exception as e:
+        # Schema validation failed - provide clear error message
+        raise ValidationError(
+            f"Check arguments validation failed for '{check_type_str}' v{version}: {e}",
+        ) from e
+
     return check_input
 
 
