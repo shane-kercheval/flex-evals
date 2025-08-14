@@ -14,7 +14,7 @@ class IsEmptyCheck(SchemaCheck):
     CHECK_TYPE: ClassVar[CheckType] = CheckType.IS_EMPTY
 
     value: str | list | dict | set | tuple | int | float | bool | None | Any = OptionalJSONPath(
-        "value to check or JSONPath expression pointing to the value",
+        "Value to check or JSONPath expression pointing to the value",
     )
     negate: bool = Field(False, description="If true, passes when value is not empty")
     strip_whitespace: bool = Field(

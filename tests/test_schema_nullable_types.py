@@ -187,7 +187,7 @@ class TestIntegrationWithExistingChecks:
         assert "default" not in fields["text"]
 
         # phrases field - required, non-nullable
-        assert fields["phrases"]["type"] == "array<string>"
+        assert fields["phrases"]["type"] == "union<string,array<string>>"
         assert fields["phrases"]["nullable"] is False
         assert "default" not in fields["phrases"]
 

@@ -19,7 +19,7 @@ class ContainsCheck_v1_0_0(BaseCheck):  # noqa: N801
 
     Arguments Schema:
     - text: string | JSONPath - Text to search
-    - phrases: array[string] - Array of strings that must be present in the text
+    - phrases: string | array[string] - Single string or array of strings that must be present
     - negate: boolean (default: false) - If true, passes when text contains none of the phrases.
                                         If false, passes when text contains all of the phrases
     - case_sensitive: boolean (default: true) - Whether phrase matching is case-sensitive
@@ -31,16 +31,20 @@ class ContainsCheck_v1_0_0(BaseCheck):  # noqa: N801
     def __call__(  # noqa: D102
             self,
             text: str,
-            phrases: list[str],
+            phrases: str | list[str],
             case_sensitive: bool = True,
             negate: bool = False,
         ) -> dict[str, Any]:
-        # Validate phrases is a list
-        if not isinstance(phrases, list):
-            raise ValidationError("Contains check 'phrases' argument must be a list")
-
-        if len(phrases) == 0:
-            raise ValidationError("Contains check 'phrases' argument must not be empty")
+        # Convert single string to list
+        if isinstance(phrases, str):
+            if not phrases:  # Empty string
+                raise ValidationError("Contains check 'phrases' argument must not be empty")
+            phrases = [phrases]
+        elif isinstance(phrases, list):
+            if len(phrases) == 0:
+                raise ValidationError("Contains check 'phrases' argument must not be empty")
+        else:
+            raise ValidationError("Contains check 'phrases' argument must be a string or list")
 
         # Convert text to string
         text_str = str(text) if text is not None else ""

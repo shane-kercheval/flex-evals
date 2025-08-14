@@ -13,14 +13,25 @@ class ThresholdCheck(SchemaCheck):
     VERSION: ClassVar[str] = "1.0.0"
     CHECK_TYPE: ClassVar[CheckType] = CheckType.THRESHOLD
 
-    value: str = OptionalJSONPath(
-        "numeric value to check or JSONPath expression pointing to the value",
-        min_length=1,
+    value: str | int | float = OptionalJSONPath(
+        "Numeric value to check or JSONPath expression pointing to the value",
     )
-    min_value: float | None = Field(None, description="Minimum acceptable value")
-    max_value: float | None = Field(None, description="Maximum acceptable value")
-    min_inclusive: bool = Field(True, description="If true, min_value is inclusive (>=), if false, exclusive (>)")  # noqa: E501
-    max_inclusive: bool = Field(True, description="If true, max_value is inclusive (<=), if false, exclusive (<)")  # noqa: E501
+    min_value: str | int | float | None = OptionalJSONPath(
+        "Minimum acceptable value, or JSONPath expression pointing to min value",
+        default=None,
+    )
+    max_value: str | int | float | None = OptionalJSONPath(
+        "Maximum acceptable value, or JSONPath expression pointing to max value",
+        default=None,
+    )
+    min_inclusive: str | bool = OptionalJSONPath(
+        "If true, min_value is inclusive (>=), if false, exclusive (>), or JSONPath expression pointing to boolean",  # noqa: E501
+        default=True,
+    )
+    max_inclusive: str | bool = OptionalJSONPath(
+        "If true, max_value is inclusive (<=), if false, exclusive (<), or JSONPath expression pointing to boolean",  # noqa: E501
+        default=True,
+    )
     negate: bool = Field(False, description="If true, passes when value is outside the specified range")  # noqa: E501
 
     @model_validator(mode='after')

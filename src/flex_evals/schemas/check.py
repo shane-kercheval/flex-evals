@@ -29,14 +29,14 @@ def RequiredJSONPath(description: str) -> Any:  # noqa: ANN401, N802
     )
 
 
-def OptionalJSONPath(description: str, **kwargs: Any) -> Any:  # noqa: ANN401, N802
+def OptionalJSONPath(description: str, default: Any = ..., **kwargs: Any) -> Any:  # noqa: ANN401, N802
     """Field that can contain literal text or JSONPath expression."""
     # Merge json_schema_extra with any existing extras
     extra = kwargs.pop("json_schema_extra", {})
     extra["jsonpath"] = JSONPathBehavior.OPTIONAL.value
 
     return Field(
-        ...,
+        default,
         description=description,
         json_schema_extra=extra,
         **kwargs,

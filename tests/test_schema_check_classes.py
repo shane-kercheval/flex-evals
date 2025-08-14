@@ -38,9 +38,10 @@ class TestContainsCheck:
         assert check.negate is True
 
     def test_contains_check_validation_empty_text(self):
-        """Test ContainsCheck validation for empty text."""
-        with pytest.raises(ValidationError):
-            ContainsCheck(text="", phrases=["hello"])
+        """Test ContainsCheck validation for empty text - now allowed."""
+        check = ContainsCheck(text="", phrases=["hello"])
+        assert check.text == ""
+        assert check.phrases == ["hello"]
 
     def test_contains_check_validation_empty_phrases(self):
         """Test ContainsCheck validation for empty phrases."""
@@ -48,9 +49,10 @@ class TestContainsCheck:
             ContainsCheck(text="$.value", phrases=[])
 
     def test_contains_check_validation_invalid_phrases(self):
-        """Test ContainsCheck validation for invalid phrases."""
-        with pytest.raises(ValidationError, match="all phrases must be non-empty strings"):
-            ContainsCheck(text="$.value", phrases=["valid", ""])
+        """Test ContainsCheck validation for invalid phrases - empty strings now allowed."""
+        check = ContainsCheck(text="$.value", phrases=["valid", ""])
+        assert check.text == "$.value"
+        assert check.phrases == ["valid", ""]
 
     def test_contains_check_to_check_conversion(self):
         """Test ContainsCheck to_check() conversion."""
@@ -72,6 +74,38 @@ class TestContainsCheck:
     def test_contains_check_type_attribute(self):
         """Test ContainsCheck CHECK_TYPE class attribute."""
         assert ContainsCheck.CHECK_TYPE == CheckType.CONTAINS
+
+    def test_contains_check_phrases_string(self):
+        """Test ContainsCheck with string phrases."""
+        check = ContainsCheck(
+            text="$.output.value",
+            phrases="hello",
+        )
+
+        assert check.text == "$.output.value"
+        assert check.phrases == "hello"
+        assert isinstance(check.phrases, str)
+
+    def test_contains_check_phrases_jsonpath(self):
+        """Test ContainsCheck with JSONPath phrases."""
+        check = ContainsCheck(
+            text="$.output.value",
+            phrases="$.expected.phrases",
+        )
+
+        assert check.phrases == "$.expected.phrases"
+        assert isinstance(check.phrases, str)
+
+    def test_contains_check_validation_empty_phrases_string(self):
+        """Test ContainsCheck validation for empty phrases string - now allowed."""
+        check = ContainsCheck(text="$.value", phrases="")
+        assert check.text == "$.value"
+        assert check.phrases == ""
+
+    def test_contains_check_validation_invalid_phrases_type(self):
+        """Test ContainsCheck validation for invalid phrases type."""
+        with pytest.raises(ValidationError, match="Input should be a valid"):
+            ContainsCheck(text="$.value", phrases=123)  # type: ignore
 
 
 class TestExactMatchCheck:
@@ -102,14 +136,16 @@ class TestExactMatchCheck:
         assert check.negate is True
 
     def test_exact_match_check_validation_empty_actual(self):
-        """Test ExactMatchCheck validation for empty actual."""
-        with pytest.raises(ValidationError):
-            ExactMatchCheck(actual="", expected="$.expected")
+        """Test ExactMatchCheck validation for empty actual - now allowed."""
+        check = ExactMatchCheck(actual="", expected="$.expected")
+        assert check.actual == ""
+        assert check.expected == "$.expected"
 
     def test_exact_match_check_validation_empty_expected(self):
-        """Test ExactMatchCheck validation for empty expected."""
-        with pytest.raises(ValidationError):
-            ExactMatchCheck(actual="$.actual", expected="")
+        """Test ExactMatchCheck validation for empty expected - now allowed."""
+        check = ExactMatchCheck(actual="$.actual", expected="")
+        assert check.actual == "$.actual"
+        assert check.expected == ""
 
     def test_exact_match_check_to_check_conversion(self):
         """Test ExactMatchCheck to_check() conversion."""
@@ -158,14 +194,18 @@ class TestEqualsCheck:
         assert check.negate is True
 
     def test_equals_check_validation_empty_actual(self):
-        """Test EqualsCheck validation for empty actual."""
-        with pytest.raises(ValidationError):
-            EqualsCheck(actual="", expected="$.expected")
+        """Test EqualsCheck allows empty actual as valid literal value."""
+        # Empty strings should be allowed as literal values
+        check = EqualsCheck(actual="", expected="$.expected")
+        assert check.actual == ""
+        assert check.expected == "$.expected"
 
     def test_equals_check_validation_empty_expected(self):
-        """Test EqualsCheck validation for empty expected."""
-        with pytest.raises(ValidationError):
-            EqualsCheck(actual="$.actual", expected="")
+        """Test EqualsCheck allows empty expected as valid literal value."""
+        # Empty strings should be allowed as literal values
+        check = EqualsCheck(actual="$.actual", expected="")
+        assert check.actual == "$.actual"
+        assert check.expected == ""
 
     def test_equals_check_to_check_conversion(self):
         """Test EqualsCheck to_check() conversion."""
@@ -218,14 +258,16 @@ class TestRegexCheck:
         assert check.negate is True
 
     def test_regex_check_validation_empty_text(self):
-        """Test RegexCheck validation for empty text."""
-        with pytest.raises(ValidationError):
-            RegexCheck(text="", pattern="test")
+        """Test RegexCheck validation for empty text - now allowed."""
+        check = RegexCheck(text="", pattern="test")
+        assert check.text == ""
+        assert check.pattern == "test"
 
     def test_regex_check_validation_empty_pattern(self):
-        """Test RegexCheck validation for empty pattern."""
-        with pytest.raises(ValidationError):
-            RegexCheck(text="$.value", pattern="")
+        """Test RegexCheck validation for empty pattern - now allowed."""
+        check = RegexCheck(text="$.value", pattern="")
+        assert check.text == "$.value"
+        assert check.pattern == ""
 
     def test_regex_check_to_check_conversion(self):
         """Test RegexCheck to_check() conversion."""
@@ -261,6 +303,17 @@ class TestRegexCheck:
     def test_regex_check_type_attribute(self):
         """Test RegexCheck CHECK_TYPE class attribute."""
         assert RegexCheck.CHECK_TYPE == CheckType.REGEX
+
+    def test_regex_check_pattern_jsonpath(self):
+        """Test RegexCheck with JSONPath pattern."""
+        check = RegexCheck(
+            text="$.output.value",
+            pattern="$.expected.pattern",
+        )
+
+        assert check.text == "$.output.value"
+        assert check.pattern == "$.expected.pattern"
+        assert check.negate is False
 
 
 class TestThresholdCheck:
@@ -308,9 +361,11 @@ class TestThresholdCheck:
         assert check.negate is True
 
     def test_threshold_check_validation_empty_value(self):
-        """Test ThresholdCheck validation for empty value."""
-        with pytest.raises(ValidationError):
-            ThresholdCheck(value="", min_value=80.0)
+        """Test ThresholdCheck allows empty value as valid literal value."""
+        # Empty strings should be allowed as literal values (though they may fail at execution)
+        check = ThresholdCheck(value="", min_value=80.0)
+        assert check.value == ""
+        assert check.min_value == 80.0
 
     def test_threshold_check_validation_no_bounds(self):
         """Test ThresholdCheck validation for no bounds."""
@@ -354,6 +409,59 @@ class TestThresholdCheck:
         """Test ThresholdCheck CHECK_TYPE class attribute."""
         assert ThresholdCheck.CHECK_TYPE == CheckType.THRESHOLD
 
+    def test_threshold_check_jsonpath_min_value(self):
+        """Test ThresholdCheck with JSONPath min_value."""
+        check = ThresholdCheck(
+            value="$.output.score",
+            min_value="$.thresholds.min",
+        )
+
+        assert check.value == "$.output.score"
+        assert check.min_value == "$.thresholds.min"
+        assert check.max_value is None
+        assert check.min_inclusive is True
+        assert check.max_inclusive is True
+
+    def test_threshold_check_jsonpath_max_value(self):
+        """Test ThresholdCheck with JSONPath max_value."""
+        check = ThresholdCheck(
+            value="$.output.score",
+            max_value="$.thresholds.max",
+        )
+
+        assert check.max_value == "$.thresholds.max"
+        assert check.min_value is None
+
+    def test_threshold_check_jsonpath_inclusive_flags(self):
+        """Test ThresholdCheck with JSONPath inclusive flags."""
+        check = ThresholdCheck(
+            value="$.output.score",
+            min_value=80.0,
+            max_value=90.0,
+            min_inclusive="$.flags.min_inclusive",
+            max_inclusive="$.flags.max_inclusive",
+        )
+
+        assert check.min_value == 80.0
+        assert check.max_value == 90.0
+        assert check.min_inclusive == "$.flags.min_inclusive"
+        assert check.max_inclusive == "$.flags.max_inclusive"
+
+    def test_threshold_check_mixed_literal_and_jsonpath(self):
+        """Test ThresholdCheck with mixed literal and JSONPath values."""
+        check = ThresholdCheck(
+            value="$.output.score",
+            min_value="$.thresholds.min",
+            max_value=95.0,
+            min_inclusive=False,
+            max_inclusive="$.flags.max_inclusive",
+        )
+
+        assert check.min_value == "$.thresholds.min"
+        assert check.max_value == 95.0
+        assert check.min_inclusive is False
+        assert check.max_inclusive == "$.flags.max_inclusive"
+
 
 class TestSemanticSimilarityCheck:
     """Test SemanticSimilarityCheck schema class."""
@@ -394,16 +502,17 @@ class TestSemanticSimilarityCheck:
         assert check.threshold.negate is True
 
     def test_semantic_similarity_check_validation_empty_text(self):
-        """Test SemanticSimilarityCheck validation for empty text."""
+        """Test SemanticSimilarityCheck validation for empty text - now allowed."""
         def mock_embedding_function(text: str):  # noqa: ANN202, ARG001
             return [0.1, 0.2, 0.3]
 
-        with pytest.raises(ValidationError):
-            SemanticSimilarityCheck(
-                text="",
-                reference="$.expected",
-                embedding_function=mock_embedding_function,
-            )
+        check = SemanticSimilarityCheck(
+            text="",
+            reference="$.expected",
+            embedding_function=mock_embedding_function,
+        )
+        assert check.text == ""
+        assert check.reference == "$.expected"
 
     def test_semantic_similarity_check_to_check_conversion(self):
         """Test SemanticSimilarityCheck to_check() conversion."""
@@ -472,19 +581,20 @@ class TestLLMJudgeCheck:
         assert check.llm_function == mock_llm_function
 
     def test_llm_judge_check_validation_empty_prompt(self):
-        """Test LLMJudgeCheck validation for empty prompt."""
+        """Test LLMJudgeCheck validation for empty prompt - now allowed."""
         class TestResponse(BaseModel):
             score: int
 
         def mock_llm_function(prompt: str, response_format: type) -> tuple[BaseModel, dict]:  # noqa: ARG001
             return TestResponse(score=8), {}
 
-        with pytest.raises(ValidationError):
-            LLMJudgeCheck(
-                prompt="",
-                response_format=TestResponse,
-                llm_function=mock_llm_function,
-            )
+        check = LLMJudgeCheck(
+            prompt="",
+            response_format=TestResponse,
+            llm_function=mock_llm_function,
+        )
+        assert check.prompt == ""
+        assert check.response_format == TestResponse
 
     def test_llm_judge_check_to_check_conversion(self):
         """Test LLMJudgeCheck to_check() conversion."""
@@ -511,6 +621,54 @@ class TestLLMJudgeCheck:
     def test_llm_judge_check_type_attribute(self):
         """Test LLMJudgeCheck CHECK_TYPE class attribute."""
         assert LLMJudgeCheck.CHECK_TYPE == CheckType.LLM_JUDGE
+
+    def test_llm_judge_check_jsonpath_prompt(self):
+        """Test LLMJudgeCheck with JSONPath prompt."""
+        class TestResponse(BaseModel):
+            score: int = Field(ge=1, le=10)
+
+        def mock_llm_function(prompt: str, response_format: type) -> tuple[BaseModel, dict]:  # noqa: ARG001
+            return TestResponse(score=8), {"cost": 0.01}
+
+        check = LLMJudgeCheck(
+            prompt="$.prompt_template",
+            response_format=TestResponse,
+            llm_function=mock_llm_function,
+        )
+
+        assert check.prompt == "$.prompt_template"
+        assert check.response_format == TestResponse
+        assert check.llm_function == mock_llm_function
+
+    def test_llm_judge_check_jsonpath_response_format(self):
+        """Test LLMJudgeCheck with JSONPath response_format."""
+        def mock_llm_function(prompt: str, response_format: type) -> tuple[BaseModel, dict]:  # noqa: ARG001
+            return BaseModel(), {"cost": 0.01}
+
+        check = LLMJudgeCheck(
+            prompt="Rate this: {{$.output.value}}",
+            response_format="$.response_schema",
+            llm_function=mock_llm_function,
+        )
+
+        assert check.prompt == "Rate this: {{$.output.value}}"
+        assert check.response_format == "$.response_schema"
+        assert check.llm_function == mock_llm_function
+
+    def test_llm_judge_check_both_jsonpath(self):
+        """Test LLMJudgeCheck with both prompt and response_format as JSONPath."""
+        def mock_llm_function(prompt: str, response_format: type) -> tuple[BaseModel, dict]:  # noqa: ARG001
+            return BaseModel(), {"cost": 0.01}
+
+        check = LLMJudgeCheck(
+            prompt="$.templates.evaluation_prompt",
+            response_format="$.schemas.evaluation_response",
+            llm_function=mock_llm_function,
+        )
+
+        assert check.prompt == "$.templates.evaluation_prompt"
+        assert check.response_format == "$.schemas.evaluation_response"
+        assert check.llm_function == mock_llm_function
 
 
 class TestCustomFunctionCheck:

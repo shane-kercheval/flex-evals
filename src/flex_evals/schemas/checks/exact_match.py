@@ -14,10 +14,10 @@ class ExactMatchCheck(SchemaCheck):
     CHECK_TYPE: ClassVar[CheckType] = CheckType.EXACT_MATCH
 
     actual: str = OptionalJSONPath(
-        "value to check or JSONPath expression pointing to the value", min_length=1,
+        "Value to check or JSONPath expression pointing to the value",
     )
     expected: str = OptionalJSONPath(
-        "expected value or JSONPath expression pointing to the value", min_length=1,
+        "Expected value or JSONPath expression pointing to the value",
     )
     case_sensitive: bool = Field(True, description="Whether string comparison is case-sensitive")
     negate: bool = Field(False, description="If true, passes when values don't match")

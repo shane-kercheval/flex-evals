@@ -140,7 +140,7 @@ class TestSchemaGeneration:
 
         # Test phrases field - required, non-nullable
         phrases_field = fields["phrases"]
-        assert phrases_field["type"] == "array<string>"
+        assert phrases_field["type"] == "union<string,array<string>>"
         assert phrases_field["nullable"] is False
         assert "default" not in phrases_field  # Required field has no default
 
@@ -286,7 +286,7 @@ class TestFieldSchemaExtraction:
         field_info = ContainsCheck.model_fields["phrases"]
         field_schema = _extract_field_schema("phrases", field_info, ContainsCheck)
 
-        assert field_schema["type"] == "array<string>"
+        assert field_schema["type"] == "union<string,array<string>>"
         assert field_schema["nullable"] is False
         assert "default" not in field_schema  # Required field has no default
 

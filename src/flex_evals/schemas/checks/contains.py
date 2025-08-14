@@ -14,22 +14,28 @@ class ContainsCheck(SchemaCheck):
     CHECK_TYPE: ClassVar[CheckType] = CheckType.CONTAINS
 
     text: str = OptionalJSONPath(
-        "text to search or JSONPath expression pointing to the text to search",
-        min_length=1,
+        "Text to search or JSONPath expression pointing to the text to search",
     )
-    phrases: list[str] = Field(..., min_length=1, description="List of strings that must be present in the text")  # noqa: E501
+    phrases: str | list[str] = OptionalJSONPath(
+        "String or list of strings that must be present in the text, or JSONPath expression pointing to single string",  # noqa: E501
+    )
     case_sensitive: bool = Field(True, description="Whether phrase matching is case-sensitive")
     negate: bool = Field(False, description="If true, passes when text contains none of the phrases")  # noqa: E501
 
 
     @field_validator('phrases')
     @classmethod
-    def validate_phrases(cls, v: list[str]) -> list[str]:
-        """Validate that all phrases are non-empty strings."""
-        if not v:
-            raise ValueError("phrases must not be empty")
-        for phrase in v:
-            if not isinstance(phrase, str) or not phrase:
-                raise ValueError("all phrases must be non-empty strings")
-        return v
+    def validate_phrases(cls, v: str | list[str]) -> str | list[str]:
+        """Validate phrases field."""
+        if isinstance(v, str):
+            return v  # Empty strings are now allowed
+        if isinstance(v, list):
+            if not v:
+                raise ValueError("phrases list must not be empty")
+            for phrase in v:
+                if not isinstance(phrase, str):
+                    raise ValueError("all phrases must be strings")
+            return v
+
+        raise ValueError("phrases must be a string or list of strings")
 
