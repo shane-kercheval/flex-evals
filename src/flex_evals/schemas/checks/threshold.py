@@ -8,22 +8,7 @@ from ..check import Check, SchemaCheck, OptionalJSONPath
 
 
 class ThresholdCheck(SchemaCheck):
-    """
-    Type-safe schema for threshold check.
-
-    Checks if a numeric value meets minimum/maximum thresholds with configurable inclusivity.
-
-    Fields:
-    - value: numeric value to check or JSONPath expression pointing to the value
-    - min_value: Minimum acceptable value (optional)
-    - max_value: Maximum acceptable value (optional)
-    - min_inclusive: If true, min_value is inclusive (>=), if false, exclusive (>) (default: True)
-    - max_inclusive: If true, max_value is inclusive (<=), if false, exclusive (<) (default: True)
-    - negate: If true, passes when value is outside the specified range (default: False)
-    - version: Optional version string for the check
-
-    At least one of min_value or max_value must be specified.
-    """
+    """Checks if a numeric value meets minimum/maximum thresholds."""
 
     VERSION: ClassVar[str] = "1.0.0"
     CHECK_TYPE: ClassVar[CheckType] = CheckType.THRESHOLD

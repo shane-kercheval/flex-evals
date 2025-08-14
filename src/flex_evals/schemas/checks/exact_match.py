@@ -8,18 +8,7 @@ from ..check import SchemaCheck, OptionalJSONPath
 
 
 class ExactMatchCheck(SchemaCheck):
-    """
-    Type-safe schema for exact match check.
-
-    Compares two text values for exact equality with configurable case sensitivity and negation.
-
-    Fields:
-    - actual: value to check or JSONPath expression pointing to the value
-    - expected: expected value or JSONPath expression pointing to the value
-    - case_sensitive: Whether string comparison is case-sensitive (default: True)
-    - negate: If true, passes when values don't match (default: False)
-    - version: Optional version string for the check
-    """
+    """Compares two text values for exact equality."""
 
     VERSION: ClassVar[str] = "1.0.0"
     CHECK_TYPE: ClassVar[CheckType] = CheckType.EXACT_MATCH

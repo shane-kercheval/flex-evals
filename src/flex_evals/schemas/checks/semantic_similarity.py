@@ -20,19 +20,7 @@ class ThresholdConfig(BaseModel):
 
 
 class SemanticSimilarityCheck(SchemaCheck):
-    """
-    Type-safe schema for semantic similarity check.
-
-    Computes semantic similarity between two texts using embeddings.
-
-    Fields:
-    - text: first text to compare or JSONPath expression pointing to the text
-    - reference: second text to compare against or JSONPath expression pointing to the text
-    - embedding_function: User-provided function to generate embeddings
-    - similarity_metric: Similarity calculation method (default: 'cosine')
-    - threshold: Optional threshold configuration for pass/fail determination
-    - version: Optional version string for the check
-    """
+    """Computes semantic similarity between two texts using embeddings."""
 
     VERSION: ClassVar[str] = "1.0.0"
     CHECK_TYPE: ClassVar[CheckType] = CheckType.SEMANTIC_SIMILARITY

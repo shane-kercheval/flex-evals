@@ -16,18 +16,7 @@ class RegexFlags(BaseModel):
 
 
 class RegexCheck(SchemaCheck):
-    """
-    Type-safe schema for regex check.
-
-    Tests text against regular expression patterns with configurable flags.
-
-    Fields:
-    - text: text to test against the pattern or JSONPath expression pointing to the text
-    - pattern: Regular expression pattern to match against the text
-    - negate: If true, passes when pattern doesn't match (default: False)
-    - flags: Regex matching options (default: None)
-    - version: Optional version string for the check
-    """
+    """Checks if a text value matches a specified regular expression pattern."""
 
     VERSION: ClassVar[str] = "1.0.0"
     CHECK_TYPE: ClassVar[CheckType] = CheckType.REGEX
