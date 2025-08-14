@@ -1,6 +1,7 @@
 """Tests for standard check implementations."""
 
 import pytest
+from typing import Any
 
 from flex_evals.checks.standard.exact_match import ExactMatchCheck_v1_0_0
 from flex_evals.checks.standard.contains import ContainsCheck_v1_0_0
@@ -394,120 +395,62 @@ class TestRegexCheck:
 class TestIsEmptyCheck:
     """Test IsEmpty check implementation."""
 
-    def test_is_empty_empty_string(self):
-        """Test empty string passes is_empty check."""
-        result = IsEmptyCheck_v1_0_0()(value="")
-        assert result == {"passed": True}
+    @pytest.mark.parametrize(("value", "strip_whitespace", "expected_passed", "description"), [
+        # Empty values (should pass)
+        ("", True, True, "empty string"),
+        (None, True, True, "None value"),
+        ("   \t\n  ", True, True, "whitespace-only with strip=True"),
+        ([], True, True, "empty list"),
+        ({}, True, True, "empty dict"),
+        (set(), True, True, "empty set"),
+        ((), True, True, "empty tuple"),
+        (frozenset(), True, True, "empty frozenset"),
 
-    def test_is_empty_none_value(self):
-        """Test None value passes is_empty check."""
-        result = IsEmptyCheck_v1_0_0()(value=None)
-        assert result == {"passed": True}
+        # Non-empty values (should fail)
+        ("hello", True, False, "non-empty string"),
+        ("  hello  ", True, False, "string with content and whitespace"),
+        ("   \t\n  ", False, False, "whitespace-only with strip=False"),
+        (123, True, False, "positive integer"),
+        (0, True, False, "zero"),
+        (-1, True, False, "negative integer"),
+        (0.0, True, False, "float zero"),
+        (False, True, False, "boolean False"),
+        (True, True, False, "boolean True"),
+        ([1, 2, 3], True, False, "list with items"),
+        ({"key": "value"}, True, False, "dict with items"),
+        ({1, 2, 3}, True, False, "set with items"),
+        ((1, 2, 3), True, False, "tuple with items"),
+        (frozenset([1, 2, 3]), True, False, "frozenset with items"),
+        ({"nested": {"list": [1, 2, {"key": None}]}}, True, False, "complex data structure"),
+    ])
+    def test_is_empty_values(self, value: Any, strip_whitespace: bool, expected_passed: bool, description: str):  # noqa: E501
+        """Test various values for emptiness."""
+        result = IsEmptyCheck_v1_0_0()(value=value, strip_whitespace=strip_whitespace)
+        assert result == {"passed": expected_passed}, f"Failed for {description}"
 
-    def test_is_empty_whitespace_only_with_strip(self):
-        """Test whitespace-only string passes when strip_whitespace=True."""
-        result = IsEmptyCheck_v1_0_0()(value="   \t\n  ", strip_whitespace=True)
-        assert result == {"passed": True}
+    @pytest.mark.parametrize(("value", "expected_passed", "description"), [
+        # Empty values (should fail when negated)
+        ("", False, "empty string"),
+        (None, False, "None value"),
+        ("   \t\n  ", False, "whitespace-only string"),
+        ([], False, "empty list"),
+        ({}, False, "empty dict"),
+        (set(), False, "empty set"),
+        ((), False, "empty tuple"),
 
-    def test_is_empty_whitespace_only_without_strip(self):
-        """Test whitespace-only string fails when strip_whitespace=False."""
-        result = IsEmptyCheck_v1_0_0()(value="   \t\n  ", strip_whitespace=False)
-        assert result == {"passed": False}
-
-    def test_is_empty_non_empty_string(self):
-        """Test non-empty string fails is_empty check."""
-        result = IsEmptyCheck_v1_0_0()(value="hello")
-        assert result == {"passed": False}
-
-    def test_is_empty_string_with_content_and_whitespace(self):
-        """Test string with content and whitespace fails is_empty check."""
-        result = IsEmptyCheck_v1_0_0()(value="  hello  ")
-        assert result == {"passed": False}
-
-    def test_is_empty_negate_empty_string(self):
-        """Test negate=True fails for empty string (not empty check)."""
-        result = IsEmptyCheck_v1_0_0()(value="", negate=True)
-        assert result == {"passed": False}
-
-    def test_is_empty_negate_non_empty_string(self):
-        """Test negate=True passes for non-empty string (not empty check)."""
-        result = IsEmptyCheck_v1_0_0()(value="hello", negate=True)
-        assert result == {"passed": True}
-
-    def test_is_empty_negate_none_value(self):
-        """Test negate=True fails for None value (not empty check)."""
-        result = IsEmptyCheck_v1_0_0()(value=None, negate=True)
-        assert result == {"passed": False}
-
-    def test_is_empty_numeric_value(self):
-        """Test numeric value is considered non-empty."""
-        result = IsEmptyCheck_v1_0_0()(value=123)
-        assert result == {"passed": False}
-
-    def test_is_empty_zero_value(self):
-        """Test zero value is considered non-empty."""
-        result = IsEmptyCheck_v1_0_0()(value=0)
-        assert result == {"passed": False}
-
-    def test_is_empty_negative_value(self):
-        """Test negative value is considered non-empty."""
-        result = IsEmptyCheck_v1_0_0()(value=-1)
-        assert result == {"passed": False}
-
-    def test_is_empty_float_value(self):
-        """Test float value is considered non-empty."""
-        result = IsEmptyCheck_v1_0_0()(value=0.0)
-        assert result == {"passed": False}
-
-    def test_is_empty_boolean_false(self):
-        """Test False value is considered non-empty."""
-        result = IsEmptyCheck_v1_0_0()(value=False)
-        assert result == {"passed": False}
-
-    def test_is_empty_boolean_true(self):
-        """Test True value is considered non-empty."""
-        result = IsEmptyCheck_v1_0_0()(value=True)
-        assert result == {"passed": False}
-
-    def test_is_empty_list_empty(self):
-        """Test empty list is considered non-empty."""
-        result = IsEmptyCheck_v1_0_0()(value=[])
-        assert result == {"passed": False}
-
-    def test_is_empty_list_with_items(self):
-        """Test list with items is considered non-empty."""
-        result = IsEmptyCheck_v1_0_0()(value=[1, 2, 3])
-        assert result == {"passed": False}
-
-    def test_is_empty_dict_empty(self):
-        """Test empty dict is considered non-empty."""
-        result = IsEmptyCheck_v1_0_0()(value={})
-        assert result == {"passed": False}
-
-    def test_is_empty_dict_with_items(self):
-        """Test dict with items is considered non-empty."""
-        result = IsEmptyCheck_v1_0_0()(value={"key": "value"})
-        assert result == {"passed": False}
-
-    def test_is_empty_complex_type(self):
-        """Test complex data structure is considered non-empty."""
-        result = IsEmptyCheck_v1_0_0()(value={"nested": {"list": [1, 2, {"key": None}]}})
-        assert result == {"passed": False}
-
-    def test_is_empty_negate_with_numeric(self):
-        """Test negate=True with numeric value passes (not empty check)."""
-        result = IsEmptyCheck_v1_0_0()(value=123, negate=True)
-        assert result == {"passed": True}
-
-    def test_is_empty_negate_with_false(self):
-        """Test negate=True with False value passes (not empty check)."""
-        result = IsEmptyCheck_v1_0_0()(value=False, negate=True)
-        assert result == {"passed": True}
-
-    def test_is_empty_negate_with_empty_list(self):
-        """Test negate=True with empty list passes (not empty check)."""
-        result = IsEmptyCheck_v1_0_0()(value=[], negate=True)
-        assert result == {"passed": True}
+        # Non-empty values (should pass when negated)
+        ("hello", True, "non-empty string"),
+        (123, True, "numeric value"),
+        (False, True, "False value"),
+        ([1, 2, 3], True, "non-empty list"),
+        ({"key": "value"}, True, "non-empty dict"),
+        ({1, 2, 3}, True, "non-empty set"),
+        ((1, 2, 3), True, "non-empty tuple"),
+    ])
+    def test_is_empty_negate(self, value: Any, expected_passed: bool, description: str):
+        """Test negate=True behavior (not empty check)."""
+        result = IsEmptyCheck_v1_0_0()(value=value, negate=True)
+        assert result == {"passed": expected_passed}, f"Failed negate test for {description}"
 
     def test_is_empty_missing_value(self):
         """Test missing value argument raises TypeError."""
@@ -521,13 +464,17 @@ class TestIsEmptyCheck:
         assert set(result.keys()) == {"passed"}
         assert isinstance(result["passed"], bool)
 
-    @pytest.mark.parametrize(("output_value", "expected_passed"), [
-        ("", True),
-        ("not empty", False),
-        ("   ", True),
-        ("  text  ", False),
+    @pytest.mark.parametrize(("output_value", "jsonpath", "expected_passed"), [
+        ("", "$.output.value", True),
+        ("not empty", "$.output.value", False),
+        ("   ", "$.output.value", True),
+        ("  text  ", "$.output.value", False),
+        ({"data": []}, "$.output.value.data", True),
+        ({"data": [1, 2, 3]}, "$.output.value.data", False),
+        ({"data": {}}, "$.output.value.data", True),
+        ({"data": {"key": "value"}}, "$.output.value.data", False),
     ])
-    def test_is_empty_via_evaluate(self, output_value: str, expected_passed: bool):
+    def test_is_empty_via_evaluate(self, output_value: Any, jsonpath: str, expected_passed: bool):
         """Test using JSONPath for value with various empty/non-empty combinations."""
         # Define your test cases
         test_cases = [
@@ -539,7 +486,7 @@ class TestIsEmptyCheck:
                     Check(
                         type=CheckType.IS_EMPTY,
                         arguments={
-                            "value": "$.output.value",
+                            "value": jsonpath,
                         },
                     ),
                 ],
@@ -563,7 +510,7 @@ class TestIsEmptyCheck:
         (None, True),
         (1, False),
     ])
-    def test_none_empty_via_evaluate(self, output_value: str, expected_passed: bool):
+    def test_none_empty_via_evaluate(self, output_value: Any, expected_passed: bool):
         """Test using JSONPath for value with various empty/non-empty combinations."""
         # Define your test cases
         test_cases = [

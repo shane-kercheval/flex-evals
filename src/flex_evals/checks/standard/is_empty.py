@@ -1,7 +1,7 @@
 """
 Is Empty check implementation for FEP.
 
-Tests whether a value is empty (None, empty string, or whitespace-only).
+Tests whether a value is empty (None, empty string, whitespace-only, empty list, or empty dict).
 """
 
 from typing import Any
@@ -22,6 +22,12 @@ class IsEmptyCheck_v1_0_0(BaseCheck):  # noqa: N801
     - strip_whitespace: boolean (default: true) - If true, strips whitespace before checking
         (strings only)
 
+    Empty values include:
+    - None
+    - Empty strings ("")
+    - Whitespace-only strings (when strip_whitespace=True)
+    - Any empty collection that supports len() (lists, dicts, sets, tuples, etc.)
+
     Results Schema:
     - passed: boolean - Whether the empty check passed
     """
@@ -39,6 +45,9 @@ class IsEmptyCheck_v1_0_0(BaseCheck):  # noqa: N801
         # Handle strings with optional whitespace stripping
         elif isinstance(value, str):
             is_empty = value.strip() == "" if strip_whitespace else value == ""
+        # Handle any object that supports len()
+        elif hasattr(value, '__len__'):
+            is_empty = len(value) == 0
         # All other types are considered non-empty
         else:
             is_empty = False
