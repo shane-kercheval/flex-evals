@@ -320,14 +320,14 @@ class TestEvaluationEngine:
             Check(
                 type="test_check",
                 arguments={"expected": "Paris"},
-                version="2.1.0",
+                version="1.0.0",
             ),
         ]
 
         result = evaluate(self.test_cases, self.outputs, checks_with_version)
 
         check_result = result.results[0].check_results[0]
-        assert check_result.check_version == "2.1.0"
+        assert check_result.check_version == "1.0.0"
 
     def test_evaluate_jsonpath_resolution(self):
         """Test JSONPath expressions are resolved correctly."""
@@ -370,21 +370,13 @@ class TestEvaluationEngine:
             assert "This check always fails" in check_result.error.message
 
     def test_evaluate_unregistered_check_type(self):
-        """Test handling of unregistered check types."""
+        """Test that unregistered check types fail early with clear error."""
         invalid_checks = [
             Check(type="nonexistent_check", arguments={}),
         ]
 
-        result = evaluate(self.test_cases, self.outputs, invalid_checks)
-
-        assert result.status == 'error'
-
-        # Should have error results for unregistered check
-        for test_result in result.results:
-            assert test_result.status == 'error'
-            check_result = test_result.check_results[0]
-            assert check_result.status == 'error'
-            assert "not registered" in check_result.error.message
+        with pytest.raises(ValueError, match="Check type 'nonexistent_check' is not registered"):
+            evaluate(self.test_cases, self.outputs, invalid_checks)
 
     def test_evaluate_summary_statistics(self):
         """Test summary statistics are computed correctly."""
@@ -428,7 +420,7 @@ class TestEvaluationEngine:
         concurrent_checks = [
             Check(
                 type="slow_async_check",
-                arguments={"delay": delay_per_check, "expected": "test"},
+                arguments={"delay": delay_per_check},
             )
             for _ in range(num_checks)
         ]
@@ -485,7 +477,7 @@ class TestEvaluationEngine:
             mixed_checks.append(
                 Check(
                     type="slow_async_check",
-                    arguments={"delay": async_delay, "expected": "test"},
+                    arguments={"delay": async_delay},
                 ),
             )
 
@@ -590,7 +582,7 @@ class TestEvaluationEngine:
         concurrent_checks = [
             Check(
                 type="slow_async_check",
-                arguments={"delay": delay_per_check, "expected": "test"},
+                arguments={"delay": delay_per_check},
             )
             for _ in range(num_checks)
         ]
@@ -702,7 +694,7 @@ class TestEvaluationEngine:
         checks = [
             Check(
                 type="slow_async_check",
-                arguments={"delay": delay_per_check, "expected": "test"},
+                arguments={"delay": delay_per_check},
             )
             for _ in range(num_async_checks_per_case)
         ]
@@ -802,7 +794,7 @@ class TestEvaluationEngine:
         concurrent_checks = [
             Check(
                 type="slow_async_check",
-                arguments={"delay": delay_per_check, "expected": "test"},
+                arguments={"delay": delay_per_check},
             )
             for _ in range(num_checks)
         ]
@@ -834,7 +826,7 @@ class TestEvaluationEngine:
         serializable for multiprocessing. This is a limitation of Python's pickle module.
         """
         # Register the module-level custom check
-        register("custom_user_check", version="2.0.0")(CustomUserCheck)
+        register("custom_user_check", version="1.0.0")(CustomUserCheck)
 
         # Create test cases that use the custom check
         test_cases = [

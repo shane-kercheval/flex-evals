@@ -1,6 +1,6 @@
 """Tests for engine version-aware check execution."""
 
-
+import pytest
 from flex_evals.engine import evaluate
 from flex_evals.schemas import TestCase, Output, Check
 from flex_evals.schemas.checks.contains import ContainsCheck
@@ -170,7 +170,7 @@ class TestEngineVersioning:
         assert async_result.status == "completed"
 
     def test_engine_version_not_found_error(self):
-        """Test engine handles gracefully when requested version doesn't exist."""
+        """Test engine fails fast when requested version doesn't exist."""
 
         @register("error_test", version="1.0.0")
         class ErrorTest_v1(BaseCheck):  # noqa: N801
@@ -182,14 +182,11 @@ class TestEngineVersioning:
         output = Output(value="test output")
 
         # Create check with non-existent version
-        check_nonexistent = Check(type="error_test", arguments={}, version="2.0.0")
+        check_nonexistent = Check(type="error_test", arguments={}, version="99.0.0")
 
-        result = evaluate([test_case], [output], [check_nonexistent])
-        check_result = result.results[0].check_results[0]
-
-        # Should result in an error status
-        assert check_result.status == "error"
-        assert "Version '2.0.0' not found" in check_result.error.message
+        # Should raise ValueError for version not found
+        with pytest.raises(ValueError, match="No schema class found for check type 'error_test' version '99.0.0'"):  # noqa: E501
+            evaluate([test_case], [output], [check_nonexistent])
 
     def test_engine_version_in_check_result_metadata(self):
         """Test that check version is included in CheckResult metadata."""

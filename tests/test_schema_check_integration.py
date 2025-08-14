@@ -453,7 +453,6 @@ class TestSchemaCheckErrorHandling:
             pattern="test",
             negate=True,
             flags=RegexFlags(case_insensitive=True, multiline=True),
-            version="1.0.0",
         )
 
         converted_check = schema_check.to_check()

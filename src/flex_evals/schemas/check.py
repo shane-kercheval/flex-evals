@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, ClassVar, Literal
 import re
 from enum import Enum
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, ConfigDict
 
 import jsonpath_ng
 from jsonpath_ng.exceptions import JSONPathError as JSONPathNGError
@@ -168,6 +168,8 @@ class SchemaCheck(JSONPathValidatedModel, ABC):
     - Adds validation at creation time
     - Seamless integration with existing evaluate() function
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     metadata: dict[str, Any] | None = None
 

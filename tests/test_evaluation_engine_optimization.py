@@ -332,7 +332,7 @@ class TestFlattenUnflatten:
                 checks=[
                     Check(type="exact_match", arguments={
                         "actual": "$.output.value.result",
-                        "expected": 10,
+                        "expected": "10",
                     }),
                     Check(type="async_sleep", arguments={"sleep_duration": 0.01}),
                 ],
@@ -344,7 +344,7 @@ class TestFlattenUnflatten:
                     Check(type="async_sleep", arguments={"sleep_duration": 0.01}),
                     Check(type="exact_match", arguments={
                         "actual": "$.output.value.result",
-                        "expected": 20,
+                        "expected": "20",
                     }),
                     Check(type="async_sleep", arguments={"sleep_duration": 0.01}),
                 ],
@@ -358,9 +358,9 @@ class TestFlattenUnflatten:
         ]
 
         outputs = [
-            Output(value={"result": 10}),
-            Output(value={"result": 20}),
-            Output(value={"result": 30}),
+            Output(value={"result": "10"}),
+            Output(value={"result": "20"}),
+            Output(value={"result": "30"}),
         ]
 
         # Run evaluation (uses flatten/unflatten internally)
