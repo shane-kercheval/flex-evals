@@ -158,14 +158,18 @@ class TestEqualsCheck:
         assert check.negate is True
 
     def test_equals_check_validation_empty_actual(self):
-        """Test EqualsCheck validation for empty actual."""
-        with pytest.raises(ValidationError):
-            EqualsCheck(actual="", expected="$.expected")
+        """Test EqualsCheck allows empty actual as valid literal value."""
+        # Empty strings should be allowed as literal values
+        check = EqualsCheck(actual="", expected="$.expected")
+        assert check.actual == ""
+        assert check.expected == "$.expected"
 
     def test_equals_check_validation_empty_expected(self):
-        """Test EqualsCheck validation for empty expected."""
-        with pytest.raises(ValidationError):
-            EqualsCheck(actual="$.actual", expected="")
+        """Test EqualsCheck allows empty expected as valid literal value."""
+        # Empty strings should be allowed as literal values
+        check = EqualsCheck(actual="$.actual", expected="")
+        assert check.actual == "$.actual"
+        assert check.expected == ""
 
     def test_equals_check_to_check_conversion(self):
         """Test EqualsCheck to_check() conversion."""
@@ -308,9 +312,11 @@ class TestThresholdCheck:
         assert check.negate is True
 
     def test_threshold_check_validation_empty_value(self):
-        """Test ThresholdCheck validation for empty value."""
-        with pytest.raises(ValidationError):
-            ThresholdCheck(value="", min_value=80.0)
+        """Test ThresholdCheck allows empty value as valid literal value."""
+        # Empty strings should be allowed as literal values (though they may fail at execution)
+        check = ThresholdCheck(value="", min_value=80.0)
+        assert check.value == ""
+        assert check.min_value == 80.0
 
     def test_threshold_check_validation_no_bounds(self):
         """Test ThresholdCheck validation for no bounds."""

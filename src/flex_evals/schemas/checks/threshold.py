@@ -13,9 +13,8 @@ class ThresholdCheck(SchemaCheck):
     VERSION: ClassVar[str] = "1.0.0"
     CHECK_TYPE: ClassVar[CheckType] = CheckType.THRESHOLD
 
-    value: str = OptionalJSONPath(
+    value: str | int | float = OptionalJSONPath(
         "numeric value to check or JSONPath expression pointing to the value",
-        min_length=1,
     )
     min_value: float | None = Field(None, description="Minimum acceptable value")
     max_value: float | None = Field(None, description="Maximum acceptable value")

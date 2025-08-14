@@ -1666,3 +1666,249 @@ class TestSchemaCheckTypes:
         assert check_result.metadata is not None
         assert check_result.metadata.get("test_category") == "geography"
         assert check_result.metadata.get("difficulty") == "easy"
+
+
+class TestSchemaCheckTypesWithLiteralValues:
+    """Test schema check types using literal values instead of JSONPath expressions."""
+
+    def setup_method(self):
+        """Set up test fixtures for literal value schema checks."""
+        restore_standard_checks()
+
+        # Simple test cases and outputs for literal value testing
+        self.test_cases = [
+            TestCase(id="test_001", input="What is the capital of France?", expected="Paris"),
+            TestCase(id="test_002", input="What is 2 + 2?", expected="4"),
+        ]
+
+        # Simple outputs that we'll extract values from manually
+        self.outputs = [
+            Output(value="Paris", id="output_001"),
+            Output(value="4", id="output_002"),
+        ]
+
+    def test_contains_check_with_literal_values(self):
+        """Test ContainsCheck using literal string values instead of JSONPath."""
+        # Extract values manually and use literal strings
+        schema_checks = [
+            ContainsCheck(text="Paris", phrases=["Par", "is"]),
+            ContainsCheck(text="The answer is 4", phrases=["answer", "4"], case_sensitive=False),
+        ]
+
+        result = evaluate(self.test_cases, self.outputs, schema_checks)
+
+        assert result.status == 'completed'
+
+        # Both test cases should pass their contains checks
+        for test_result in result.results:
+            for check_result in test_result.check_results:
+                assert check_result.results["passed"] is True
+
+    def test_equals_check_with_literal_values(self):
+        """Test EqualsCheck using literal values instead of JSONPath."""
+        schema_checks = [
+            EqualsCheck(actual="Paris", expected="Paris"),
+            EqualsCheck(actual=4, expected=4),  # Numeric literals
+            EqualsCheck(actual=["a", "b"], expected=["a", "b"]),  # List literals work
+            EqualsCheck(actual="", expected=""),  # Empty strings are valid literal values
+        ]
+
+        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+
+        assert result.status == 'completed'
+
+        # All equality checks should pass
+        test_result = result.results[0]
+        assert len(test_result.check_results) == 4
+        for check_result in test_result.check_results:
+            assert check_result.results["passed"] is True
+
+    def test_exact_match_check_with_literal_values(self):
+        """Test ExactMatchCheck using literal string values instead of JSONPath."""
+        schema_checks = [
+            ExactMatchCheck(actual="Paris", expected="Paris", case_sensitive=True),
+            ExactMatchCheck(actual="HELLO", expected="hello", case_sensitive=False),
+            ExactMatchCheck(
+                actual="Test", expected="test", case_sensitive=True, negate=True,
+            ),  # Should pass
+        ]
+
+        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+
+        assert result.status == 'completed'
+
+        # All exact match checks should pass
+        test_result = result.results[0]
+        assert len(test_result.check_results) == 3
+        for check_result in test_result.check_results:
+            assert check_result.results["passed"] is True
+
+    def test_is_empty_check_with_literal_values(self):
+        """Test IsEmptyCheck using literal values instead of JSONPath."""
+        schema_checks = [
+            IsEmptyCheck(value=""),           # Empty string
+            IsEmptyCheck(value=[]),           # Empty list
+            IsEmptyCheck(value={}),           # Empty dict
+            IsEmptyCheck(value=None),         # None value
+            IsEmptyCheck(value="not empty", negate=True),  # Non-empty (negated)
+            IsEmptyCheck(value=[1, 2, 3], negate=True),    # Non-empty list (negated)
+        ]
+
+        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+
+        assert result.status == 'completed'
+
+        # All empty/non-empty checks should pass
+        test_result = result.results[0]
+        assert len(test_result.check_results) == 6
+        for check_result in test_result.check_results:
+            assert check_result.results["passed"] is True
+
+    def test_regex_check_with_literal_values(self):
+        """Test RegexCheck using literal string values instead of JSONPath."""
+        schema_checks = [
+            RegexCheck(text="Paris", pattern=r"^[A-Z][a-z]+$"),           # Capital + lowercase
+            RegexCheck(
+                text="user@example.com", pattern=r"^[\w.-]+@[\w.-]+\.\w+$",
+            ),  # Email pattern
+            RegexCheck(text="123-45-6789", pattern=r"^\d{3}-\d{2}-\d{4}$"),        # SSN pattern
+            RegexCheck(text="Hello123", pattern=r"\d+"),                   # Contains digits
+        ]
+
+        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+
+        assert result.status == 'completed'
+
+        # All regex checks should pass
+        test_result = result.results[0]
+        assert len(test_result.check_results) == 4
+        for check_result in test_result.check_results:
+            assert check_result.results["passed"] is True
+
+    def test_threshold_check_with_literal_values(self):
+        """Test ThresholdCheck using literal numeric values instead of JSONPath."""
+        schema_checks = [
+            ThresholdCheck(value=0.95, min_value=0.8, max_value=1.0),     # Within range
+            ThresholdCheck(value=100, min_value=50),                       # Above minimum only
+            ThresholdCheck(value=25, max_value=50),                        # Below maximum only
+            ThresholdCheck(value=3.14159, min_value=3.0, max_value=4.0),  # Float within range
+        ]
+
+        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+
+        assert result.status == 'completed'
+
+        # All threshold checks should pass
+        test_result = result.results[0]
+        assert len(test_result.check_results) == 4
+        for check_result in test_result.check_results:
+            assert check_result.results["passed"] is True
+
+    def test_mixed_literal_and_jsonpath_values(self):
+        """Test mixing literal values with JSONPath expressions in same evaluation."""
+        # Create more complex output structure
+        complex_outputs = [
+            Output(value={"text": "Hello World", "score": 0.95}, id="complex_001"),
+        ]
+
+        schema_checks = [
+            # Literal value checks
+            ContainsCheck(text="Hello World", phrases=["Hello"]),
+            EqualsCheck(actual=42, expected=42),
+            # JSONPath value checks
+            ThresholdCheck(value="$.output.value.score", min_value=0.8),
+            ContainsCheck(text="$.output.value.text", phrases=["World"]),
+        ]
+
+        result = evaluate(self.test_cases[:1], complex_outputs, schema_checks)
+
+        assert result.status == 'completed'
+
+        # All mixed checks should pass
+        test_result = result.results[0]
+        assert len(test_result.check_results) == 4
+        for check_result in test_result.check_results:
+            assert check_result.results["passed"] is True
+
+    def test_literal_values_with_complex_data_types(self):
+        """Test schema checks with complex literal data types."""
+        schema_checks = [
+            # Complex data structure comparisons
+            EqualsCheck(
+                actual={"name": "John", "age": 30, "skills": ["Python", "JavaScript"]},
+                expected={"name": "John", "age": 30, "skills": ["Python", "JavaScript"]},
+            ),
+            EqualsCheck(
+                actual=[1, 2, {"nested": True}],
+                expected=[1, 2, {"nested": True}],
+            ),
+            # Empty collection checks
+            IsEmptyCheck(value=set()),  # Empty set
+            IsEmptyCheck(value=(), negate=False),  # Empty tuple
+            # String operations on complex converted values
+            ContainsCheck(
+                text=str({"key": "value"}),
+                phrases=["key", "value"],
+            ),
+        ]
+
+        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+
+        assert result.status == 'completed'
+
+        # All complex data type checks should pass
+        test_result = result.results[0]
+        assert len(test_result.check_results) == 5
+        for check_result in test_result.check_results:
+            assert check_result.results["passed"] is True
+
+    def test_user_resolved_values_pattern(self):
+        """Test a realistic pattern where users resolve values themselves."""
+        # Simulate user extracting and processing values from outputs
+        raw_output = {"model_response": "The capital of France is Paris", "confidence": 0.92}
+
+        # User extracts and processes the values
+        extracted_text = raw_output["model_response"]
+        confidence_score = raw_output["confidence"]
+        word_count = len(extracted_text.split())
+        contains_capital = "capital" in extracted_text.lower()
+
+        # User creates checks with their resolved values
+        user_resolved_checks = [
+            ContainsCheck(text=extracted_text, phrases=["France", "Paris"]),
+            ThresholdCheck(value=confidence_score, min_value=0.8),
+            ThresholdCheck(value=word_count, min_value=5, max_value=20),
+            EqualsCheck(actual=contains_capital, expected=True),
+            RegexCheck(text=extracted_text, pattern=r"The .+ of .+ is .+"),  # Template pattern
+        ]
+
+        result = evaluate(self.test_cases[:1], self.outputs[:1], user_resolved_checks)
+
+        assert result.status == 'completed'
+
+        # All user-resolved checks should pass
+        test_result = result.results[0]
+        assert len(test_result.check_results) == 5
+        for i, check_result in enumerate(test_result.check_results):
+            assert check_result.results["passed"] is True, (
+                f"Check {i} failed: {check_result.check_type}"
+            )
+
+    def test_literal_values_error_cases(self):
+        """Test that literal values still produce meaningful errors when checks fail."""
+        schema_checks = [
+            ContainsCheck(text="Hello", phrases=["Goodbye"]),  # Should fail
+            EqualsCheck(actual="Apple", expected="Orange"),     # Should fail
+            ThresholdCheck(value=5, min_value=10),              # Should fail
+        ]
+
+        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+
+        assert result.status == 'completed'
+
+        # All checks should fail but complete successfully
+        test_result = result.results[0]
+        assert len(test_result.check_results) == 3
+        for check_result in test_result.check_results:
+            assert check_result.status == 'completed'
+            assert check_result.results["passed"] is False

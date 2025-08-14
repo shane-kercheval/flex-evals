@@ -333,12 +333,15 @@ class TestSchemaCheckValidation:
             ExactMatchCheck(actual="$.actual", expected="")
 
     def test_equals_check_validation_errors(self):
-        """Test EqualsCheck validation errors."""
-        with pytest.raises(ValidationError):
-            EqualsCheck(actual="", expected="$.expected")
+        """Test EqualsCheck allows empty strings as valid literal values."""
+        # Empty strings should be allowed as literal values
+        check1 = EqualsCheck(actual="", expected="$.expected")
+        assert check1.actual == ""
+        assert check1.expected == "$.expected"
 
-        with pytest.raises(ValidationError):
-            EqualsCheck(actual="$.actual", expected="")
+        check2 = EqualsCheck(actual="$.actual", expected="")
+        assert check2.actual == "$.actual"
+        assert check2.expected == ""
 
 
 class TestSchemaCheckEquivalence:

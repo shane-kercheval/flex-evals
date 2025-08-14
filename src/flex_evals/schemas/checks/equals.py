@@ -14,9 +14,9 @@ class EqualsCheck(SchemaCheck):
     CHECK_TYPE: ClassVar[CheckType] = CheckType.EQUALS
 
     actual: str | list | dict | set | tuple | int | float | bool | None | Any = OptionalJSONPath(
-        "value to check or JSONPath expression pointing to the value", min_length=1,
+        "value to check or JSONPath expression pointing to the value",
     )
     expected: str | list | dict | set | tuple | int | float | bool | None | Any = OptionalJSONPath(
-        "expected value or JSONPath expression pointing to the value", min_length=1,
+        "expected value or JSONPath expression pointing to the value",
     )
     negate: bool = Field(False, description="If true, passes when values don't match")
