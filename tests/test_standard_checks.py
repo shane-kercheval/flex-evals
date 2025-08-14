@@ -5,6 +5,7 @@ from typing import Any
 
 from flex_evals.checks.standard.exact_match import ExactMatchCheck_v1_0_0
 from flex_evals.checks.standard.contains import ContainsCheck_v1_0_0
+from flex_evals.checks.standard.equals import EqualsCheck_v1_0_0
 from flex_evals.checks.standard.is_empty import IsEmptyCheck_v1_0_0
 from flex_evals.checks.standard.regex import RegexCheck_v1_0_0
 from flex_evals.checks.standard.threshold import ThresholdCheck_v1_0_0
@@ -111,6 +112,366 @@ class TestExactMatchCheck:
         assert results.summary.completed_test_cases == 1
         assert results.summary.error_test_cases == 0
         assert results.summary.skipped_test_cases == 0
+        assert results.results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].results == {"passed": expected_passed}
+
+
+class TestEqualsCheck:
+    """Test Equals check implementation."""
+
+    def test_equals_identical_strings(self):
+        """Test equals passes when strings are identical."""
+        result = EqualsCheck_v1_0_0()(
+            actual="hello world",
+            expected="hello world",
+            negate=False,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_different_strings(self):
+        """Test equals fails when strings are different."""
+        result = EqualsCheck_v1_0_0()(
+            actual="hello world",
+            expected="goodbye world",
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_case_sensitive_by_default(self):
+        """Test equals is case sensitive by default."""
+        result = EqualsCheck_v1_0_0()(
+            actual="Hello World",
+            expected="hello world",
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_integers(self):
+        """Test equals works with identical integers."""
+        result = EqualsCheck_v1_0_0()(
+            actual=42,
+            expected=42,
+            negate=False,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_different_integers(self):
+        """Test equals fails with different integers."""
+        result = EqualsCheck_v1_0_0()(
+            actual=42,
+            expected=43,
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_floats(self):
+        """Test equals works with identical floats."""
+        result = EqualsCheck_v1_0_0()(
+            actual=3.14,
+            expected=3.14,
+            negate=False,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_different_floats(self):
+        """Test equals fails with different floats."""
+        result = EqualsCheck_v1_0_0()(
+            actual=3.14,
+            expected=2.71,
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_booleans(self):
+        """Test equals works with identical booleans."""
+        result = EqualsCheck_v1_0_0()(
+            actual=True,
+            expected=True,
+            negate=False,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_different_booleans(self):
+        """Test equals fails with different booleans."""
+        result = EqualsCheck_v1_0_0()(
+            actual=True,
+            expected=False,
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_lists_identical(self):
+        """Test equals works with identical lists."""
+        result = EqualsCheck_v1_0_0()(
+            actual=[1, 2, 3],
+            expected=[1, 2, 3],
+            negate=False,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_lists_different_values(self):
+        """Test equals fails with lists containing different values."""
+        result = EqualsCheck_v1_0_0()(
+            actual=[1, 2, 3],
+            expected=[1, 2, 4],
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_lists_different_order(self):
+        """Test equals fails with same values in different order."""
+        result = EqualsCheck_v1_0_0()(
+            actual=[1, 2, 3],
+            expected=[3, 2, 1],
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_lists_different_length(self):
+        """Test equals fails with different length lists."""
+        result = EqualsCheck_v1_0_0()(
+            actual=[1, 2, 3],
+            expected=[1, 2],
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_dicts_identical(self):
+        """Test equals works with identical dictionaries."""
+        result = EqualsCheck_v1_0_0()(
+            actual={"a": 1, "b": 2},
+            expected={"a": 1, "b": 2},
+            negate=False,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_dicts_different_values(self):
+        """Test equals fails with dicts having different values."""
+        result = EqualsCheck_v1_0_0()(
+            actual={"a": 1, "b": 2},
+            expected={"a": 1, "b": 3},
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_dicts_different_keys(self):
+        """Test equals fails with dicts having different keys."""
+        result = EqualsCheck_v1_0_0()(
+            actual={"a": 1, "b": 2},
+            expected={"a": 1, "c": 2},
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_dicts_different_order_same_content(self):
+        """Test equals passes with same dict content in different order."""
+        result = EqualsCheck_v1_0_0()(
+            actual={"a": 1, "b": 2},
+            expected={"b": 2, "a": 1},
+            negate=False,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_sets_identical(self):
+        """Test equals works with identical sets."""
+        result = EqualsCheck_v1_0_0()(
+            actual={1, 2, 3},
+            expected={1, 2, 3},
+            negate=False,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_sets_different_values(self):
+        """Test equals fails with sets having different values."""
+        result = EqualsCheck_v1_0_0()(
+            actual={1, 2, 3},
+            expected={1, 2, 4},
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_sets_different_order_same_content(self):
+        """Test equals passes with same set content in different order."""
+        result = EqualsCheck_v1_0_0()(
+            actual={1, 2, 3},
+            expected={3, 1, 2},
+            negate=False,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_tuples_identical(self):
+        """Test equals works with identical tuples."""
+        result = EqualsCheck_v1_0_0()(
+            actual=(1, 2, 3),
+            expected=(1, 2, 3),
+            negate=False,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_tuples_different_order(self):
+        """Test equals fails with tuples in different order."""
+        result = EqualsCheck_v1_0_0()(
+            actual=(1, 2, 3),
+            expected=(3, 2, 1),
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_none_values(self):
+        """Test equals works with None values."""
+        result = EqualsCheck_v1_0_0()(
+            actual=None,
+            expected=None,
+            negate=False,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_none_vs_empty_string(self):
+        """Test equals fails when comparing None to empty string."""
+        result = EqualsCheck_v1_0_0()(
+            actual=None,
+            expected="",
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_mixed_types_different(self):
+        """Test equals fails when comparing different types."""
+        result = EqualsCheck_v1_0_0()(
+            actual="42",
+            expected=42,
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_nested_structures(self):
+        """Test equals works with nested data structures."""
+        result = EqualsCheck_v1_0_0()(
+            actual={"list": [1, 2, {"nested": "value"}], "number": 42},
+            expected={"list": [1, 2, {"nested": "value"}], "number": 42},
+            negate=False,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_nested_structures_different(self):
+        """Test equals fails with different nested structures."""
+        result = EqualsCheck_v1_0_0()(
+            actual={"list": [1, 2, {"nested": "value"}], "number": 42},
+            expected={"list": [1, 2, {"nested": "different"}], "number": 42},
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_negate_true_equal_values(self):
+        """Test negate=true fails when values are equal."""
+        result = EqualsCheck_v1_0_0()(
+            actual="hello",
+            expected="hello",
+            negate=True,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_negate_true_different_values(self):
+        """Test negate=true passes when values are different."""
+        result = EqualsCheck_v1_0_0()(
+            actual="hello",
+            expected="world",
+            negate=True,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_negate_false_equal_values(self):
+        """Test negate=false passes when values are equal."""
+        result = EqualsCheck_v1_0_0()(
+            actual="hello",
+            expected="hello",
+            negate=False,
+        )
+        assert result == {"passed": True}
+
+    def test_equals_negate_false_different_values(self):
+        """Test negate=false fails when values are different."""
+        result = EqualsCheck_v1_0_0()(
+            actual="hello",
+            expected="world",
+            negate=False,
+        )
+        assert result == {"passed": False}
+
+    def test_equals_missing_actual_argument(self):
+        """Test equals raises error when actual argument is missing."""
+        with pytest.raises(TypeError):
+            EqualsCheck_v1_0_0()(expected="value", negate=False)
+
+    def test_equals_missing_expected_argument(self):
+        """Test equals raises error when expected argument is missing."""
+        with pytest.raises(TypeError):
+            EqualsCheck_v1_0_0()(actual="value", negate=False)
+
+    def test_equals_result_schema(self):
+        """Test equals returns correct result schema."""
+        result = EqualsCheck_v1_0_0()(
+            actual="test",
+            expected="test",
+            negate=False,
+        )
+
+        assert isinstance(result, dict)
+        assert "passed" in result
+        assert isinstance(result["passed"], bool)
+        assert len(result) == 1
+
+    @pytest.mark.parametrize(("actual_value", "expected_value", "expected_passed"), [
+        # Same type comparisons
+        ("hello", "hello", True),
+        ("hello", "world", False),
+        (42, 42, True),
+        (42, 43, False),
+        ([1, 2, 3], [1, 2, 3], True),
+        ([1, 2, 3], [1, 2, 4], False),
+        ({"a": 1}, {"a": 1}, True),
+        ({"a": 1}, {"a": 2}, False),
+
+        # Cross-type comparisons (should be False)
+        ("42", 42, False),
+        (1, 1.0, True),  # Python considers 1 == 1.0 to be True
+        ([1, 2], (1, 2), False),
+        ({"a": 1}, [("a", 1)], False),
+
+        # None comparisons
+        (None, None, True),
+        (None, "", False),
+        (None, 0, False),
+        (None, [], False),
+    ])
+    def test_equals_via_evaluate(
+        self, actual_value: Any, expected_value: Any, expected_passed: bool,
+    ):
+        """Test using JSONPath for values with various equal/non-equal combinations."""
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="Input data",
+                expected="Expected output",
+                checks=[
+                    Check(
+                        type=CheckType.EQUALS,
+                        arguments={
+                            "actual": "$.output.value.actual_value",
+                            "expected": "$.output.value.expected_value",
+                        },
+                    ),
+                ],
+            ),
+        ]
+
+        outputs = [
+            Output(value={"actual_value": actual_value, "expected_value": expected_value}),
+        ]
+
+        results = evaluate(test_cases, outputs)
+        assert len(results.results) == 1
         assert results.results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": expected_passed}

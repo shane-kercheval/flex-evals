@@ -4,7 +4,7 @@ import pytest
 from pydantic import BaseModel, Field, ValidationError
 
 from flex_evals import (
-    evaluate, ContainsCheck, ExactMatchCheck, RegexCheck, ThresholdCheck,
+    evaluate, ContainsCheck, EqualsCheck, ExactMatchCheck, RegexCheck, ThresholdCheck,
     CustomFunctionCheck,
     Check, TestCase, Output,
     RegexFlags,
@@ -44,6 +44,22 @@ class TestSchemaCheckBasicUsage:
         output = Output(value="hello world")
 
         check = ExactMatchCheck(
+            actual="$.output.value",
+            expected="$.test_case.expected",
+        )
+
+        result = evaluate([test_case], [output], [check])
+
+        assert result.status == "completed"
+        assert len(result.results) == 1
+        assert result.results[0].check_results[0].results["passed"] is True
+
+    def test_evaluate_with_equals_check(self):
+        """Test evaluate() works with EqualsCheck."""
+        test_case = TestCase(id="test1", input="user input", expected="hello world")
+        output = Output(value="hello world")
+
+        check = EqualsCheck(
             actual="$.output.value",
             expected="$.test_case.expected",
         )
@@ -121,6 +137,7 @@ class TestSchemaCheckMixedUsage:
 
         checks = [
             ContainsCheck(text="$.output.value.text", phrases=["hello"]),
+            EqualsCheck(actual="$.output.value.text", expected="$.test_case.expected"),
             ExactMatchCheck(actual="$.output.value.text", expected="$.test_case.expected"),
             ThresholdCheck(value="$.output.value.score", min_value=90.0),
             RegexCheck(text="$.output.value.text", pattern=r"world"),
@@ -129,7 +146,7 @@ class TestSchemaCheckMixedUsage:
         result = evaluate([test_case], [output], checks)
 
         assert result.status == "completed"
-        assert len(result.results[0].check_results) == 4
+        assert len(result.results[0].check_results) == 5
         assert all(cr.results["passed"] for cr in result.results[0].check_results)
 
 
@@ -314,6 +331,14 @@ class TestSchemaCheckValidation:
 
         with pytest.raises(ValidationError):
             ExactMatchCheck(actual="$.actual", expected="")
+
+    def test_equals_check_validation_errors(self):
+        """Test EqualsCheck validation errors."""
+        with pytest.raises(ValidationError):
+            EqualsCheck(actual="", expected="$.expected")
+
+        with pytest.raises(ValidationError):
+            EqualsCheck(actual="$.actual", expected="")
 
 
 class TestSchemaCheckEquivalence:

@@ -6,7 +6,7 @@ from flex_evals.engine import evaluate
 from flex_evals.registry import list_registered_checks, get_check_class
 from flex_evals import (
     TestCase, Output,
-    ContainsCheck, ExactMatchCheck, IsEmptyCheck, RegexCheck, ThresholdCheck,
+    ContainsCheck, EqualsCheck, ExactMatchCheck, IsEmptyCheck, RegexCheck, ThresholdCheck,
     AttributeExistsCheck, SemanticSimilarityCheck, LLMJudgeCheck, CustomFunctionCheck,
 )
 
@@ -17,7 +17,7 @@ class TestSchemaImplementationConsistency:
     def test_all_schema_classes_have_version_attribute(self):
         """Test that all schema classes have VERSION attribute."""
         schema_classes = [
-            ContainsCheck, ExactMatchCheck, IsEmptyCheck, RegexCheck, ThresholdCheck,
+            ContainsCheck, EqualsCheck, ExactMatchCheck, IsEmptyCheck, RegexCheck, ThresholdCheck,
             AttributeExistsCheck, SemanticSimilarityCheck, LLMJudgeCheck, CustomFunctionCheck,
         ]
 
@@ -30,6 +30,7 @@ class TestSchemaImplementationConsistency:
         """Test that every schema class has a corresponding registered implementation."""
         schema_to_check_type = {
             ContainsCheck: CheckType.CONTAINS,
+            EqualsCheck: CheckType.EQUALS,
             ExactMatchCheck: CheckType.EXACT_MATCH,
             IsEmptyCheck: CheckType.IS_EMPTY,
             RegexCheck: CheckType.REGEX,
@@ -64,6 +65,7 @@ class TestSchemaImplementationConsistency:
         # Map of check types to their schema classes
         check_type_to_schema = {
             "contains": ContainsCheck,
+            "equals": EqualsCheck,
             "exact_match": ExactMatchCheck,
             "is_empty": IsEmptyCheck,
             "regex": RegexCheck,
@@ -91,6 +93,7 @@ class TestSchemaImplementationConsistency:
         # Test with a few schema classes
         schema_instances = [
             ContainsCheck(text="test", phrases=["hello"]),
+            EqualsCheck(actual="actual", expected="expected"),
             ExactMatchCheck(actual="actual", expected="expected"),
             IsEmptyCheck(value="test"),
         ]
