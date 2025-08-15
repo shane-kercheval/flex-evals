@@ -1,6 +1,7 @@
 """Tests for pytest decorator implementation using real checks (no mocks)."""
 
 import inspect
+import os
 import pytest
 import time
 import _pytest.outcomes
@@ -1050,6 +1051,10 @@ class TestEvaluateDecoratorAsync:
         assert total_duration < max_concurrent_duration, f"Async functions may not be concurrent (took {total_duration:.3f}s)"  # noqa: E501
         assert num_func_calls == num_samples, "Function should be called exactly num_samples times"
 
+    @pytest.mark.skipif(
+        os.getenv("SKIP_CI_TESTS") == "true",
+        reason="Performance tests skipped in CI environment",
+    )
     def test_async_with_multiple_test_cases_timing(self):
         """
         Test async concurrency with multiple test cases per sample.
