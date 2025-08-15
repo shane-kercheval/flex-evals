@@ -16,7 +16,7 @@ from .schemas import (
 )
 from .schemas.results import ExecutionContext
 from .schemas.check import CheckError
-from .checks.base import EvaluationContext, BaseCheck, BaseAsyncCheck
+from .checks.base import EvaluationContext, BaseCheck, BaseAsyncCheck, CheckTypes
 from .registry import (
     get_check_class,
     get_registry_state,
@@ -30,7 +30,7 @@ from .exceptions import ValidationError
 def evaluate(
         test_cases: list[TestCase],
         outputs: list[Output],
-        checks: list[Check | BaseCheck | BaseAsyncCheck] | list[list[Check | BaseCheck | BaseAsyncCheck]] | None = None,
+        checks: list[CheckTypes] | list[list[CheckTypes]] | None = None,
         experiment_metadata: ExperimentMetadata | None = None,
         max_async_concurrent: int | None = None,
         max_parallel_workers: int = 1,
@@ -50,8 +50,8 @@ def evaluate(
         test_cases: List of test cases to evaluate
         outputs: List of system outputs corresponding to test cases
         checks: Either:
-            - List[Check | BaseCheck | BaseAsyncCheck]: Same checks applied to all test cases (shared pattern)
-            - List[List[Check | BaseCheck | BaseAsyncCheck]]: checks[i] applies to test_cases[i] (per-test-case pattern)
+            - List[CheckTypes]: Same checks applied to all test cases (shared pattern)
+            - List[List[CheckTypes]]: checks[i] applies to test_cases[i] (per-test-case pattern)
             - None: Extract checks from TestCase.checks field (convenience pattern)
             Can be Check objects or BaseCheck/BaseAsyncCheck instances
         experiment_metadata: Optional experiment context information
@@ -105,8 +105,8 @@ def evaluate(
 
 
 def _convert_check_input(
-	    check_input: Check | BaseCheck | BaseAsyncCheck,
-	) -> BaseCheck | BaseAsyncCheck:
+        check_input: CheckTypes,
+) -> BaseCheck | BaseAsyncCheck:
     """
     Convert a Check or BaseCheck to a validated BaseCheck/BaseAsyncCheck instance.
 
@@ -156,7 +156,7 @@ def _convert_check_input(
 def _validate_inputs(
         test_cases: list[TestCase],
         outputs: list[Output],
-        checks: list[Check | BaseCheck | BaseAsyncCheck] | list[list[Check | BaseCheck | BaseAsyncCheck]] | None,
+        checks: list[CheckTypes] | list[list[CheckTypes]] | None,
     ) -> None:
     """Validate evaluation inputs according to FEP protocol."""
     if len(test_cases) != len(outputs):
@@ -192,7 +192,7 @@ def _validate_inputs(
 
 def _resolve_checks(
         test_cases: list[TestCase],
-        checks: list[Check | BaseCheck | BaseAsyncCheck] | list[list[Check | BaseCheck | BaseAsyncCheck]] | None,
+        checks: list[CheckTypes] | list[list[CheckTypes]] | None,
     ) -> list[list[BaseCheck | BaseAsyncCheck]]:
     """
     Resolve checks for each test case according to FEP patterns.
@@ -280,7 +280,7 @@ def _flatten_checks_for_execution(
 
 
 def _unflatten_check_results(
-        work_items: list[tuple[TestCase, Output, list[Check]]],
+        work_items: list[tuple[TestCase, Output, list[BaseCheck | BaseAsyncCheck]]],
         sync_results: list[CheckResult],
         async_results: list[CheckResult],
         check_tracking: list[tuple[int, int, bool, int]],
@@ -321,7 +321,7 @@ def _unflatten_check_results(
 
 
 def _evaluate(
-        work_items: list[tuple[TestCase, Output, list[Check]]],
+        work_items: list[tuple[TestCase, Output, list[BaseCheck | BaseAsyncCheck]]],
         max_async_concurrent: int | None = None,
     ) -> list[TestCaseResult]:
     """Execute evaluation with optimal sync/async separation across all test cases."""
@@ -349,7 +349,7 @@ def _evaluate(
 def _evaluate_parallel(
         test_cases: list[TestCase],
         outputs: list[Output],
-        resolved_checks: list[list[Check]],
+        resolved_checks: list[list[BaseCheck | BaseAsyncCheck]],
         max_async_concurrent: int | None = None,
         max_parallel_workers: int = 2,
     ) -> list[TestCaseResult]:
@@ -387,7 +387,7 @@ def _evaluate_parallel(
 
 
 def _evaluate_with_registry(
-        work_items: list[tuple[TestCase, Output, list[Check]]],
+        work_items: list[tuple[TestCase, Output, list[BaseCheck | BaseAsyncCheck]]],
         max_async_concurrent: int | None = None,
         registry_state: dict | None = None,
     ) -> list[TestCaseResult]:
@@ -404,10 +404,8 @@ def _evaluate_with_registry(
 def _execute_sync_check(check: BaseCheck, context: EvaluationContext) -> CheckResult:
     """Execute a single synchronous combined check and return the result."""
     try:
-        # Execute the check using the combined check's execute method
+        # Execute the check using the new architecture
         return check.execute(
-            check_type=str(check.check_type),
-            arguments=check.to_arguments(),
             context=context,
             check_metadata=check.metadata,
         )
@@ -420,7 +418,7 @@ def _execute_sync_check(check: BaseCheck, context: EvaluationContext) -> CheckRe
 
 
 async def _execute_all_async_checks(
-        async_check_contexts: list[tuple[Check, EvaluationContext]],
+        async_check_contexts: list[tuple[BaseAsyncCheck, EvaluationContext]],
         max_async_concurrent: int | None = None,
     ) -> list[CheckResult]:
     """Execute ALL async checks across all test cases concurrently."""
@@ -445,10 +443,8 @@ async def _execute_async_check(
     """Execute a single asynchronous check and return the result."""
     async def _run_check() -> CheckResult:
         try:
-            # Execute the check using the combined check's execute method
+            # Execute the check using the new architecture
             return await check.execute(
-                check_type=str(check.check_type),
-                arguments=check.to_arguments(),
                 context=context,
                 check_metadata=check.metadata,
             )

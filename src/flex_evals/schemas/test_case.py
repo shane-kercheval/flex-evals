@@ -7,9 +7,8 @@ from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     # Import check classes for type hints only
-    from ..checks.base import BaseCheck, BaseAsyncCheck
+    from ..checks.base import CheckTypes
 
-from ..schemas.check import Check
 
 
 @dataclass
@@ -31,7 +30,7 @@ class TestCase:
     input: str | dict[str, Any]
     expected: str | dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
-    checks: list[Check | BaseCheck | BaseAsyncCheck] | None = None  # Per-test-case checks (convenience pattern)
+    checks: list[CheckTypes] | None = None  # Per-test-case checks (convenience pattern)
 
     def __post_init__(self):
         """Validate required fields and constraints."""

@@ -6,9 +6,9 @@ Combines schema validation with execution logic in a single class.
 
 from typing import Any
 from datetime import datetime, UTC
-from pydantic import Field
+from pydantic import Field, field_validator
 
-from .base import BaseCheck, EvaluationContext, RequiredJSONPath
+from .base import BaseCheck, EvaluationContext, JSONPath
 from ..registry import register
 from ..constants import CheckType
 from ..exceptions import JSONPathError, ValidationError
@@ -19,15 +19,27 @@ from ..schemas import CheckResult
 class AttributeExistsCheck(BaseCheck):
     """Tests whether an attribute/field exists as defined by the JSONPath; useful for checking if optional fields."""  # noqa: E501
 
-    # Pydantic fields with validation
-    path: str = RequiredJSONPath('JSONPath expression to check for existence (e.g., "$.output.error")')
-    negate: bool = Field(False, description='If true, passes when attribute does NOT exist')
+    # Pydantic fields with validation - path must be JSONPath, negate can be literal or JSONPath
+    path: JSONPath = Field(..., description='JSONPath expression to check for existence (e.g., "$.output.error")')
+    negate: bool | JSONPath = Field(False, description='If true, passes when attribute does NOT exist')
 
-    def __call__(
-        self,
-        path: str,  # noqa: ARG002
-        negate: bool = False,  # noqa: ARG002
-    ) -> dict[str, Any]:
+    @field_validator('path', mode='before')
+    @classmethod
+    def convert_path_jsonpath(cls, v):
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str):
+            return JSONPath(expression=v)
+        return v
+
+    @field_validator('negate', mode='before')
+    @classmethod
+    def convert_negate_jsonpath(cls, v):
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
+    def __call__(self) -> dict[str, Any]:
         """
         Should never be called directly for AttributeExistsCheck.
 
@@ -40,8 +52,6 @@ class AttributeExistsCheck(BaseCheck):
 
     def execute(
         self,
-        check_type: str,
-        arguments: dict[str, Any],
         context: EvaluationContext,
         check_metadata: dict[str, Any] | None = None,
     ) -> CheckResult:
@@ -56,29 +66,31 @@ class AttributeExistsCheck(BaseCheck):
 
         # Get version from registry using the class
         check_version = self._get_version()
+        check_type = str(self.check_type)
 
         try:
-            # Validate arguments
-            if 'path' not in arguments:
-                raise ValidationError("AttributeExistsCheck requires 'path' argument")
-
-            path = arguments.get('path')
-            negate = arguments.get('negate', False)
-
-            if not isinstance(path, str):
-                raise ValidationError("'path' argument must be a string")
-
-            if not self._resolver.is_jsonpath(path):
-                raise ValidationError(
-                    "'path' argument must be a JSONPath expression (e.g., '$.output.error')",
-                )
+            # Resolve negate field if it's JSONPath (path field stays as JSONPath object)
+            if isinstance(self.negate, JSONPath):
+                try:
+                    negate_result = self._resolver.resolve_argument(
+                        self.negate.expression,
+                        context.context_dict,
+                    )
+                    negate = negate_result.get("value")
+                except Exception as e:
+                    raise ValidationError(f"Failed to resolve negate JSONPath: {e}") from e
+            else:
+                negate = self.negate
 
             if not isinstance(negate, bool):
-                raise ValidationError("'negate' argument must be a boolean")
+                raise ValidationError("'negate' field must resolve to a boolean")
+
+            # Use the path JSONPath expression directly
+            path_expression = self.path.expression
 
             # Try to resolve the JSONPath to determine existence
             try:
-                resolved_arg = self._resolver.resolve_argument(path, context.context_dict)
+                resolved_arg = self._resolver.resolve_argument(path_expression, context.context_dict)
                 # If we get here, the path exists
                 attribute_exists = True
                 resolved_arguments = {'path': resolved_arg, 'negate': {'value': negate}}
@@ -86,7 +98,7 @@ class AttributeExistsCheck(BaseCheck):
                 # Path doesn't exist
                 attribute_exists = False
                 resolved_arguments = {
-                    'path': {'jsonpath': path, 'value': None},
+                    'path': {'jsonpath': path_expression, 'value': None},
                     'negate': {'value': negate},
                 }
 

@@ -9,7 +9,9 @@ from pydantic import BaseModel, Field
 import threading
 
 from flex_evals.pytest_decorator import evaluate
-from flex_evals import TestCase, Check, CheckType, ContainsCheck
+from flex_evals import TestCase, Check, CheckType
+from flex_evals.checks.contains import ContainsCheck
+from flex_evals.checks.base import JSONPath
 
 from typing import Never
 
@@ -38,7 +40,7 @@ class TestEvaluateDecoratorBasicFunctionality:
         @evaluate(
             test_cases=[TestCase(id="basic", input="test input")],
             checks=[ContainsCheck(
-                text="$.output.value",
+                text=JSONPath(expression="$.output.value"),
                 phrases=["Python"],
             )],
             samples=3,

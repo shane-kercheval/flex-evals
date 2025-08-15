@@ -13,6 +13,7 @@ import pytest
 from typing import Any
 
 from flex_evals.checks.contains import ContainsCheck
+from flex_evals.checks.base import JSONPath
 from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
 from flex_evals.exceptions import ValidationError
 from pydantic import ValidationError as PydanticValidationError
@@ -28,7 +29,8 @@ class TestContainsValidation:
             phrases=["hello", "world"],
         )
 
-        assert check.text == "$.output.value"
+        assert isinstance(check.text, JSONPath)
+        assert check.text.expression == "$.output.value"
         assert check.phrases == ["hello", "world"]
         assert check.case_sensitive is True
         assert check.negate is False
@@ -53,13 +55,17 @@ class TestContainsValidation:
 
     def test_contains_check_validation_empty_phrases(self):
         """Test ContainsCheck validation for empty phrases."""
-        with pytest.raises(PydanticValidationError):
-            ContainsCheck(text="$.value", phrases=[])
+        # Empty phrases are now allowed at construction but fail at execution
+        check = ContainsCheck(text="$.value", phrases=[])
+        assert isinstance(check.text, JSONPath)
+        assert check.phrases == []
 
     def test_contains_check_validation_invalid_phrases(self):
         """Test ContainsCheck validation for invalid phrases - empty strings now allowed."""
         check = ContainsCheck(text="$.value", phrases=["valid", ""])
-        assert check.text == "$.value"
+        assert isinstance(check.text, JSONPath)
+
+        assert check.text.expression == "$.value"
         assert check.phrases == ["valid", ""]
 
     def test_contains_check_type_property(self):
@@ -74,7 +80,10 @@ class TestContainsValidation:
             phrases="hello",
         )
 
-        assert check.text == "$.output.value"
+        assert isinstance(check.text, JSONPath)
+
+
+        assert check.text.expression == "$.output.value"
         assert check.phrases == "hello"
         assert isinstance(check.phrases, str)
 
@@ -85,13 +94,15 @@ class TestContainsValidation:
             phrases="$.expected.phrases",
         )
 
-        assert check.phrases == "$.expected.phrases"
-        assert isinstance(check.phrases, str)
+        assert isinstance(check.phrases, JSONPath)
+        assert check.phrases.expression == "$.expected.phrases"
 
     def test_contains_check_validation_empty_phrases_string(self):
         """Test ContainsCheck validation for empty phrases string - now allowed."""
         check = ContainsCheck(text="$.value", phrases="")
-        assert check.text == "$.value"
+        assert isinstance(check.text, JSONPath)
+
+        assert check.text.expression == "$.value"
         assert check.phrases == ""
 
     def test_contains_check_validation_invalid_phrases_type(self):
@@ -105,140 +116,140 @@ class TestContainsExecution:
 
     def test_contains_all_phrases_found(self):
         """Test negate=false passes when all phrases present."""
-        check = ContainsCheck(text="test", phrases=["test"])
-        result = check(
+        check = ContainsCheck(
             text="Paris is the capital of France",
             phrases=["Paris", "France"],
             negate=False,
         )
+        result = check()
         assert result == {"passed": True}
 
     def test_contains_some_phrases_missing(self):
         """Test negate=false fails when any phrase missing."""
-        check = ContainsCheck(text="test", phrases=["test"])
-        result = check(
+        check = ContainsCheck(
             text="Paris is the capital of France",
             phrases=["Paris", "Spain"],  # Spain is missing
             negate=False,
         )
+        result = check()
         assert result == {"passed": False}
 
     def test_contains_negate_none_found(self):
         """Test negate=true passes when no phrases found."""
-        check = ContainsCheck(text="test", phrases=["test"])
-        result = check(
+        check = ContainsCheck(
             text="Paris is the capital of France",
             phrases=["London", "Spain"],
             negate=True,
         )
+        result = check()
         assert result == {"passed": True}
 
     def test_contains_negate_some_found(self):
         """Test negate=true fails when any phrase found."""
-        check = ContainsCheck(text="test", phrases=["test"])
-        result = check(
+        check = ContainsCheck(
             text="Paris is the capital of France",
             phrases=["Paris", "Spain"],  # Paris is found
             negate=True,
         )
+        result = check()
         assert result == {"passed": False}
 
     def test_contains_case_sensitive(self):
         """Test case sensitivity in phrase matching."""
-        check = ContainsCheck(text="test", phrases=["test"])
-        result = check(
+        check = ContainsCheck(
             text="Paris is the capital of France",
             phrases=["paris"],  # Lowercase
             case_sensitive=True,
         )
+        result = check()
         assert result == {"passed": False}
 
     def test_contains_case_insensitive(self):
         """Test case insensitive matching."""
-        check = ContainsCheck(text="test", phrases=["test"])
-        result = check(
+        check = ContainsCheck(
             text="Paris is the capital of France",
             phrases=["paris"],  # Lowercase
             case_sensitive=False,
         )
+        result = check()
         assert result == {"passed": True}
 
     def test_contains_single_phrase(self):
         """Test with single phrase in array."""
-        check = ContainsCheck(text="test", phrases=["test"])
-        result = check(
+        check = ContainsCheck(
             text="Paris is the capital of France",
             phrases=["capital"],
         )
+        result = check()
         assert result == {"passed": True}
 
     def test_contains_overlapping_phrases(self):
         """Test with overlapping/duplicate phrases."""
-        check = ContainsCheck(text="test", phrases=["test"])
-        result = check(
+        check = ContainsCheck(
             text="Paris Paris is great",
             phrases=["Paris", "Paris"],  # Duplicate phrase
         )
+        result = check()
         assert result == {"passed": True}
 
     def test_contains_missing_text(self):
         """Test missing text argument raises TypeError."""
-        check = ContainsCheck(text="test", phrases=["test"])
-        with pytest.raises(TypeError):
-            check(phrases=["test"])
+        # This test is no longer valid with new architecture - text is required at construction
+        with pytest.raises(PydanticValidationError):
+            ContainsCheck(phrases=["test"])  # Missing required text field
 
     def test_contains_missing_phrases(self):
         """Test missing phrases argument raises TypeError."""
-        check = ContainsCheck(text="test", phrases=["test"])
-        with pytest.raises(TypeError):
-            check(text="test text")
+        # This test is no longer valid with new architecture - phrases is required at construction
+        with pytest.raises(PydanticValidationError):
+            ContainsCheck(text="test text")  # Missing required phrases field
 
     def test_contains_single_string_phrase_found(self):
         """Test single string phrase that is found."""
-        check = ContainsCheck(text="test", phrases="test")
-        result = check(
+        check = ContainsCheck(
             text="Paris is the capital of France",
             phrases="Paris",  # Single string instead of list
         )
+        result = check()
         assert result == {"passed": True}
 
     def test_contains_single_string_phrase_not_found(self):
         """Test single string phrase that is not found."""
-        check = ContainsCheck(text="test", phrases="test")
-        result = check(
+        check = ContainsCheck(
             text="Paris is the capital of France",
             phrases="Spain",  # Single string not found
         )
+        result = check()
         assert result == {"passed": False}
 
     def test_contains_single_string_case_sensitive(self):
         """Test single string phrase with case sensitivity."""
-        check = ContainsCheck(text="test", phrases="test")
-        result = check(
+        check = ContainsCheck(
             text="Paris is the capital of France",
             phrases="paris",  # Lowercase
             case_sensitive=True,
         )
+        result = check()
         assert result == {"passed": False}
 
     def test_contains_single_string_case_insensitive(self):
         """Test single string phrase case insensitive."""
-        check = ContainsCheck(text="test", phrases="test")
-        result = check(
+        check = ContainsCheck(
             text="Paris is the capital of France",
             phrases="paris",  # Lowercase
             case_sensitive=False,
         )
+        result = check()
         assert result == {"passed": True}
 
     def test_contains_single_string_with_negate(self):
         """Test single string phrase with negate=True."""
-        check = ContainsCheck(text="test", phrases="test")
-        result = check(
+        check = ContainsCheck(
             text="Paris is the capital of France",
             phrases="Spain",  # Not found
             negate=True,
         )
+        result = check()
         assert result == {"passed": True}
 
 
@@ -367,21 +378,21 @@ class TestContainsErrorHandling:
 
     def test_contains_empty_phrases_execution_error(self):
         """Test behavior with empty phrases array during execution."""
-        check = ContainsCheck(text="test", phrases=["test"])
+        check = ContainsCheck(text="test text", phrases=[])
         with pytest.raises(ValidationError, match="must not be empty"):
-            check(text="test text", phrases=[])
+            check()
 
     def test_contains_empty_string_phrase_execution_error(self):
         """Test empty string phrase raises ValidationError during execution."""
-        check = ContainsCheck(text="test", phrases="test")
+        check = ContainsCheck(text="test text", phrases="")
         with pytest.raises(ValidationError, match="must not be empty"):
-            check(text="test text", phrases="")
+            check()
 
     def test_contains_invalid_phrases_type_execution_error(self):
         """Test invalid phrases type raises ValidationError during execution."""
-        check = ContainsCheck(text="test", phrases="test")
-        with pytest.raises(ValidationError, match="must be a string or list"):
-            check(text="test", phrases=123)
+        # With new architecture, invalid types are caught during construction
+        with pytest.raises(PydanticValidationError):
+            ContainsCheck(text="test", phrases=123)  # type: ignore
 
     def test_contains_required_fields(self):
         """Test that required fields are enforced."""
@@ -415,7 +426,7 @@ class TestContainsErrorHandling:
         outputs = [Output(value="test")]
         
         # Should raise validation error for invalid JSONPath
-        with pytest.raises(ValidationError, match="appears to be JSONPath but is invalid"):
+        with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
             evaluate(test_cases, outputs)
 
 

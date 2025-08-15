@@ -9,7 +9,7 @@ from typing import Any
 from collections.abc import Callable
 from pydantic import Field, BaseModel, field_validator
 
-from .base import BaseAsyncCheck, OptionalJSONPath
+from .base import BaseAsyncCheck, JSONPath
 from ..registry import register
 from ..exceptions import ValidationError, CheckExecutionError
 from ..constants import CheckType, SimilarityMetric
@@ -29,12 +29,16 @@ class ThresholdConfig(BaseModel):
 class SemanticSimilarityCheck(BaseAsyncCheck):
     """Computes semantic similarity between two texts using embeddings."""
 
-    # Pydantic fields with validation
-    text: str = OptionalJSONPath('First text to compare or JSONPath expression')
-    reference: str = OptionalJSONPath('Second text to compare against or JSONPath expression')
-    threshold: ThresholdConfig | None = Field(None, description='Threshold configuration for pass/fail determination')
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    text: str | JSONPath = Field(..., description='First text to compare or JSONPath expression')
+    reference: str | JSONPath = Field(..., description='Second text to compare against or JSONPath expression')
+    threshold: ThresholdConfig | JSONPath | None = Field(
+        None, description='Threshold configuration for pass/fail determination',
+    )
     embedding_function: Any = Field(..., description='User-provided function to generate embeddings')
-    similarity_metric: SimilarityMetric = Field(SimilarityMetric.COSINE, description='Similarity calculation method')
+    similarity_metric: SimilarityMetric | JSONPath = Field(
+        SimilarityMetric.COSINE, description='Similarity calculation method',
+    )
 
     @field_validator('embedding_function')
     @classmethod
@@ -44,57 +48,60 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
             raise ValueError("embedding_function must be callable")
         return v
 
-    async def __call__(
-        self,
-        text: str,
-        reference: str,
-        embedding_function: Callable,
-        threshold: dict | ThresholdConfig | None = None,
-        similarity_metric: str | SimilarityMetric = SimilarityMetric.COSINE,
-    ) -> dict[str, Any]:
+    async def __call__(self) -> dict[str, Any]:
         """
-        Execute semantic similarity check with resolved arguments.
+        Execute semantic similarity check using resolved Pydantic fields.
 
-        Args:
-            text: Resolved first text to compare
-            reference: Resolved second text to compare against
-            embedding_function: User-provided function to generate embeddings
-            threshold: Threshold configuration (dict, ThresholdConfig, or None)
-            similarity_metric: Similarity calculation method
+        All JSONPath objects should have been resolved by execute() before this is called.
 
         Returns:
             Dictionary with 'score' key and optional 'passed' key
+
+        Raises:
+            RuntimeError: If any field contains unresolved JSONPath objects
         """
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.text, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'text' field: {self.text}")
+        if isinstance(self.reference, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'reference' field: {self.reference}")
+        if isinstance(self.threshold, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'threshold' field: {self.threshold}")
+        if isinstance(self.similarity_metric, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'similarity_metric' field: {self.similarity_metric}")
+
         # Validate embedding function is callable
-        if not callable(embedding_function):
+        if not callable(self.embedding_function):
             raise ValidationError("embedding_function must be callable")
 
         # Handle similarity metric conversion
-        if isinstance(similarity_metric, str):
+        if isinstance(self.similarity_metric, str):
             try:
-                similarity_metric = SimilarityMetric(similarity_metric)
+                similarity_metric = SimilarityMetric(self.similarity_metric)
             except ValueError:
                 valid_metrics = [m.value for m in SimilarityMetric]
-                raise ValidationError(f"Unsupported similarity metric: {similarity_metric}. Valid options: {valid_metrics}")
+                raise ValidationError(f"Unsupported similarity metric: {self.similarity_metric}. Valid options: {valid_metrics}")
+        else:
+            similarity_metric = self.similarity_metric
 
         # Handle threshold conversion
         threshold_obj = None
-        if threshold is not None:
-            if isinstance(threshold, dict):
-                threshold_obj = ThresholdConfig(**threshold)
-            elif isinstance(threshold, ThresholdConfig):
-                threshold_obj = threshold
+        if self.threshold is not None:
+            if isinstance(self.threshold, dict):
+                threshold_obj = ThresholdConfig(**self.threshold)
+            elif isinstance(self.threshold, ThresholdConfig):
+                threshold_obj = self.threshold
             else:
                 raise ValidationError("threshold must be a dict or ThresholdConfig")
 
         # Convert to strings for embedding
-        text_str = str(text) if text is not None else ""
-        reference_str = str(reference) if reference is not None else ""
+        text_str = str(self.text) if self.text is not None else ""
+        reference_str = str(self.reference) if self.reference is not None else ""
 
         try:
             # Get embeddings for both texts
-            text_embedding = await self._call_embedding_function(embedding_function, text_str)
-            reference_embedding = await self._call_embedding_function(embedding_function, reference_str)
+            text_embedding = await self._call_embedding_function(self.embedding_function, text_str)
+            reference_embedding = await self._call_embedding_function(self.embedding_function, reference_str)
 
             # Calculate similarity score
             score = self._calculate_similarity(text_embedding, reference_embedding, similarity_metric.value)

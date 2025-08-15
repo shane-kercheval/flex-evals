@@ -5,9 +5,9 @@ Combines schema validation with execution logic in a single class.
 """
 
 from typing import Any
-from pydantic import Field
+from pydantic import field_validator, Field
 
-from .base import BaseCheck, OptionalJSONPath
+from .base import BaseCheck, JSONPath
 from ..registry import register
 from ..constants import CheckType
 
@@ -16,19 +16,26 @@ from ..constants import CheckType
 class IsEmptyCheck(BaseCheck):
     """Tests whether a value is empty (None, empty string, whitespace-only, or any empty collection that supports len())."""  # noqa: E501
 
-    # Pydantic fields with validation
-    value: str | list | dict | set | tuple | int | float | bool | None = OptionalJSONPath(
-        'Value to test for emptiness or JSONPath expression'
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    value: str | list | dict | set | tuple | int | float | bool | None | JSONPath = Field(
+        ..., description='Value to test for emptiness or JSONPath expression',
     )
-    negate: bool = Field(False, description='If true, passes when value is not empty')
-    strip_whitespace: bool = Field(True, description='If true, strips whitespace before checking (strings only)')
+    negate: bool | JSONPath = Field(
+        False, description='If true, passes when value is not empty',
+    )
+    strip_whitespace: bool | JSONPath = Field(
+        True, description='If true, strips whitespace before checking (strings only)',
+    )
 
-    def __call__(
-        self,
-        value: str | list | dict | set | tuple | int | float | bool | None,
-        negate: bool = False,
-        strip_whitespace: bool = True,
-    ) -> dict[str, Any]:
+    @field_validator('value', 'negate', 'strip_whitespace', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
+    def __call__(self) -> dict[str, Any]:
         """
         Execute emptiness check with resolved arguments.
 
@@ -40,20 +47,28 @@ class IsEmptyCheck(BaseCheck):
         Returns:
             Dictionary with 'passed' key indicating check result
         """
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.value, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'value' field: {self.value}")
+        if isinstance(self.negate, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'negate' field: {self.negate}")
+        if isinstance(self.strip_whitespace, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'strip_whitespace' field: {self.strip_whitespace}")
+
         # Handle None directly
-        if value is None:
+        if self.value is None:
             is_empty = True
         # Handle strings with optional whitespace stripping
-        elif isinstance(value, str):
-            is_empty = value.strip() == "" if strip_whitespace else value == ""
+        elif isinstance(self.value, str):
+            is_empty = self.value.strip() == "" if self.strip_whitespace else self.value == ""
         # Handle any object that supports len()
-        elif hasattr(value, '__len__'):
-            is_empty = len(value) == 0
+        elif hasattr(self.value, '__len__'):
+            is_empty = len(self.value) == 0
         # All other types are considered non-empty
         else:
             is_empty = False
 
         # Apply negation
-        passed = not is_empty if negate else is_empty
+        passed = not is_empty if self.negate else is_empty
 
         return {'passed': passed}

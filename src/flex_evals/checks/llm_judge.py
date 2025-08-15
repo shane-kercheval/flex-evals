@@ -12,9 +12,9 @@ import re
 from datetime import datetime, UTC
 from typing import Any, TypeVar
 from collections.abc import Callable, Awaitable
-from pydantic import Field, BaseModel
+from pydantic import Field, BaseModel, field_validator
 
-from .base import BaseAsyncCheck, EvaluationContext
+from .base import BaseAsyncCheck, EvaluationContext, JSONPath
 from ..registry import register
 from ..exceptions import ValidationError, CheckExecutionError, JSONPathError
 from ..constants import CheckType
@@ -28,112 +28,147 @@ T = TypeVar('T', bound=BaseModel)
 class LLMJudgeCheck(BaseAsyncCheck):
     """Uses an LLM to evaluate outputs against complex, nuanced criteria."""
 
-    # Pydantic fields with validation
-    prompt: str = Field(..., description='Prompt template with optional {{$.jsonpath}} placeholders')
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    prompt: str | JSONPath = Field(..., description='Prompt template with optional {{$.jsonpath}} placeholders')
     response_format: type[BaseModel] = Field(..., description='Pydantic model defining expected LLM response structure')
     llm_function: Any = Field(..., description='Function to call LLM with signature: (prompt, response_format) -> tuple[BaseModel, dict]')
 
+    @field_validator('prompt', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
     async def execute(
         self,
-        check_type: str,
-        arguments: dict[str, Any],
         context: EvaluationContext,
         check_metadata: dict[str, Any] | None = None,
     ) -> CheckResult:
         """
         Execute LLM judge check with template processing.
 
-        This method overrides the base class execute() to implement the two-phase
-        execution model required for prompt template processing:
-
-        PHASE 1 - TEMPLATE PROCESSING:
-        1. Checks if the prompt argument contains template placeholders
-        2. If templates exist, processes {{$.jsonpath}} placeholders
-        3. Creates modified arguments with processed prompt
-
-        PHASE 2 - STANDARD EXECUTION:
-        4. Delegates to parent class execute() with processed arguments
+        This method overrides the base class execute() to implement template processing
+        for prompts that contain {{$.jsonpath}} placeholders before standard field resolution.
         """
-        # Get version from registry using the class
+        evaluated_at = datetime.now(UTC)
         check_version = self._get_version()
+        check_type = str(self.check_type)
 
-        # PHASE 1: Template processing (if needed)
-        if "prompt" in arguments and isinstance(arguments["prompt"], str):
+        try:
+            # PHASE 1: Handle template processing if prompt contains {{$.jsonpath}} placeholders
+            prompt_to_use = self.prompt
+            if isinstance(self.prompt, str) and '{{$.' in self.prompt:
+                try:
+                    # Process prompt template by resolving {{$.jsonpath}} placeholders
+                    prompt_to_use = self._process_prompt_template(
+                        template=self.prompt,
+                        context=context,
+                    )
+                except JSONPathError as e:
+                    # Template processing failed - return error result
+                    return self._create_error_result(
+                        check_type=check_type,
+                        error_type='jsonpath_error',
+                        error_message=f"Error processing prompt template: {e}",
+                        resolved_arguments={},
+                        evaluated_at=evaluated_at,
+                        check_version=check_version,
+                        check_metadata=check_metadata,
+                        recoverable=False,
+                    )
+            elif isinstance(self.prompt, JSONPath):
+                # Resolve JSONPath prompt field
+                try:
+                    prompt_result = self._resolver.resolve_argument(
+                        self.prompt.expression,
+                        context.context_dict,
+                    )
+                    prompt_to_use = prompt_result.get("value")
+                except Exception as e:
+                    return self._create_error_result(
+                        check_type=check_type,
+                        error_type='jsonpath_error',
+                        error_message=f"Failed to resolve prompt JSONPath: {e}",
+                        resolved_arguments={},
+                        evaluated_at=evaluated_at,
+                        check_version=check_version,
+                        check_metadata=check_metadata,
+                        recoverable=False,
+                    )
+
+            # Create a copy of self with the processed prompt
+            # We need to temporarily set the prompt to the processed value
+            original_prompt = self.prompt
+            self.prompt = prompt_to_use
+
             try:
-                # Process prompt template by resolving {{$.jsonpath}} placeholders
-                processed_prompt = self._process_prompt_template(
-                    template=arguments["prompt"],
-                    context=context,
-                )
+                # PHASE 2: Execute with processed prompt using __call__()
+                results = await self()
 
-                # Create modified arguments with processed prompt
-                modified_arguments = arguments.copy()
-                modified_arguments["prompt"] = processed_prompt
+                # Build resolved arguments for the result
+                resolved_arguments = {
+                    'prompt': {'value': prompt_to_use, 'resolved_from': 'template_processed' if '{{$.' in str(original_prompt) else 'literal'},
+                    'response_format': {'value': str(self.response_format), 'resolved_from': 'literal'},
+                    'llm_function': {'value': str(self.llm_function), 'resolved_from': 'literal'},
+                }
 
-            except JSONPathError as e:
-                # Template processing failed - return error result
-                return self._create_error_result(
+                return CheckResult(
                     check_type=check_type,
-                    error_type='jsonpath_error',
-                    error_message=f"Error processing prompt template: {e}",
-                    resolved_arguments={},
-                    evaluated_at=datetime.now(UTC),
                     check_version=check_version,
-                    check_metadata=check_metadata,
-                    recoverable=False,
+                    status='completed',
+                    results=results,
+                    resolved_arguments=resolved_arguments,
+                    evaluated_at=evaluated_at,
+                    metadata=check_metadata,
                 )
-        else:
-            # No template processing needed
-            modified_arguments = arguments
 
-        # PHASE 2: Standard execution with processed arguments
-        # Delegate to parent class for standard JSONPath resolution and execution
-        return await super().execute(
-            check_type,
-            modified_arguments,
-            context,
-            check_metadata,
-        )
+            finally:
+                # Restore original prompt
+                self.prompt = original_prompt
 
-    async def __call__(
-        self,
-        prompt: str,
-        response_format: type[T],
-        llm_function: Callable[
-            [str, type[T]],
-            tuple[T, dict[str, Any]] | Awaitable[tuple[T, dict[str, Any]]],
-        ],
-        **kwargs: Any,  # noqa: ANN401
-    ) -> dict[str, Any]:
+        except Exception as e:
+            return self._create_error_result(
+                check_type=check_type,
+                error_type='execution_error',
+                error_message=f"LLM judge execution failed: {e}",
+                resolved_arguments={},
+                evaluated_at=evaluated_at,
+                check_version=check_version,
+                check_metadata=check_metadata,
+                recoverable=False,
+            )
+
+    async def __call__(self) -> dict[str, Any]:
         """
-        Execute LLM evaluation with fully processed arguments.
+        Execute LLM evaluation with resolved Pydantic fields.
 
-        This method expects FULLY PROCESSED arguments with NO templates
-        or JSONPath expressions. All template processing should have been
-        completed by the execute() method before this is called.
-
-        Args:
-            prompt: Fully processed prompt string (no templates)
-            response_format: Pydantic model class defining expected response structure
-            llm_function: Callable to invoke LLM with the prompt
-            **kwargs: Additional arguments (passed through but not used)
+        All JSONPath objects should have been resolved by execute() before this is called.
 
         Returns:
             Dictionary with response fields and judge_metadata
+
+        Raises:
+            RuntimeError: If any field contains unresolved JSONPath objects
         """
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.prompt, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'prompt' field: {self.prompt}")
+
         # Validate argument types
-        if not isinstance(prompt, str):
+        if not isinstance(self.prompt, str):
             raise ValidationError("prompt must be a string")
 
-        if not (isinstance(response_format, type) and issubclass(response_format, BaseModel)):
+        if not (isinstance(self.response_format, type) and issubclass(self.response_format, BaseModel)):
             raise ValidationError("response_format must be a Pydantic BaseModel class")
 
-        if not callable(llm_function):
+        if not callable(self.llm_function):
             raise ValidationError("llm_function must be callable")
 
         try:
             # Execute LLM evaluation with the fully processed prompt
-            llm_response = await self._call_llm_function(llm_function, prompt, response_format)
+            llm_response = await self._call_llm_function(self.llm_function, self.prompt, self.response_format)
 
             # Expect tuple of (model_response, metadata)
             if not isinstance(llm_response, tuple) or len(llm_response) != 2:
@@ -142,7 +177,7 @@ class LLMJudgeCheck(BaseAsyncCheck):
                 )
 
             model_response, metadata = llm_response
-            validated_response = self._validate_response_format(model_response, response_format)
+            validated_response = self._validate_response_format(model_response, self.response_format)
 
             # Preserve response structure and add judge_metadata field
             result = validated_response.copy()

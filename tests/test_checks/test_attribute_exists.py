@@ -12,6 +12,7 @@ import pytest
 from typing import Any
 
 from flex_evals.checks.attribute_exists import AttributeExistsCheck
+from flex_evals.checks.base import JSONPath
 from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
 from flex_evals.exceptions import ValidationError
 from pydantic import ValidationError as PydanticValidationError
@@ -26,7 +27,10 @@ class TestAttributeExistsValidation:
             path="$.output.value.error",
         )
 
-        assert check.path == "$.output.value.error"
+        assert isinstance(check.path, JSONPath)
+
+
+        assert check.path.expression == "$.output.value.error"
         assert check.negate is False
 
     def test_attribute_exists_check_with_negate(self):

@@ -14,7 +14,8 @@ from flex_evals.checks import (
     AttributeExistsCheck, ContainsCheck, EqualsCheck,
     ExactMatchCheck, IsEmptyCheck, RegexCheck, ThresholdCheck,
 )
-from flex_evals.checks.base import BaseCheck, BaseAsyncCheck
+from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, JSONPath
+from pydantic import field_validator
 from flex_evals.registry import register, clear_registry
 from flex_evals.exceptions import ValidationError
 from tests.conftest import restore_standard_checks
@@ -23,31 +24,61 @@ from tests.conftest import restore_standard_checks
 class TestExampleCheck(BaseCheck):
     """Test check for evaluation engine testing."""
 
-    # Pydantic fields with validation
-    expected: str = "Paris"
-    actual: str | None = None
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    expected: str | JSONPath = "Paris"
+    actual: str | JSONPath | None = None
 
-    def __call__(self, expected: str = "Paris", actual: str | None = None) -> dict[str, Any]:
-        # For test purposes, if actual is not provided, we'll handle it in the integration
-        return {"passed": str(actual) == str(expected)}
+    @field_validator('expected', 'actual', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
+    def __call__(self) -> dict[str, Any]:
+        """Execute test check using resolved Pydantic fields."""
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.expected, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'expected' field: {self.expected}")
+        if isinstance(self.actual, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'actual' field: {self.actual}")
+        
+        # For test purposes, compare string representations
+        return {"passed": str(self.actual) == str(self.expected)}
 
 
 class TestExampleAsyncCheck(BaseAsyncCheck):
     """Test async check for evaluation engine testing."""
 
-    # Pydantic fields with validation
-    expected: str = "Paris"
-    actual: str | None = None
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    expected: str | JSONPath = "Paris"
+    actual: str | JSONPath | None = None
 
-    async def __call__(self, expected: str = "Paris", actual: str | None = None) -> dict[str, Any]:
-        # For test purposes, if actual is not provided, we'll handle it in the integration
-        return {"passed": str(actual) == str(expected)}
+    @field_validator('expected', 'actual', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
+    async def __call__(self) -> dict[str, Any]:
+        """Execute async test check using resolved Pydantic fields."""
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.expected, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'expected' field: {self.expected}")
+        if isinstance(self.actual, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'actual' field: {self.actual}")
+        
+        # For test purposes, compare string representations
+        return {"passed": str(self.actual) == str(self.expected)}
 
 
 class TestFailingCheck(BaseCheck):
     """Test check that always fails for error testing."""
 
-    def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
+    def __call__(self) -> dict[str, Any]:
         raise RuntimeError("This check always fails")
 
 
@@ -57,9 +88,9 @@ class SlowAsyncCheck(BaseAsyncCheck):
     # Pydantic fields with validation
     delay: float = 0.1
 
-    async def __call__(self, delay: float = 0.1, **kwargs) -> dict[str, Any]:  # noqa
-        await asyncio.sleep(delay)
-        return {"passed": True, "delay_used": delay}
+    async def __call__(self) -> dict[str, Any]:
+        await asyncio.sleep(self.delay)
+        return {"passed": True, "delay_used": self.delay}
 
 
 class CustomUserCheck(BaseCheck):
@@ -68,12 +99,12 @@ class CustomUserCheck(BaseCheck):
     # Pydantic fields with validation
     test_value: str = "expected"
 
-    def __call__(self, test_value: str = "expected", **kwargs) -> dict[str, Any]:  # noqa
+    def __call__(self) -> dict[str, Any]:
         # Return a unique identifier to prove this exact check was executed
         return {
             "passed": True,
             "check_identifier": "custom_user_check_v2",
-            "test_value": test_value,
+            "test_value": self.test_value,
         }
 
 

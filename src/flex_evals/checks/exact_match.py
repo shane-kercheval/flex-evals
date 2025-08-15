@@ -5,9 +5,10 @@ Combines schema validation with execution logic in a single class.
 """
 
 from typing import Any
-from pydantic import Field
+from pydantic import field_validator
 
-from .base import BaseCheck, OptionalJSONPath
+from .base import BaseCheck, JSONPath
+from pydantic import Field
 from ..registry import register
 from ..constants import CheckType
 
@@ -16,41 +17,56 @@ from ..constants import CheckType
 class ExactMatchCheck(BaseCheck):
     """Compares two text values for exact equality."""
 
-    # Pydantic fields with validation
-    actual: str = OptionalJSONPath(
-        'Value to check or JSONPath expression pointing to the value',
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    actual: Any | JSONPath = Field(
+        ..., description='Value to check or JSONPath expression pointing to the value',
     )
-    expected: str = OptionalJSONPath(
-        'Expected value or JSONPath expression pointing to the value',
+    expected: Any | JSONPath = Field(
+        ..., description='Expected value or JSONPath expression pointing to the value',
     )
-    case_sensitive: bool = Field(True, description='Whether string comparison is case-sensitive')
-    negate: bool = Field(False, description='If true, passes when values don\'t match')
+    case_sensitive: bool | JSONPath = Field(
+        True, description='Whether string comparison is case-sensitive',
+    )
+    negate: bool | JSONPath = Field(
+        False, description='If true, passes when values don\'t match',
+    )
 
-    def __call__(
-            self,
-            actual: str,
-            expected: str,
-            case_sensitive: bool = True,
-            negate: bool = False,
-        ) -> dict[str, Any]:
+    @field_validator('actual', 'expected', 'case_sensitive', 'negate', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
+    def __call__(self) -> dict[str, Any]:
         """
-        Execute exact match check with resolved arguments.
+        Execute exact match check using resolved Pydantic fields.
 
-        Args:
-            actual: Resolved value to check
-            expected: Resolved expected value
-            case_sensitive: Whether comparison is case-sensitive
-            negate: If true, passes when values don't match
+        All JSONPath objects should have been resolved by execute() before this is called.
 
         Returns:
             Dictionary with 'passed' key indicating check result
+
+        Raises:
+            RuntimeError: If any field contains unresolved JSONPath objects
         """
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.actual, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'actual' field: {self.actual}")
+        if isinstance(self.expected, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'expected' field: {self.expected}")
+        if isinstance(self.case_sensitive, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'case_sensitive' field: {self.case_sensitive}")
+        if isinstance(self.negate, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'negate' field: {self.negate}")
+
         # Convert to strings for comparison
-        actual_str = str(actual) if actual is not None else ''
-        expected_str = str(expected) if expected is not None else ''
+        actual_str = str(self.actual) if self.actual is not None else ''
+        expected_str = str(self.expected) if self.expected is not None else ''
 
         # Apply case sensitivity
-        if not case_sensitive:
+        if not self.case_sensitive:
             actual_str = actual_str.lower()
             expected_str = expected_str.lower()
 
@@ -58,6 +74,6 @@ class ExactMatchCheck(BaseCheck):
         match = actual_str == expected_str
 
         # Apply negation
-        passed = not match if negate else match
+        passed = not match if self.negate else match
 
         return {'passed': passed}

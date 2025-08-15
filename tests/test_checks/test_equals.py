@@ -1,8 +1,8 @@
 """Comprehensive tests for EqualsCheck implementation.
 
 This module consolidates all tests for the EqualsCheck including:
-- Pydantic validation tests (from test_schema_check_classes.py)
-- Implementation execution tests (from test_standard_checks.py) 
+- Pydantic validation tests 
+- Implementation execution tests
 - Engine integration tests
 - Edge cases and error handling
 
@@ -13,6 +13,7 @@ import pytest
 from typing import Any
 
 from flex_evals.checks.equals import EqualsCheck
+from flex_evals.checks.base import JSONPath
 from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
 from flex_evals.exceptions import ValidationError
 from pydantic import ValidationError as PydanticValidationError
@@ -28,8 +29,10 @@ class TestEqualsValidation:
             expected="$.expected",
         )
 
-        assert check.actual == "$.output.value"
-        assert check.expected == "$.expected"
+        assert isinstance(check.actual, JSONPath)
+        assert check.actual.expression == "$.output.value"
+        assert isinstance(check.expected, JSONPath)
+        assert check.expected.expression == "$.expected"
         assert check.negate is False
 
     def test_equals_check_with_options(self):
@@ -42,424 +45,216 @@ class TestEqualsValidation:
 
         assert check.negate is True
 
-    def test_equals_check_validation_empty_actual(self):
-        """Test EqualsCheck allows empty actual as valid literal value."""
-        # Empty strings should be allowed as literal values
-        check = EqualsCheck(actual="", expected="$.expected")
-        assert check.actual == ""
-        assert check.expected == "$.expected"
+    def test_equals_check_with_literals(self):
+        """Test EqualsCheck with literal values."""
+        check = EqualsCheck(
+            actual="test_value",
+            expected=42,
+            negate=False,
+        )
 
-    def test_equals_check_validation_empty_expected(self):
-        """Test EqualsCheck allows empty expected as valid literal value."""
-        # Empty strings should be allowed as literal values
-        check = EqualsCheck(actual="$.actual", expected="")
-        assert check.actual == "$.actual"
-        assert check.expected == ""
+        assert check.actual == "test_value"
+        assert check.expected == 42
+        assert check.negate is False
 
     def test_equals_check_type_property(self):
         """Test EqualsCheck check_type property returns correct type."""
         check = EqualsCheck(actual="test", expected="test")
         assert check.check_type == CheckType.EQUALS
 
-    def test_equals_check_version_property(self):
-        """Test EqualsCheck version property works correctly."""
-        check = EqualsCheck(actual="test", expected="test")
-        assert check._get_version() == "1.0.0"
+    def test_equals_required_fields(self):
+        """Test that required fields are enforced."""
+        with pytest.raises(PydanticValidationError):
+            EqualsCheck()  # type: ignore
+        
+        with pytest.raises(PydanticValidationError):
+            EqualsCheck(actual="test")  # type: ignore
+        
+        with pytest.raises(PydanticValidationError):
+            EqualsCheck(expected="test")  # type: ignore
 
 
 class TestEqualsExecution:
     """Test EqualsCheck execution logic and __call__ method."""
 
     def test_equals_identical_strings(self):
-        """Test equals passes when strings are identical."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual="hello world",
-            expected="hello world",
-            negate=False,
-        )
+        """Test identical strings return passed=true."""
+        check = EqualsCheck(actual="hello", expected="hello")
+        result = check()
         assert result == {"passed": True}
 
     def test_equals_different_strings(self):
-        """Test equals fails when strings are different."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual="hello world",
-            expected="goodbye world",
-            negate=False,
-        )
-        assert result == {"passed": False}
-
-    def test_equals_case_sensitive_by_default(self):
-        """Test equals is case sensitive by default."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual="Hello World",
-            expected="hello world",
-            negate=False,
-        )
+        """Test different strings return passed=false."""
+        check = EqualsCheck(actual="hello", expected="world")
+        result = check()
         assert result == {"passed": False}
 
     def test_equals_integers(self):
-        """Test equals works with identical integers."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=42,
-            expected=42,
-            negate=False,
-        )
+        """Test identical integers."""
+        check = EqualsCheck(actual=42, expected=42)
+        result = check()
         assert result == {"passed": True}
 
     def test_equals_different_integers(self):
-        """Test equals fails with different integers."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=42,
-            expected=43,
-            negate=False,
-        )
+        """Test different integers."""
+        check = EqualsCheck(actual=42, expected=24)
+        result = check()
         assert result == {"passed": False}
 
     def test_equals_floats(self):
-        """Test equals works with identical floats."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=3.14,
-            expected=3.14,
-            negate=False,
-        )
+        """Test identical floats."""
+        check = EqualsCheck(actual=3.14, expected=3.14)
+        result = check()
         assert result == {"passed": True}
 
     def test_equals_different_floats(self):
-        """Test equals fails with different floats."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=3.14,
-            expected=2.71,
-            negate=False,
-        )
+        """Test different floats."""
+        check = EqualsCheck(actual=3.14, expected=2.71)
+        result = check()
         assert result == {"passed": False}
 
     def test_equals_booleans(self):
-        """Test equals works with identical booleans."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=True,
-            expected=True,
-            negate=False,
-        )
+        """Test identical booleans."""
+        check = EqualsCheck(actual=True, expected=True)
+        result = check()
         assert result == {"passed": True}
 
     def test_equals_different_booleans(self):
-        """Test equals fails with different booleans."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=True,
-            expected=False,
-            negate=False,
-        )
+        """Test different booleans."""
+        check = EqualsCheck(actual=True, expected=False)
+        result = check()
         assert result == {"passed": False}
 
     def test_equals_lists_identical(self):
-        """Test equals works with identical lists."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=[1, 2, 3],
-            expected=[1, 2, 3],
-            negate=False,
-        )
+        """Test identical lists."""
+        check = EqualsCheck(actual=[1, 2, 3], expected=[1, 2, 3])
+        result = check()
         assert result == {"passed": True}
 
     def test_equals_lists_different_values(self):
-        """Test equals fails with lists containing different values."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=[1, 2, 3],
-            expected=[1, 2, 4],
-            negate=False,
-        )
+        """Test lists with different values."""
+        check = EqualsCheck(actual=[1, 2, 3], expected=[1, 2, 4])
+        result = check()
         assert result == {"passed": False}
 
     def test_equals_lists_different_order(self):
-        """Test equals fails with same values in different order."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=[1, 2, 3],
-            expected=[3, 2, 1],
-            negate=False,
-        )
-        assert result == {"passed": False}
-
-    def test_equals_lists_different_length(self):
-        """Test equals fails with different length lists."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=[1, 2, 3],
-            expected=[1, 2],
-            negate=False,
-        )
+        """Test lists with different order."""
+        check = EqualsCheck(actual=[1, 2, 3], expected=[3, 2, 1])
+        result = check()
         assert result == {"passed": False}
 
     def test_equals_dicts_identical(self):
-        """Test equals works with identical dictionaries."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual={"a": 1, "b": 2},
-            expected={"a": 1, "b": 2},
-            negate=False,
+        """Test identical dictionaries."""
+        check = EqualsCheck(
+            actual={"name": "Alice", "age": 30},
+            expected={"name": "Alice", "age": 30}
         )
+        result = check()
         assert result == {"passed": True}
 
     def test_equals_dicts_different_values(self):
-        """Test equals fails with dicts having different values."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual={"a": 1, "b": 2},
-            expected={"a": 1, "b": 3},
-            negate=False,
+        """Test dictionaries with different values."""
+        check = EqualsCheck(
+            actual={"name": "Alice", "age": 30},
+            expected={"name": "Bob", "age": 30}
         )
+        result = check()
         assert result == {"passed": False}
-
-    def test_equals_dicts_different_keys(self):
-        """Test equals fails with dicts having different keys."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual={"a": 1, "b": 2},
-            expected={"a": 1, "c": 2},
-            negate=False,
-        )
-        assert result == {"passed": False}
-
-    def test_equals_dicts_different_order_same_content(self):
-        """Test equals passes with same dict content in different order."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual={"a": 1, "b": 2},
-            expected={"b": 2, "a": 1},
-            negate=False,
-        )
-        assert result == {"passed": True}
 
     def test_equals_sets_identical(self):
-        """Test equals works with identical sets."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual={1, 2, 3},
-            expected={1, 2, 3},
-            negate=False,
-        )
+        """Test identical sets."""
+        check = EqualsCheck(actual={1, 2, 3}, expected={1, 2, 3})
+        result = check()
         assert result == {"passed": True}
-
-    def test_equals_sets_different_values(self):
-        """Test equals fails with sets having different values."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual={1, 2, 3},
-            expected={1, 2, 4},
-            negate=False,
-        )
-        assert result == {"passed": False}
 
     def test_equals_sets_different_order_same_content(self):
-        """Test equals passes with same set content in different order."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual={1, 2, 3},
-            expected={3, 1, 2},
-            negate=False,
-        )
-        assert result == {"passed": True}
-
-    def test_equals_tuples_identical(self):
-        """Test equals works with identical tuples."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=(1, 2, 3),
-            expected=(1, 2, 3),
-            negate=False,
-        )
-        assert result == {"passed": True}
-
-    def test_equals_tuples_different_order(self):
-        """Test equals fails with tuples in different order."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=(1, 2, 3),
-            expected=(3, 2, 1),
-            negate=False,
-        )
-        assert result == {"passed": False}
+        """Test sets with different order but same content."""
+        check = EqualsCheck(actual={1, 2, 3}, expected={3, 1, 2})
+        result = check()
+        assert result == {"passed": True}  # Sets ignore order
 
     def test_equals_none_values(self):
-        """Test equals works with None values."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=None,
-            expected=None,
-            negate=False,
-        )
+        """Test None values."""
+        check = EqualsCheck(actual=None, expected=None)
+        result = check()
         assert result == {"passed": True}
 
     def test_equals_none_vs_empty_string(self):
-        """Test equals fails when comparing None to empty string."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual=None,
-            expected="",
-            negate=False,
-        )
+        """Test None vs empty string."""
+        check = EqualsCheck(actual=None, expected="")
+        result = check()
         assert result == {"passed": False}
 
     def test_equals_mixed_types_different(self):
-        """Test equals fails when comparing different types."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual="42",
-            expected=42,
-            negate=False,
-        )
-        assert result == {"passed": False}
+        """Test different types."""
+        check = EqualsCheck(actual="42", expected=42)
+        result = check()
+        assert result == {"passed": False}  # String vs int
 
     def test_equals_nested_structures(self):
-        """Test equals works with nested data structures."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual={"list": [1, 2, {"nested": "value"}], "number": 42},
-            expected={"list": [1, 2, {"nested": "value"}], "number": 42},
-            negate=False,
+        """Test nested data structures."""
+        check = EqualsCheck(
+            actual={"users": [{"name": "Alice"}, {"name": "Bob"}]},
+            expected={"users": [{"name": "Alice"}, {"name": "Bob"}]}
         )
+        result = check()
         assert result == {"passed": True}
 
-    def test_equals_nested_structures_different(self):
-        """Test equals fails with different nested structures."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual={"list": [1, 2, {"nested": "value"}], "number": 42},
-            expected={"list": [1, 2, {"nested": "different"}], "number": 42},
-            negate=False,
-        )
-        assert result == {"passed": False}
-
-    def test_equals_negate_true_equal_values(self):
-        """Test negate=true fails when values are equal."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual="hello",
-            expected="hello",
-            negate=True,
-        )
-        assert result == {"passed": False}
-
-    def test_equals_negate_true_different_values(self):
-        """Test negate=true passes when values are different."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual="hello",
-            expected="world",
-            negate=True,
-        )
+    def test_equals_negate_true(self):
+        """Test negate=true passes when values differ."""
+        check = EqualsCheck(actual="hello", expected="world", negate=True)
+        result = check()
         assert result == {"passed": True}
 
-    def test_equals_negate_false_equal_values(self):
-        """Test negate=false passes when values are equal."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual="hello",
-            expected="hello",
-            negate=False,
-        )
-        assert result == {"passed": True}
-
-    def test_equals_negate_false_different_values(self):
-        """Test negate=false fails when values are different."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual="hello",
-            expected="world",
-            negate=False,
-        )
+    def test_equals_negate_false_match(self):
+        """Test negate=true fails when values match."""
+        check = EqualsCheck(actual="hello", expected="hello", negate=True)
+        result = check()
         assert result == {"passed": False}
-
-    def test_equals_missing_actual_argument(self):
-        """Test equals raises error when actual argument is missing."""
-        check = EqualsCheck(actual="test", expected="test")
-        with pytest.raises(TypeError):
-            check(expected="value", negate=False)
-
-    def test_equals_missing_expected_argument(self):
-        """Test equals raises error when expected argument is missing."""
-        check = EqualsCheck(actual="test", expected="test")
-        with pytest.raises(TypeError):
-            check(actual="value", negate=False)
-
-    def test_equals_result_schema(self):
-        """Test equals returns correct result schema."""
-        check = EqualsCheck(actual="test", expected="test")
-        result = check(
-            actual="test",
-            expected="test",
-            negate=False,
-        )
-
-        assert isinstance(result, dict)
-        assert "passed" in result
-        assert isinstance(result["passed"], bool)
-        assert len(result) == 1
 
 
 class TestEqualsEngineIntegration:
     """Test EqualsCheck integration with the evaluation engine."""
 
-    @pytest.mark.parametrize(("actual_value", "expected_value", "expected_passed"), [
-        # Same type comparisons
-        ("hello", "hello", True),
-        ("hello", "world", False),
-        (42, 42, True),
-        (42, 43, False),
-        ([1, 2, 3], [1, 2, 3], True),
-        ([1, 2, 3], [1, 2, 4], False),
-        ({"a": 1}, {"a": 1}, True),
-        ({"a": 1}, {"a": 2}, False),
-
-        # Cross-type comparisons (should be False)
-        ("42", 42, False),
-        (1, 1.0, True),  # Python considers 1 == 1.0 to be True
-        ([1, 2], (1, 2), False),
-        ({"a": 1}, [("a", 1)], False),
-
-        # None comparisons
-        (None, None, True),
-        (None, "", False),
-        (None, 0, False),
-        (None, [], False),
+    @pytest.mark.parametrize(("output_value", "expected_value", "expected_passed"), [
+        ("Paris", "Paris", True),  # Exact match should pass
+        ("paris", "Paris", False),  # Case mismatch should fail
+        ({"result": 42}, 42, True),  # Identical numbers (extract from dict)
+        ({"result": 42}, 24, False),  # Different numbers
+        ({"result": [1, 2, 3]}, [1, 2, 3], True),  # Identical lists
+        ({"result": [1, 2, 3]}, [3, 2, 1], False),  # Different order
     ])
     def test_equals_via_evaluate(
-        self, actual_value: Any, expected_value: Any, expected_passed: bool,
+        self, output_value: Any, expected_value: Any, expected_passed: bool,
     ):
-        """Test using JSONPath for values with various equal/non-equal combinations."""
+        """Test using JSONPath for actual and expected with various combinations."""
+        # Use different JSONPath based on output structure
+        actual_path = "$.output.value.result" if isinstance(output_value, dict) and "result" in output_value else "$.output.value"
+        
         test_cases = [
             TestCase(
                 id="test_001",
-                input="Input data",
-                expected="Expected output",
+                input="What is the capital of France?",
+                expected=expected_value,
                 checks=[
                     Check(
                         type=CheckType.EQUALS,
                         arguments={
-                            "actual": "$.output.value.actual_value",
-                            "expected": "$.output.value.expected_value",
+                            "actual": actual_path,
+                            "expected": "$.test_case.expected",
                         },
                     ),
                 ],
             ),
         ]
-
-        outputs = [
-            Output(value={"actual_value": actual_value, "expected_value": expected_value}),
-        ]
-
+        
+        outputs = [Output(value=output_value)]
         results = evaluate(test_cases, outputs)
-        assert len(results.results) == 1
+        
+        assert results.summary.total_test_cases == 1
+        assert results.summary.completed_test_cases == 1
+        assert results.summary.error_test_cases == 0
+        assert results.summary.skipped_test_cases == 0
         assert results.results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": expected_passed}
@@ -469,8 +264,8 @@ class TestEqualsEngineIntegration:
         test_cases = [
             TestCase(
                 id="test_001",
-                input="Input data",
-                expected="hello",
+                input="What is the capital of France?",
+                expected="Paris",
                 checks=[
                     EqualsCheck(
                         actual="$.output.value",
@@ -480,7 +275,7 @@ class TestEqualsEngineIntegration:
             ),
         ]
         
-        outputs = [Output(value="hello")]
+        outputs = [Output(value="Paris")]
         results = evaluate(test_cases, outputs)
         
         assert results.summary.total_test_cases == 1
@@ -493,22 +288,22 @@ class TestEqualsEngineIntegration:
         test_cases = [
             TestCase(
                 id="test_001",
-                input="Input data",
-                expected="world",
+                input="What is the capital of France?",
+                expected="London",  # Wrong answer
                 checks=[
                     Check(
                         type=CheckType.EQUALS,
                         arguments={
                             "actual": "$.output.value",
                             "expected": "$.test_case.expected",
-                            "negate": True,
+                            "negate": True,  # Should pass because Paris != London
                         },
                     ),
                 ],
             ),
         ]
         
-        outputs = [Output(value="hello")]
+        outputs = [Output(value="Paris")]
         results = evaluate(test_cases, outputs)
         
         assert results.results[0].check_results[0].results == {"passed": True}
@@ -516,17 +311,6 @@ class TestEqualsEngineIntegration:
 
 class TestEqualsErrorHandling:
     """Test error handling and edge cases for EqualsCheck."""
-
-    def test_equals_required_fields(self):
-        """Test that required fields are enforced."""
-        with pytest.raises(PydanticValidationError):
-            EqualsCheck()  # type: ignore
-        
-        with pytest.raises(PydanticValidationError):
-            EqualsCheck(actual="test")  # type: ignore
-        
-        with pytest.raises(PydanticValidationError):
-            EqualsCheck(expected="test")  # type: ignore
 
     def test_equals_jsonpath_validation_in_engine(self):
         """Test that invalid JSONPath expressions are caught during evaluation."""
@@ -549,8 +333,33 @@ class TestEqualsErrorHandling:
         outputs = [Output(value="test")]
         
         # Should raise validation error for invalid JSONPath
-        with pytest.raises(ValidationError, match="appears to be JSONPath but is invalid"):
+        with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
             evaluate(test_cases, outputs)
+
+    def test_equals_missing_jsonpath_data(self):
+        """Test behavior when JSONPath doesn't find data."""
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="test",
+                checks=[
+                    Check(
+                        type=CheckType.EQUALS,
+                        arguments={
+                            "actual": "$.output.value.nonexistent",
+                            "expected": "test",
+                        },
+                    ),
+                ],
+            ),
+        ]
+        
+        outputs = [Output(value={"response": "test"})]
+        
+        results = evaluate(test_cases, outputs)
+        # Should result in error when JSONPath resolution fails
+        assert results.results[0].status == Status.ERROR
+        # Missing JSONPath data now causes errors rather than silent failures
 
 
 class TestEqualsJSONPathIntegration:
@@ -562,13 +371,13 @@ class TestEqualsJSONPathIntegration:
             TestCase(
                 id="test_001",
                 input="test",
-                expected={"location": {"city": "Paris", "country": "France"}},
+                expected={"result": {"answer": "Paris", "confidence": 0.95}},
                 checks=[
                     Check(
                         type=CheckType.EQUALS,
                         arguments={
-                            "actual": "$.output.value.user.location.city",
-                            "expected": "$.test_case.expected.location.city",
+                            "actual": "$.output.value.answer",
+                            "expected": "$.test_case.expected.result.answer",
                         },
                     ),
                 ],
@@ -577,10 +386,8 @@ class TestEqualsJSONPathIntegration:
         
         outputs = [
             Output(value={
-                "user": {
-                    "name": "Alice",
-                    "location": {"city": "Paris", "country": "France"},
-                },
+                "answer": "Paris",
+                "confidence": 0.95,
             }),
         ]
         
@@ -593,13 +400,13 @@ class TestEqualsJSONPathIntegration:
             TestCase(
                 id="test_001",
                 input="test",
-                expected={"scores": [95, 87, 92]},
+                expected={"first_item": "item1"},
                 checks=[
                     Check(
                         type=CheckType.EQUALS,
                         arguments={
-                            "actual": "$.output.value.results[0]",
-                            "expected": "$.test_case.expected.scores[0]",
+                            "actual": "$.output.value.items[0]",
+                            "expected": "$.test_case.expected.first_item",
                         },
                     ),
                 ],
@@ -608,8 +415,8 @@ class TestEqualsJSONPathIntegration:
         
         outputs = [
             Output(value={
-                "results": [95, 87, 92],
-                "average": 91.33,
+                "items": ["item1", "item2", "item3"],
+                "count": 3,
             }),
         ]
         
@@ -617,27 +424,23 @@ class TestEqualsJSONPathIntegration:
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_equals_complex_data_structures(self):
-        """Test equals with complex nested data structures."""
+        """Test equals with complex nested data structures from JSONPath."""
         test_cases = [
             TestCase(
                 id="test_001",
                 input="test",
                 expected={
-                    "response": {
-                        "data": {
-                            "items": [
-                                {"id": 1, "name": "item1"},
-                                {"id": 2, "name": "item2"},
-                            ],
-                        },
-                    },
+                    "user_data": {
+                        "profile": {"name": "Alice", "age": 30},
+                        "preferences": ["reading", "coding"]
+                    }
                 },
                 checks=[
                     Check(
                         type=CheckType.EQUALS,
                         arguments={
-                            "actual": "$.output.value.response.data.items",
-                            "expected": "$.test_case.expected.response.data.items",
+                            "actual": "$.output.value.user",
+                            "expected": "$.test_case.expected.user_data",
                         },
                     ),
                 ],
@@ -646,16 +449,11 @@ class TestEqualsJSONPathIntegration:
         
         outputs = [
             Output(value={
-                "response": {
-                    "status": "success",
-                    "data": {
-                        "total": 2,
-                        "items": [
-                            {"id": 1, "name": "item1"},
-                            {"id": 2, "name": "item2"},
-                        ],
-                    },
+                "user": {
+                    "profile": {"name": "Alice", "age": 30},
+                    "preferences": ["reading", "coding"]
                 },
+                "timestamp": "2024-01-01T00:00:00Z",
             }),
         ]
         

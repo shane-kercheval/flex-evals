@@ -6,41 +6,19 @@ from typing import Any, Optional, ClassVar
 from flex_evals.schema_generator import (
     generate_checks_schema,
     generate_check_schema,
-    _get_schema_class_for_check_type,
+    _get_check_class_for_type_version,
     _extract_field_schema,
     _get_python_type_string,
     _extract_class_description,
 )
-from flex_evals.schemas.checks.contains import ContainsCheck
-from flex_evals.schemas.checks.exact_match import ExactMatchCheck
-from flex_evals.schemas.checks.attribute_exists import AttributeExistsCheck
-from flex_evals.schemas.check import SchemaCheck
+from flex_evals.checks.contains import ContainsCheck
+from flex_evals.checks.exact_match import ExactMatchCheck
+from flex_evals.checks.attribute_exists import AttributeExistsCheck
+from flex_evals.checks.base import BaseCheck
+from pydantic import Field
 
 
-@pytest.fixture
-def mock_schema_classes():
-    """Create test schema classes for testing version handling."""
-    class TestSchemaV1(SchemaCheck):
-        CHECK_TYPE: ClassVar[str] = "test_check_v1"
-        VERSION: ClassVar[str] = "1.0.0"
-        test_field: str = "v1"
-
-    class TestSchemaV2(SchemaCheck):
-        CHECK_TYPE: ClassVar[str] = "test_check_v2"
-        VERSION: ClassVar[str] = "2.0.0"
-        test_field: str = "v2"
-        new_field: str = "only in v2"
-
-    class TestSchemaVersioned(SchemaCheck):
-        CHECK_TYPE: ClassVar[str] = "test_versioned"
-        VERSION: ClassVar[str] = "1.5.0"
-        versioned_field: str = "versioned"
-
-    return {
-        "v1": TestSchemaV1,
-        "v2": TestSchemaV2,
-        "versioned": TestSchemaVersioned,
-    }
+# Removed mock_schema_classes fixture - not needed in unified architecture
 
 
 class TestSchemaGeneration:
@@ -130,29 +108,29 @@ class TestSchemaGeneration:
         schema = generate_check_schema("contains", "1.0.0")
         fields = schema["fields"]
 
-        # Test text field - required, non-nullable
+        # Test text field - required, non-nullable, supports JSONPath
         text_field = fields["text"]
-        assert text_field["type"] == "string"
+        assert text_field["type"] == "union<string,JSONPath>"
         assert text_field["nullable"] is False
         assert "default" not in text_field  # Required field has no default
         assert "description" in text_field
         assert text_field["jsonpath"] == "optional"
 
-        # Test phrases field - required, non-nullable
+        # Test phrases field - required, non-nullable, supports JSONPath
         phrases_field = fields["phrases"]
-        assert phrases_field["type"] == "union<string,array<string>>"
+        assert phrases_field["type"] == "union<string,array<string>,JSONPath>"
         assert phrases_field["nullable"] is False
         assert "default" not in phrases_field  # Required field has no default
 
-        # Test case_sensitive field - optional, non-nullable with default
+        # Test case_sensitive field - optional, non-nullable with default, supports JSONPath
         case_sensitive_field = fields["case_sensitive"]
-        assert case_sensitive_field["type"] == "boolean"
+        assert case_sensitive_field["type"] == "union<boolean,JSONPath>"
         assert case_sensitive_field["nullable"] is False
         assert case_sensitive_field["default"] is True
 
-        # Test negate field - optional, non-nullable with default
+        # Test negate field - optional, non-nullable with default, supports JSONPath
         negate_field = fields["negate"]
-        assert negate_field["type"] == "boolean"
+        assert negate_field["type"] == "union<boolean,JSONPath>"
         assert negate_field["nullable"] is False
         assert negate_field["default"] is False
 
@@ -165,16 +143,16 @@ class TestSchemaGeneration:
         assert "actual" in fields
         assert "expected" in fields
 
-        # Test actual field - required, non-nullable
+        # Test actual field - required, non-nullable, supports JSONPath  
         actual_field = fields["actual"]
-        assert actual_field["type"] == "string"
+        assert actual_field["type"] == "union<Any,JSONPath>"
         assert actual_field["nullable"] is False
         assert "default" not in actual_field  # Required field has no default
         assert actual_field["jsonpath"] == "optional"
 
-        # Test expected field - required, non-nullable
-        expected_field = fields["expected"]
-        assert expected_field["type"] == "string"
+        # Test expected field - required, non-nullable, supports JSONPath
+        expected_field = fields["expected"]  
+        assert expected_field["type"] == "union<Any,JSONPath>"
         assert expected_field["nullable"] is False
         assert "default" not in expected_field  # Required field has no default
         assert expected_field["jsonpath"] == "optional"
@@ -203,58 +181,42 @@ class TestSchemaClassDiscovery:
     def test_get_schema_class_for_check_type_with_version(self):
         """Test finding schema classes for check types with correct version."""
         # Should find ContainsCheck for 'contains' version '1.0.0'
-        schema_class = _get_schema_class_for_check_type("contains", "1.0.0")
+        schema_class = _get_check_class_for_type_version("contains", "1.0.0")
         assert schema_class is ContainsCheck
 
         # Should find ExactMatchCheck for 'exact_match' version '1.0.0'
-        schema_class = _get_schema_class_for_check_type("exact_match", "1.0.0")
+        schema_class = _get_check_class_for_type_version("exact_match", "1.0.0")
         assert schema_class is ExactMatchCheck
 
         # Should find AttributeExistsCheck for 'attribute_exists' version '1.0.0'
-        schema_class = _get_schema_class_for_check_type("attribute_exists", "1.0.0")
+        schema_class = _get_check_class_for_type_version("attribute_exists", "1.0.0")
         assert schema_class is AttributeExistsCheck
 
     def test_get_schema_class_nonexistent_check_type(self):
         """Test finding schema class for non-existent check type raises ValueError."""
         with pytest.raises(
-            ValueError, match="No schema class found for check type 'nonexistent_check'",
+            ValueError, match="Check type 'nonexistent_check' is not registered",
         ):
-            _get_schema_class_for_check_type("nonexistent_check", "1.0.0")
+            _get_check_class_for_type_version("nonexistent_check", "1.0.0")
 
     def test_get_schema_class_nonexistent_version(self):
         """Test finding schema class for non-existent version raises ValueError."""
         with pytest.raises(
-            ValueError, match="No schema class found for check type 'contains' version '2.0.0'",
+            ValueError, match="No check class found for type 'contains' version '2.0.0'",
         ):
-            _get_schema_class_for_check_type("contains", "2.0.0")
+            _get_check_class_for_type_version("contains", "2.0.0")
 
     def test_get_schema_class_version_mismatch_shows_available(self):
         """Test that version mismatch error shows available versions."""
         with pytest.raises(
-            ValueError, match="No schema class found for check type 'contains' version '99.0.0'",
+            ValueError, match="No check class found for type 'contains' version '99.0.0'",
         ) as exc_info:
-            _get_schema_class_for_check_type("contains", "99.0.0")
+            _get_check_class_for_type_version("contains", "99.0.0")
 
         error_message = str(exc_info.value)
         assert "Available versions: ['1.0.0']" in error_message
 
-    def test_multiple_schema_versions(self, mock_schema_classes):  # noqa: ANN001
-        """Test handling multiple schema classes with different versions."""
-        # Should find v1 when requesting v1
-        schema_class = _get_schema_class_for_check_type("test_check_v1", "1.0.0")
-        assert schema_class is mock_schema_classes["v1"]
-
-        # Should find v2 when requesting v2
-        schema_class = _get_schema_class_for_check_type("test_check_v2", "2.0.0")
-        assert schema_class is mock_schema_classes["v2"]
-
-        # Should find versioned when requesting versioned
-        schema_class = _get_schema_class_for_check_type("test_versioned", "1.5.0")
-        assert schema_class is mock_schema_classes["versioned"]
-
-        # Should raise error for non-existent version
-        with pytest.raises(ValueError, match="Available versions:"):
-            _get_schema_class_for_check_type("test_check_v1", "3.0.0")
+    # Removed test_multiple_schema_versions - not applicable in unified architecture
 
 
 class TestFieldSchemaExtraction:
@@ -266,7 +228,7 @@ class TestFieldSchemaExtraction:
         field_info = ContainsCheck.model_fields["text"]
         field_schema = _extract_field_schema("text", field_info, ContainsCheck)
 
-        assert field_schema["type"] == "string"
+        assert field_schema["type"] == "union<string,JSONPath>"
         assert field_schema["nullable"] is False
         assert "default" not in field_schema  # Required field has no default
         assert field_schema["jsonpath"] == "optional"
@@ -277,7 +239,7 @@ class TestFieldSchemaExtraction:
         field_info = ContainsCheck.model_fields["case_sensitive"]
         field_schema = _extract_field_schema("case_sensitive", field_info, ContainsCheck)
 
-        assert field_schema["type"] == "boolean"
+        assert field_schema["type"] == "union<boolean,JSONPath>"
         assert field_schema["nullable"] is False
         assert field_schema["default"] is True
 
@@ -286,7 +248,7 @@ class TestFieldSchemaExtraction:
         field_info = ContainsCheck.model_fields["phrases"]
         field_schema = _extract_field_schema("phrases", field_info, ContainsCheck)
 
-        assert field_schema["type"] == "union<string,array<string>>"
+        assert field_schema["type"] == "union<string,array<string>,JSONPath>"
         assert field_schema["nullable"] is False
         assert "default" not in field_schema  # Required field has no default
 
@@ -324,7 +286,7 @@ class TestClassDescriptionExtraction:
 
     def test_extract_class_description_with_docstring(self):
         """Test extracting description from class with docstring."""
-        class TestSchema(SchemaCheck):
+        class TestSchema(BaseCheck):
             """
             This is a test schema class.
 
@@ -332,8 +294,10 @@ class TestClassDescriptionExtraction:
             to test proper extraction.
             """
 
-            CHECK_TYPE: ClassVar[str] = "test"
-            VERSION: ClassVar[str] = "1.0.0"
+            test_field: str = Field("test", description="Test field")
+
+            def __call__(self) -> dict[str, Any]:
+                return {'passed': True}
 
         description = _extract_class_description(TestSchema)
 
@@ -361,42 +325,50 @@ class TestClassDescriptionExtraction:
 
     def test_extract_class_description_single_line(self):
         """Test extracting description from class with single-line docstring."""
-        class TestSchema(SchemaCheck):
+        class TestSchema(BaseCheck):
             """Single line description."""
 
-            CHECK_TYPE: ClassVar[str] = "test"
-            VERSION: ClassVar[str] = "1.0.0"
+            test_field: str = Field("test", description="Test field")
+
+            def __call__(self) -> dict[str, Any]:
+                return {'passed': True}
 
         description = _extract_class_description(TestSchema)
         assert description == "Single line description."
 
     def test_extract_class_description_no_docstring(self):
         """Test extracting description from class without docstring."""
-        class TestSchema(SchemaCheck):
-            CHECK_TYPE: ClassVar[str] = "test"
-            VERSION: ClassVar[str] = "1.0.0"
+        class TestSchema(BaseCheck):
+            test_field: str = Field("test", description="Test field")
+
+            def __call__(self) -> dict[str, Any]:
+                return {'passed': True}
 
         description = _extract_class_description(TestSchema)
         assert description == ""
 
     def test_extract_class_description_empty_docstring(self):
         """Test extracting description from class with empty docstring."""
-        class TestSchema(SchemaCheck):
+        class TestSchema(BaseCheck):
             """"""  # noqa: D419
-            CHECK_TYPE: ClassVar[str] = "test"
-            VERSION: ClassVar[str] = "1.0.0"
+            test_field: str = Field("test", description="Test field")
+
+            def __call__(self) -> dict[str, Any]:
+                return {'passed': True}
 
         description = _extract_class_description(TestSchema)
         assert description == ""
 
     def test_extract_class_description_whitespace_only(self):
         """Test extracting description from class with whitespace-only docstring."""
-        class TestSchema(SchemaCheck):
+        class TestSchema(BaseCheck):
             """
 
             """  # noqa: D419
-            CHECK_TYPE: ClassVar[str] = "test"
-            VERSION: ClassVar[str] = "1.0.0"
+            test_field: str = Field("test", description="Test field")
+
+            def __call__(self) -> dict[str, Any]:
+                return {'passed': True}
 
         description = _extract_class_description(TestSchema)
         assert description == ""
@@ -431,7 +403,7 @@ class TestDescriptionIntegrationWithMockClasses:
     @pytest.fixture
     def mock_schema_classes_with_descriptions(self):
         """Create test schema classes with various docstring formats."""
-        class DetailedDocstringSchema(SchemaCheck):
+        class DetailedDocstringSchema(BaseCheck):
             """
             Comprehensive test schema class.
 
@@ -452,22 +424,25 @@ class TestDescriptionIntegrationWithMockClasses:
                 ValidationResult containing success/failure information
             """
 
-            CHECK_TYPE: ClassVar[str] = "detailed_test"
-            VERSION: ClassVar[str] = "1.0.0"
-            field1: str = "test"
-            field2: int = 42
+            field1: str = Field("test", description="First test field")
+            field2: int = Field(42, description="Second test field with complex validation")
 
-        class MinimalDocstringSchema(SchemaCheck):
+            def __call__(self) -> dict[str, Any]:
+                return {'passed': True}
+
+        class MinimalDocstringSchema(BaseCheck):
             """Minimal test schema for basic validation."""
 
-            CHECK_TYPE: ClassVar[str] = "minimal_test"
-            VERSION: ClassVar[str] = "1.0.0"
-            simple_field: bool = True
+            simple_field: bool = Field(True, description="Simple field")
 
-        class NoDocstringSchema(SchemaCheck):
-            CHECK_TYPE: ClassVar[str] = "no_docstring_test"
-            VERSION: ClassVar[str] = "1.0.0"
-            basic_field: str = "default"
+            def __call__(self) -> dict[str, Any]:
+                return {'passed': True}
+
+        class NoDocstringSchema(BaseCheck):
+            basic_field: str = Field("default", description="Basic field")
+
+            def __call__(self) -> dict[str, Any]:
+                return {'passed': True}
 
         return {
             "detailed": DetailedDocstringSchema,
@@ -503,7 +478,7 @@ class TestDescriptionIntegrationWithMockClasses:
 
     def test_docstring_preserves_formatting(self):
         """Test that docstring formatting (indentation, newlines) is preserved."""
-        class FormattedSchema(SchemaCheck):
+        class FormattedSchema(BaseCheck):
             """
             Test schema with specific formatting.
 
@@ -515,8 +490,10 @@ class TestDescriptionIntegrationWithMockClasses:
                 assert result.passed
             """
 
-            CHECK_TYPE: ClassVar[str] = "formatted_test"
-            VERSION: ClassVar[str] = "1.0.0"
+            test_field: str = Field("test", description="Test field")
+
+            def __call__(self) -> dict[str, Any]:
+                return {'passed': True}
 
         description = _extract_class_description(FormattedSchema)
 
@@ -535,7 +512,7 @@ class TestDescriptionIntegrationWithMockClasses:
 
     def test_docstring_dedenting_behavior(self):
         """Test that inspect.getdoc() properly handles docstring dedenting."""
-        class IndentedSchema(SchemaCheck):
+        class IndentedSchema(BaseCheck):
             """
             Base description starts here.
 
@@ -546,8 +523,10 @@ class TestDescriptionIntegrationWithMockClasses:
                 And indented again.
             """
 
-            CHECK_TYPE: ClassVar[str] = "indented_test"
-            VERSION: ClassVar[str] = "1.0.0"
+            test_field: str = Field("test", description="Test field")
+
+            def __call__(self) -> dict[str, Any]:
+                return {'passed': True}
 
         description = _extract_class_description(IndentedSchema)
         lines = description.split('\n')

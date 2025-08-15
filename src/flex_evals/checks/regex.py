@@ -6,9 +6,9 @@ Combines schema validation with execution logic in a single class.
 
 import re
 from typing import Any
-from pydantic import Field, BaseModel
+from pydantic import Field, BaseModel, field_validator
 
-from .base import BaseCheck, OptionalJSONPath
+from .base import BaseCheck, JSONPath
 from ..registry import register
 from ..exceptions import ValidationError
 from ..constants import CheckType
@@ -26,47 +26,55 @@ class RegexFlags(BaseModel):
 class RegexCheck(BaseCheck):
     """Checks if a text value matches a specified regular expression pattern."""
 
-    # Pydantic fields with validation
-    text: str = OptionalJSONPath('Text to test against the pattern or JSONPath expression')
-    pattern: str = Field(..., description='Regular expression pattern to match against the text')
-    negate: bool = Field(False, description='If true, passes when pattern doesn\'t match')
-    flags: RegexFlags = Field(default_factory=RegexFlags, description='Regex matching options')
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    text: str | JSONPath = Field(..., description='Text to test against the pattern or JSONPath expression')
+    pattern: str | JSONPath = Field(..., description='Regular expression pattern to match against the text')
+    negate: bool | JSONPath = Field(
+        False, description='If true, passes when pattern doesn\'t match',
+    )
+    flags: RegexFlags | JSONPath = Field(
+        default_factory=RegexFlags, description='Regex matching options',
+    )
 
-    def __call__(
-        self,
-        text: str,
-        pattern: str,
-        negate: bool = False,
-        flags: dict | RegexFlags | None = None,
-    ) -> dict[str, Any]:
+    @field_validator('text', 'pattern', 'negate', 'flags', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
+    def __call__(self) -> dict[str, Any]:
         """
-        Execute regex check with resolved arguments.
+        Execute regex check using resolved Pydantic fields.
 
-        Args:
-            text: Resolved text to test against pattern
-            pattern: Regular expression pattern to match
-            negate: If true, passes when pattern doesn't match
-            flags: Regex matching options (dict or RegexFlags instance)
+        All JSONPath objects should have been resolved by execute() before this is called.
 
         Returns:
             Dictionary with 'passed' key indicating check result
+
+        Raises:
+            RuntimeError: If any field contains unresolved JSONPath objects
         """
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.text, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'text' field: {self.text}")
+        if isinstance(self.pattern, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'pattern' field: {self.pattern}")
+        if isinstance(self.negate, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'negate' field: {self.negate}")
+        if isinstance(self.flags, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'flags' field: {self.flags}")
+
         # Validate pattern is a string
-        if not isinstance(pattern, str):
+        if not isinstance(self.pattern, str):
             raise ValidationError("Regex check 'pattern' argument must be a string")
 
-        # Handle flags conversion
-        if flags is None:
-            flags_obj = RegexFlags()
-        elif isinstance(flags, dict):
-            flags_obj = RegexFlags(**flags)
-        elif isinstance(flags, RegexFlags):
-            flags_obj = flags
-        else:
-            raise ValidationError("Regex check 'flags' argument must be a dict or RegexFlags")
+        # Handle flags (should already be RegexFlags from default_factory)
+        flags_obj = self.flags if isinstance(self.flags, RegexFlags) else RegexFlags()
 
         # Convert text to string
-        text_str = str(text) if text is not None else ""
+        text_str = str(self.text) if self.text is not None else ""
 
         # Build regex flags
         regex_flags = 0
@@ -79,13 +87,13 @@ class RegexCheck(BaseCheck):
 
         try:
             # Compile and test the pattern
-            compiled_pattern = re.compile(pattern, regex_flags)
+            compiled_pattern = re.compile(self.pattern, regex_flags)
             match = compiled_pattern.search(text_str) is not None
 
             # Apply negation
-            passed = not match if negate else match
+            passed = not match if self.negate else match
 
             return {'passed': passed}
 
         except re.error as e:
-            raise ValidationError(f"Invalid regex pattern '{pattern}': {e!s}") from e
+            raise ValidationError(f"Invalid regex pattern '{self.pattern}': {e!s}") from e

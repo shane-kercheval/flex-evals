@@ -1,9 +1,9 @@
 """Combined check classes for test utility checks."""
 
 from typing import Any
-from pydantic import Field
+from pydantic import Field, field_validator
 
-from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, OptionalJSONPath
+from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, JSONPath
 from flex_evals.registry import register
 
 
@@ -11,36 +11,64 @@ from flex_evals.registry import register
 class TestCheck(BaseCheck):
     """Combined test utility check."""
 
-    expected: str = OptionalJSONPath(
-        "Expected value or JSONPath expression pointing to the expected value",
-        default="Paris",
+    expected: str | JSONPath = Field(
+        "Paris",
+        description="Expected value or JSONPath expression pointing to the expected value",
     )
-    actual: str | None = OptionalJSONPath(
-        "Actual value or JSONPath expression pointing to the actual value",
-        default=None,
+    actual: str | JSONPath | None = Field(
+        None,
+        description="Actual value or JSONPath expression pointing to the actual value",
     )
 
-    def __call__(self, expected: str = "Paris", actual: str | None = None, **kwargs: Any) -> dict[str, Any]:
-        """Execute test check comparison."""
-        return {"passed": expected == actual}
+    @field_validator('expected', 'actual', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
+    def __call__(self) -> dict[str, Any]:
+        """Execute test check comparison using resolved Pydantic fields."""
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.expected, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'expected' field: {self.expected}")
+        if isinstance(self.actual, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'actual' field: {self.actual}")
+        
+        return {"passed": str(self.expected) == str(self.actual)}
 
 
 @register("test_async_check", version="1.0.0")
 class TestAsyncCheck(BaseAsyncCheck):
     """Combined test utility async check."""
 
-    expected: str = OptionalJSONPath(
-        "Expected value or JSONPath expression pointing to the expected value",
-        default="Paris",
+    expected: str | JSONPath = Field(
+        "Paris",
+        description="Expected value or JSONPath expression pointing to the expected value",
     )
-    actual: str | None = OptionalJSONPath(
-        "Actual value or JSONPath expression pointing to the actual value",
-        default=None,
+    actual: str | JSONPath | None = Field(
+        None,
+        description="Actual value or JSONPath expression pointing to the actual value",
     )
 
-    async def __call__(self, expected: str = "Paris", actual: str | None = None, **kwargs: Any) -> dict[str, Any]:
-        """Execute async test check comparison."""
-        return {"passed": expected == actual}
+    @field_validator('expected', 'actual', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
+    async def __call__(self) -> dict[str, Any]:
+        """Execute async test check comparison using resolved Pydantic fields."""
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.expected, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'expected' field: {self.expected}")
+        if isinstance(self.actual, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'actual' field: {self.actual}")
+        
+        return {"passed": str(self.expected) == str(self.actual)}
 
 
 @register("test_failing_check", version="1.0.0")
@@ -49,7 +77,7 @@ class TestFailingCheck(BaseCheck):
 
     # No fields - this check takes no parameters and always fails
 
-    def __call__(self, **kwargs: Any) -> dict[str, Any]:
+    def __call__(self) -> dict[str, Any]:
         """Execute test check that always fails."""
         return {"passed": False}
 

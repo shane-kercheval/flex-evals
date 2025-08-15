@@ -11,7 +11,7 @@ from collections.abc import Callable
 from collections.abc import Mapping
 from pydantic import Field
 
-from .base import BaseAsyncCheck, EvaluationContext
+from .base import BaseAsyncCheck, EvaluationContext, JSONPath
 from ..registry import register
 from ..exceptions import ValidationError, CheckExecutionError
 from ..schemas import CheckResult
@@ -22,7 +22,7 @@ from ..constants import CheckType
 class CustomFunctionCheck(BaseAsyncCheck):
     """Executes user-provided python validation functions."""
 
-    # Pydantic fields with validation
+    # Pydantic fields with validation - function_args can contain JSONPath objects
     validation_function: Any = Field(..., description='User-provided function or string function definition')
     function_args: dict[str, Any] = Field(..., description='Arguments to pass to validation_function (JSONPath expressions supported)')
 
@@ -108,33 +108,37 @@ class CustomFunctionCheck(BaseAsyncCheck):
             check_metadata,
         )
 
-    async def __call__(
-        self,
-        validation_function: Callable | str,
-        function_args: dict[str, Any],
-    ) -> Any:  # noqa: ANN401
+    async def __call__(self) -> Any:  # noqa: ANN401
         """
-        Execute custom function check with resolved arguments.
-        
-        Args:
-            validation_function: User-provided function or string function definition
-            function_args: Resolved arguments to pass to validation function
-            
+        Execute custom function check using resolved Pydantic fields.
+
+        All JSONPath objects should have been resolved by execute() before this is called.
+
         Returns:
             Whatever the validation function returns (no processing or structure imposed)
+
+        Raises:
+            RuntimeError: If function_args contains unresolved JSONPath objects
         """
+        # Validate that function_args doesn't contain unresolved JSONPath objects
+        for key, value in self.function_args.items():
+            if isinstance(value, JSONPath):
+                raise RuntimeError(f"JSONPath not resolved for function_args['{key}']: {value}")
+
         # Convert string function to callable if needed
-        if isinstance(validation_function, str):
-            validation_function = self._string_to_function(validation_function)
-        elif not callable(validation_function):
+        if isinstance(self.validation_function, str):
+            validation_function = self._string_to_function(self.validation_function)
+        elif not callable(self.validation_function):
             raise ValidationError(
-                "validation_function must be callable or string function definition"
+                "validation_function must be callable or string function definition",
             )
+        else:
+            validation_function = self.validation_function
 
         # Prepare function arguments (these are already resolved values from JSONPath)
-        if not isinstance(function_args, Mapping):
+        if not isinstance(self.function_args, Mapping):
             raise ValidationError("function_args must be a dictionary")
-        fn_kwargs = dict(function_args)
+        fn_kwargs = dict(self.function_args)
 
         try:
             # Execute the validation function (handle both sync and async)
@@ -165,9 +169,9 @@ class CustomFunctionCheck(BaseAsyncCheck):
 
             if func_string.strip().startswith('lambda'):
                 # Handle lambda functions
-                return eval(func_string, namespace, namespace)  # noqa: S307
+                return eval(func_string, namespace, namespace)
             # Handle named function definitions
-            exec(func_string, namespace, namespace)  # noqa: S102
+            exec(func_string, namespace, namespace)
             # Find the defined function in namespace
             functions = [v for v in namespace.values() if callable(v) and hasattr(v, '__name__')]
             if not functions:

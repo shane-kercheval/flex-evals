@@ -13,6 +13,7 @@ import pytest
 from typing import Any
 
 from flex_evals.checks.exact_match import ExactMatchCheck
+from flex_evals.checks.base import JSONPath
 from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
 from flex_evals.exceptions import ValidationError
 from pydantic import ValidationError as PydanticValidationError
@@ -28,8 +29,13 @@ class TestExactMatchValidation:
             expected="$.expected",
         )
 
-        assert check.actual == "$.output.value"
-        assert check.expected == "$.expected"
+        assert isinstance(check.actual, JSONPath)
+
+
+        assert check.actual.expression == "$.output.value"
+        assert isinstance(check.expected, JSONPath)
+
+        assert check.expected.expression == "$.expected"
         assert check.case_sensitive is True
         assert check.negate is False
 
@@ -49,12 +55,16 @@ class TestExactMatchValidation:
         """Test ExactMatchCheck validation for empty actual - now allowed."""
         check = ExactMatchCheck(actual="", expected="$.expected")
         assert check.actual == ""
-        assert check.expected == "$.expected"
+        assert isinstance(check.expected, JSONPath)
+
+        assert check.expected.expression == "$.expected"
 
     def test_exact_match_check_validation_empty_expected(self):
         """Test ExactMatchCheck validation for empty expected - now allowed."""
         check = ExactMatchCheck(actual="$.actual", expected="")
-        assert check.actual == "$.actual"
+        assert isinstance(check.actual, JSONPath)
+
+        assert check.actual.expression == "$.actual"
         assert check.expected == ""
 
     def test_exact_match_check_type_property(self):
@@ -73,69 +83,69 @@ class TestExactMatchExecution:
 
     def test_exact_match_string_equal(self):
         """Test matching strings return passed=true."""
-        check = ExactMatchCheck(actual="test", expected="test")
-        result = check(actual="Paris", expected="Paris")
+        check = ExactMatchCheck(actual="Paris", expected="Paris")
+        result = check()
         assert result == {"passed": True}
 
     def test_exact_match_string_not_equal(self):
         """Test non-matching strings return passed=false."""
-        check = ExactMatchCheck(actual="test", expected="test")
-        result = check(actual="paris", expected="Paris")
+        check = ExactMatchCheck(actual="paris", expected="Paris")
+        result = check()
         assert result == {"passed": False}
 
     def test_exact_match_case_sensitive_true(self):
         """Test 'Hello' != 'hello' when case_sensitive=true."""
-        check = ExactMatchCheck(actual="test", expected="test")
-        result = check(actual="Hello", expected="hello", case_sensitive=True)
+        check = ExactMatchCheck(actual="Hello", expected="hello", case_sensitive=True)
+        result = check()
         assert result == {"passed": False}
 
     def test_exact_match_case_sensitive_false(self):
         """Test 'Hello' == 'hello' when case_sensitive=false."""
-        check = ExactMatchCheck(actual="test", expected="test")
-        result = check(actual="Hello", expected="hello", case_sensitive=False)
+        check = ExactMatchCheck(actual="Hello", expected="hello", case_sensitive=False)
+        result = check()
         assert result == {"passed": True}
 
     def test_exact_match_negate_true(self):
         """Test negate=true passes when values differ."""
-        check = ExactMatchCheck(actual="test", expected="test")
-        result = check(actual="Paris", expected="London", negate=True)
+        check = ExactMatchCheck(actual="Paris", expected="London", negate=True)
+        result = check()
         assert result == {"passed": True}
 
     def test_exact_match_negate_false(self):
         """Test negate=false passes when values match."""
-        check = ExactMatchCheck(actual="test", expected="test")
-        result = check(actual="Paris", expected="Paris", negate=False)
+        check = ExactMatchCheck(actual="Paris", expected="Paris", negate=False)
+        result = check()
         assert result == {"passed": True}
 
     def test_exact_match_object_comparison(self):
         """Test comparing complex objects."""
-        check = ExactMatchCheck(actual="test", expected="test")
         # Objects will be converted to strings for comparison
-        result = check(actual={"city": "Paris"}, expected="{'city': 'Paris'}")
+        check = ExactMatchCheck(actual={"city": "Paris"}, expected="{'city': 'Paris'}")
+        result = check()
         assert result == {"passed": True}
 
     def test_exact_match_null_values(self):
         """Test comparison with null/None values."""
-        check = ExactMatchCheck(actual="test", expected="test")
-        result = check(actual=None, expected="")
+        check = ExactMatchCheck(actual=None, expected="")
+        result = check()
         assert result == {"passed": True}  # None converts to empty string
 
     def test_exact_match_missing_actual(self):
         """Test missing actual argument raises TypeError."""
-        check = ExactMatchCheck(actual="test", expected="test")
-        with pytest.raises(TypeError):
-            check(expected="Paris")
+        # This test is no longer valid with new architecture - missing fields caught at construction
+        with pytest.raises(PydanticValidationError):
+            ExactMatchCheck(expected="Paris")  # Missing required actual field
 
     def test_exact_match_missing_expected(self):
         """Test missing expected argument raises TypeError."""
-        check = ExactMatchCheck(actual="test", expected="test")
-        with pytest.raises(TypeError):
-            check(actual="Paris")
+        # This test is no longer valid with new architecture - missing fields caught at construction
+        with pytest.raises(PydanticValidationError):
+            ExactMatchCheck(actual="Paris")  # Missing required expected field
 
     def test_exact_match_result_schema(self):
         r"""Test result matches {\"passed\": boolean} exactly."""
         check = ExactMatchCheck(actual="test", expected="test")
-        result = check(actual="test", expected="test")
+        result = check()
         assert isinstance(result, dict)
         assert set(result.keys()) == {"passed"}
         assert isinstance(result["passed"], bool)
@@ -265,14 +275,15 @@ class TestExactMatchErrorHandling:
     """Test error handling and edge cases for ExactMatchCheck."""
 
     def test_exact_match_invalid_field_type(self):
-        """Test validation error for invalid field types during construction."""
-        # Test invalid actual type
-        with pytest.raises(PydanticValidationError):
-            ExactMatchCheck(actual=123, expected="test")  # type: ignore
+        """Test that various field types are accepted since ExactMatch can compare any types."""
+        # ExactMatchCheck now accepts any types for comparison
+        check1 = ExactMatchCheck(actual=123, expected="test")
+        assert check1.actual == 123
+        assert check1.expected == "test"
         
-        # Test invalid expected type  
-        with pytest.raises(PydanticValidationError):
-            ExactMatchCheck(actual="test", expected=123)  # type: ignore
+        check2 = ExactMatchCheck(actual="test", expected=123)
+        assert check2.actual == "test"
+        assert check2.expected == 123
 
     def test_exact_match_required_fields(self):
         """Test that required fields are enforced."""
@@ -306,25 +317,31 @@ class TestExactMatchErrorHandling:
         outputs = [Output(value="test")]
         
         # Should raise validation error for invalid JSONPath
-        with pytest.raises(ValidationError, match="appears to be JSONPath but is invalid"):
+        with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
             evaluate(test_cases, outputs)
 
     def test_exact_match_complex_data_types(self):
         """Test exact match with complex data types."""
-        check = ExactMatchCheck(actual="test", expected="test")
-        
         # Test with nested dictionaries
         actual = {"user": {"name": "Alice", "age": 30}}
         expected = {"user": {"name": "Alice", "age": 30}}
-        result = check(actual=actual, expected=expected)
+        check1 = ExactMatchCheck(actual=actual, expected=expected)
+        result = check1()
         assert result == {"passed": True}
         
         # Test with lists
-        result = check(actual=[1, 2, 3], expected=[1, 2, 3])
+        check2 = ExactMatchCheck(actual=[1, 2, 3], expected=[1, 2, 3])
+        result = check2()
         assert result == {"passed": True}
         
-        # Test with mixed types (should fail)
-        result = check(actual="123", expected=123)
+        # Test with mixed types (string representation matches)
+        check3 = ExactMatchCheck(actual="123", expected=123)
+        result = check3()
+        assert result == {"passed": True}  # str(123) == "123"
+        
+        # Test with truly different types that don't match
+        check4 = ExactMatchCheck(actual="hello", expected=123)
+        result = check4()
         assert result == {"passed": False}
 
 
@@ -412,6 +429,6 @@ class TestExactMatchJSONPathIntegration:
         outputs = [Output(value={"response": "test"})]
         
         results = evaluate(test_cases, outputs)
-        # Should complete but likely fail the match due to missing data
-        assert results.results[0].status == Status.COMPLETED
-        # The specific behavior for missing JSONPath data depends on resolver implementation
+        # Should result in error when JSONPath resolution fails
+        assert results.results[0].status == Status.ERROR
+        # Missing JSONPath data now causes errors rather than silent failures

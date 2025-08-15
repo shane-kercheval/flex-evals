@@ -8,11 +8,15 @@ with proper evaluation context handling, including JSONPath validation.
 from abc import ABC, abstractmethod
 from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, ClassVar
-
+from types import UnionType
+from typing import Any, ClassVar, TypeAlias, TYPE_CHECKING
+import typing
 import jsonpath_ng
 from jsonpath_ng.exceptions import JSONPathError as JSONPathNGError
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_validator
+
+if TYPE_CHECKING:
+    from ..schemas.check import Check
 
 from ..constants import CheckType
 from ..exceptions import CheckExecutionError, JSONPathError, ValidationError
@@ -28,36 +32,32 @@ class JSONPathBehavior(Enum):
     OPTIONAL = 'optional'  # Can be literal or JSONPath (validates if starts with $)
 
 
-def RequiredJSONPath(description: str) -> Any:  # noqa: ANN401, N802
-    """Field that must contain a valid JSONPath expression."""
-    return Field(
-        ...,
-        description=description,
-        json_schema_extra={'jsonpath': JSONPathBehavior.REQUIRED.value},
-    )
-
-
-def OptionalJSONPath(description: str, default: Any = ..., **kwargs: Any) -> Any:  # noqa: ANN401, N802
-    """Field that can contain literal text or JSONPath expression."""
-    # Merge json_schema_extra with any existing extras
-    extra = kwargs.pop('json_schema_extra', {})
-    extra['jsonpath'] = JSONPathBehavior.OPTIONAL.value
-
-    return Field(
-        default,
-        description=description,
-        json_schema_extra=extra,
-        **kwargs,
-    )
+# Helper functions removed - JSONPath behavior is now inferred from type annotations
 
 
 def get_jsonpath_behavior(model_class: type, field_name: str) -> JSONPathBehavior | None:
-    """Get JSONPath behavior for a field."""
+    """Get JSONPath behavior for a field by inspecting its type annotation."""
     field_info = model_class.model_fields.get(field_name)
-    if field_info and hasattr(field_info, 'json_schema_extra') and field_info.json_schema_extra:
-        behavior_str = field_info.json_schema_extra.get('jsonpath')
-        if behavior_str:
-            return JSONPathBehavior(behavior_str)
+    if not field_info:
+        return None
+
+    # Get the field's type annotation
+    field_type = field_info.annotation
+
+    # Check if the field type is exactly JSONPath (required)
+    if field_type is JSONPath:
+        return JSONPathBehavior.REQUIRED
+
+    # Check if the field type is a Union that includes JSONPath (optional)
+    # This handles cases like str | JSONPath, bool | JSONPath, etc.
+    origin = typing.get_origin(field_type)
+
+    # Handle both old-style typing.Union and new-style types.UnionType (Python 3.10+)
+    if origin is typing.Union or isinstance(field_type, UnionType):
+        args = typing.get_args(field_type)
+        if JSONPath in args:
+            return JSONPathBehavior.OPTIONAL
+
     return None
 
 
@@ -91,6 +91,27 @@ def is_jsonpath_expression(value: str) -> bool:
         return False  # Escaped literal
 
     return value.startswith('$.')
+
+
+# JSONPath type for clean field definitions
+class JSONPath(BaseModel):
+    """Represents a JSONPath expression that needs resolution."""
+
+    expression: str = Field(..., description="The JSONPath expression to resolve")
+
+    @field_validator('expression')
+    @classmethod
+    def validate_expression(cls, v: str) -> str:
+        """Validate that the expression is a valid JSONPath."""
+        if not validate_jsonpath(v):
+            raise ValueError(f"Invalid JSONPath expression: '{v}'")
+        return v
+
+    def __str__(self) -> str:
+        return self.expression
+
+    def __repr__(self) -> str:
+        return f"JSONPath('{self.expression}')"
 
 
 class JSONPathValidatedModel(BaseModel):
@@ -169,7 +190,7 @@ class BaseCheck(JSONPathValidatedModel, ABC):
         # Import here to avoid circular import
         from ..registry import get_check_type_for_class  # noqa: PLC0415
         check_type_str = get_check_type_for_class(self.__class__)
-        
+
         # Try to convert to CheckType enum, but allow arbitrary strings for custom/test checks
         try:
             return CheckType(check_type_str)
@@ -177,10 +198,14 @@ class BaseCheck(JSONPathValidatedModel, ABC):
             return check_type_str
 
     def to_arguments(self) -> dict[str, Any]:
-        """Convert Pydantic fields to arguments dict for execution."""
+        """Convert Pydantic fields to arguments dict for engine compatibility."""
         data = self.model_dump()
         # Remove metadata as it's handled separately
         data.pop('metadata', None)
+        # Convert JSONPath objects to their string expressions for engine compatibility
+        for key, value in data.items():
+            if isinstance(value, JSONPath):
+                data[key] = value.expression
         return data
 
     def _get_version(self) -> str:
@@ -206,23 +231,61 @@ class BaseCheck(JSONPathValidatedModel, ABC):
         """
         pass
 
+    def resolve_fields(self, context: EvaluationContext) -> dict[str, Any]:
+        """Resolve any JSONPath fields in-place using the evaluation context."""
+        resolved_arguments = {}
+
+        for field_name in self.__class__.model_fields:
+            field_value = getattr(self, field_name)
+
+            if isinstance(field_value, JSONPath):
+                try:
+                    resolved_result = self._resolver.resolve_argument(
+                        field_value.expression,
+                        context.context_dict,
+                    )
+                    resolved_value = resolved_result.get("value")
+                    setattr(self, field_name, resolved_value)
+                    resolved_arguments[field_name] = resolved_result
+                except Exception as e:
+                    raise JSONPathError(
+                        f"Failed to resolve JSONPath in field '{field_name}': {e}",
+                        jsonpath_expression=field_value.expression,
+                    ) from e
+            else:
+                resolved_arguments[field_name] = {
+                    "value": field_value,
+                    "resolved_from": "literal",
+                }
+
+        self._resolved_arguments = resolved_arguments
+        return resolved_arguments
+
+    def _restore_jsonpath_fields(self) -> None:
+        """Restore JSONPath objects from their resolved values (for reuse of check instances)."""
+        # Only restore if we have the resolved arguments mapping
+        if not hasattr(self, '_resolved_arguments'):
+            return
+
+        for field_name, resolved_info in self._resolved_arguments.items():
+            if 'jsonpath' in resolved_info:
+                # This field was resolved from a JSONPath - restore the JSONPath object
+                original_jsonpath = JSONPath(expression=resolved_info['jsonpath'])
+                setattr(self, field_name, original_jsonpath)
+
     def execute(
         self,
-        check_type: str,
-        arguments: dict[str, Any],
         context: EvaluationContext,
         check_metadata: dict[str, Any] | None = None,
     ) -> CheckResult:
         """
         Execute the check and return a complete CheckResult.
 
-        This method handles argument resolution, error handling, and result formatting
+        This method handles JSONPath field resolution, error handling, and result formatting
         according to the FEP protocol.
 
         Args:
-            check_type: The type identifier for this check
-            arguments: Raw check arguments (may contain JSONPath expressions)
-            context: Evaluation context
+            context: Evaluation context for JSONPath resolution
             check_metadata: Additional metadata from the check definition
 
         Returns:
@@ -232,25 +295,20 @@ class BaseCheck(JSONPathValidatedModel, ABC):
 
         # Get version from registry using the class
         check_version = self._get_version()
+        check_type = str(self.check_type)
 
         try:
-            # Resolve arguments
-            resolved_arguments = self._resolver.resolve_arguments(
-                arguments,
-                context.context_dict,
-            )
+            # Resolve JSONPath fields in-place
+            resolved_arguments = self.resolve_fields(context)
 
-            # Extract resolved values for check execution
-            resolved_values = {
-                key: arg_data["value"]
-                for key, arg_data in resolved_arguments.items()
-            }
-
-            # Execute the check
+            # Execute the check with resolved fields
             try:
-                results = self(**resolved_values)
+                results = self()
             except TypeError as e:
                 raise ValidationError(f"Invalid arguments for check: {e!s}") from e
+            finally:
+                # Restore JSONPath objects to allow reuse of check instances
+                self._restore_jsonpath_fields()
 
             # Create successful result
             return CheckResult(
@@ -348,7 +406,6 @@ class BaseAsyncCheck(JSONPathValidatedModel, ABC):
     Subclasses should define their Pydantic fields and implement async __call__().
     """
 
-
     # Pydantic configuration
     model_config: ClassVar[dict[str, Any]] = {'extra': 'forbid'}
 
@@ -367,7 +424,7 @@ class BaseAsyncCheck(JSONPathValidatedModel, ABC):
         # Import here to avoid circular import
         from ..registry import get_check_type_for_class  # noqa: PLC0415
         check_type_str = get_check_type_for_class(self.__class__)
-        
+
         # Try to convert to CheckType enum, but allow arbitrary strings for custom/test checks
         try:
             return CheckType(check_type_str)
@@ -375,10 +432,14 @@ class BaseAsyncCheck(JSONPathValidatedModel, ABC):
             return check_type_str
 
     def to_arguments(self) -> dict[str, Any]:
-        """Convert Pydantic fields to arguments dict for execution."""
+        """Convert Pydantic fields to arguments dict for engine compatibility."""
         data = self.model_dump()
         # Remove metadata as it's handled separately
         data.pop('metadata', None)
+        # Convert JSONPath objects to their string expressions for engine compatibility
+        for key, value in data.items():
+            if isinstance(value, JSONPath):
+                data[key] = value.expression
         return data
 
     def _get_version(self) -> str:
@@ -404,10 +465,50 @@ class BaseAsyncCheck(JSONPathValidatedModel, ABC):
         """
         pass
 
+    def resolve_fields(self, context: EvaluationContext) -> dict[str, Any]:
+        """Resolve any JSONPath fields in-place using the evaluation context."""
+        resolved_arguments = {}
+
+        for field_name in self.__class__.model_fields:
+            field_value = getattr(self, field_name)
+
+            if isinstance(field_value, JSONPath):
+                try:
+                    resolved_result = self._resolver.resolve_argument(
+                        field_value.expression,
+                        context.context_dict,
+                    )
+                    resolved_value = resolved_result.get("value")
+                    setattr(self, field_name, resolved_value)
+                    resolved_arguments[field_name] = resolved_result
+                except Exception as e:
+                    raise JSONPathError(
+                        f"Failed to resolve JSONPath in field '{field_name}': {e}",
+                        jsonpath_expression=field_value.expression,
+                    ) from e
+            else:
+                resolved_arguments[field_name] = {
+                    "value": field_value,
+                    "resolved_from": "literal",
+                }
+
+        self._resolved_arguments = resolved_arguments
+        return resolved_arguments
+
+    def _restore_jsonpath_fields(self) -> None:
+        """Restore JSONPath objects from their resolved values (for reuse of check instances)."""
+        # Only restore if we have the resolved arguments mapping
+        if not hasattr(self, '_resolved_arguments'):
+            return
+
+        for field_name, resolved_info in self._resolved_arguments.items():
+            if 'jsonpath' in resolved_info:
+                # This field was resolved from a JSONPath - restore the JSONPath object
+                original_jsonpath = JSONPath(expression=resolved_info['jsonpath'])
+                setattr(self, field_name, original_jsonpath)
+
     async def execute(
         self,
-        check_type: str,
-        arguments: dict[str, Any],
         context: EvaluationContext,
         check_metadata: dict[str, Any] | None = None,
     ) -> CheckResult:
@@ -418,9 +519,7 @@ class BaseAsyncCheck(JSONPathValidatedModel, ABC):
         according to the FEP protocol.
 
         Args:
-            check_type: The type identifier for this check
-            arguments: check arguments (may contain JSONPath expressions that need to be resolved)
-            context: Evaluation context
+            context: Evaluation context for JSONPath resolution
             check_metadata: Additional metadata from the check definition
 
         Returns:
@@ -430,25 +529,20 @@ class BaseAsyncCheck(JSONPathValidatedModel, ABC):
 
         # Get version from registry using the class
         check_version = self._get_version()
+        check_type = str(self.check_type)
 
         try:
-            # Resolve arguments
-            resolved_arguments = self._resolver.resolve_arguments(
-                arguments,
-                context.context_dict,
-            )
+            # Resolve JSONPath fields in-place
+            resolved_arguments = self.resolve_fields(context)
 
-            # Extract resolved values for check execution
-            resolved_values = {
-                key: arg_data["value"]
-                for key, arg_data in resolved_arguments.items()
-            }
-
-            # Execute the check asynchronously
+            # Execute the check asynchronously with resolved fields
             try:
-                results = await self(**resolved_values)
+                results = await self()
             except TypeError as e:
                 raise ValidationError(f"Invalid arguments for check: {e!s}") from e
+            finally:
+                # Restore JSONPath objects to allow reuse of check instances
+                self._restore_jsonpath_fields()
 
             # Create successful result
             return CheckResult(
@@ -535,3 +629,7 @@ class BaseAsyncCheck(JSONPathValidatedModel, ABC):
                 recoverable=recoverable,
             ),
         )
+
+
+# Type alias for any check type
+CheckTypes: TypeAlias = 'Check | BaseCheck | BaseAsyncCheck'

@@ -5,9 +5,9 @@ Combines schema validation with execution logic in a single class.
 """
 
 from typing import Any
-from pydantic import Field, field_validator
+from pydantic import field_validator, Field
 
-from .base import BaseCheck, OptionalJSONPath
+from .base import BaseCheck, JSONPath
 from ..registry import register
 from ..exceptions import ValidationError
 from ..constants import CheckType
@@ -17,43 +17,50 @@ from ..constants import CheckType
 class ContainsCheck(BaseCheck):
     """Checks if the string value contains all specified phrases."""
 
-    # Pydantic fields with validation
-    text: str = OptionalJSONPath('Text to search or JSONPath expression pointing to the text')
-    phrases: str | list[str] = Field(
-        ...,
-        description='Single string or array of strings that must be present',
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    text: str | JSONPath = Field(..., description='Text to search or JSONPath expression pointing to the text')
+    phrases: str | list[str] | JSONPath = Field(
+        ..., description='Single string or array of strings that must be present',
     )
-    case_sensitive: bool = Field(True, description='Whether phrase matching is case-sensitive')
-    negate: bool = Field(False, description='If true, passes when text contains none of the phrases')
+    case_sensitive: bool | JSONPath = Field(
+        True, description='Whether phrase matching is case-sensitive',
+    )
+    negate: bool | JSONPath = Field(
+        False, description='If true, passes when text contains none of the phrases',
+    )
 
-    @field_validator('phrases')
+    @field_validator('text', 'phrases', 'case_sensitive', 'negate', mode='before')
     @classmethod
-    def validate_phrases(cls, v: str | list[str]) -> str | list[str]:
-        """Validate that phrases is not an empty list."""
-        if isinstance(v, list) and len(v) == 0:
-            raise ValueError("phrases cannot be an empty list")
+    def convert_jsonpath(cls, v):
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
         return v
 
-    def __call__(
-        self,
-        text: str,
-        phrases: str | list[str],
-        case_sensitive: bool = True,
-        negate: bool = False,
-    ) -> dict[str, Any]:
+    def __call__(self) -> dict[str, Any]:
         """
-        Execute contains check with resolved arguments.
+        Execute contains check using resolved Pydantic fields.
 
-        Args:
-            text: Resolved text to search
-            phrases: Resolved phrases to find (string or list of strings)
-            case_sensitive: Whether phrase matching is case-sensitive
-            negate: If true, passes when text contains none of the phrases
+        All JSONPath objects should have been resolved by execute() before this is called.
 
         Returns:
             Dictionary with 'passed' key indicating check result
+
+        Raises:
+            RuntimeError: If any field contains unresolved JSONPath objects
         """
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.text, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'text' field: {self.text}")
+        if isinstance(self.phrases, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'phrases' field: {self.phrases}")
+        if isinstance(self.case_sensitive, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'case_sensitive' field: {self.case_sensitive}")
+        if isinstance(self.negate, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'negate' field: {self.negate}")
+
         # Convert single string to list
+        phrases = self.phrases
         if isinstance(phrases, str):
             if not phrases:  # Empty string
                 raise ValidationError("Contains check 'phrases' argument must not be empty")
@@ -65,10 +72,10 @@ class ContainsCheck(BaseCheck):
             raise ValidationError("Contains check 'phrases' argument must be a string or list")
 
         # Convert text to string
-        text_str = str(text) if text is not None else ""
+        text_str = str(self.text) if self.text is not None else ""
 
         # Apply case sensitivity
-        if not case_sensitive:
+        if not self.case_sensitive:
             text_str = text_str.lower()
             phrases = [str(phrase).lower() for phrase in phrases]
         else:
@@ -80,7 +87,7 @@ class ContainsCheck(BaseCheck):
             if phrase in text_str:
                 found_count += 1
 
-        if negate:  # noqa: SIM108
+        if self.negate:  # noqa: SIM108
             # Pass if NONE of the phrases are found
             passed = found_count == 0
         else:

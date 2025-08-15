@@ -5,9 +5,9 @@ Combines schema validation with execution logic in a single class.
 """
 
 from typing import Any
-from pydantic import Field
+from pydantic import field_validator, Field
 
-from .base import BaseCheck, OptionalJSONPath
+from .base import BaseCheck, JSONPath
 from ..registry import register
 from ..constants import CheckType
 
@@ -16,37 +16,50 @@ from ..constants import CheckType
 class EqualsCheck(BaseCheck):
     """Tests whether two values of any type are equal using Python's == operator."""
 
-    # Pydantic fields with validation
-    actual: str | list | dict | set | tuple | int | float | bool | None = OptionalJSONPath(
-        'Value to check or JSONPath expression pointing to the value'
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    actual: str | list | dict | set | tuple | int | float | bool | None | JSONPath = Field(
+        ..., description='Value to check or JSONPath expression pointing to the value',
     )
-    expected: str | list | dict | set | tuple | int | float | bool | None = OptionalJSONPath(
-        'Expected value or JSONPath expression pointing to the value'
+    expected: str | list | dict | set | tuple | int | float | bool | None | JSONPath = Field(
+        ..., description='Expected value or JSONPath expression pointing to the value',
     )
-    negate: bool = Field(False, description='If true, passes when values don\'t match')
+    negate: bool | JSONPath = Field(
+        False, description='If true, passes when values don\'t match',
+    )
 
-    def __call__(
-        self,
-        actual: str | list | dict | set | tuple | int | float | bool | None,
-        expected: str | list | dict | set | tuple | int | float | bool | None,
-        negate: bool = False,
-    ) -> dict[str, Any]:
+    @field_validator('actual', 'expected', 'negate', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
+    def __call__(self) -> dict[str, Any]:
         """
-        Execute equality check with resolved arguments.
+        Execute equals check using resolved Pydantic fields.
 
-        Args:
-            actual: Resolved value to check
-            expected: Resolved expected value
-            negate: If true, passes when values don't match
+        All JSONPath objects should have been resolved by execute() before this is called.
 
         Returns:
             Dictionary with 'passed' key indicating check result
+
+        Raises:
+            RuntimeError: If any field contains unresolved JSONPath objects
         """
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.actual, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'actual' field: {self.actual}")
+        if isinstance(self.expected, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'expected' field: {self.expected}")
+        if isinstance(self.negate, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'negate' field: {self.negate}")
+
         # Perform direct equality comparison
         # Python's == operator handles different types appropriately
-        equal = actual == expected
+        equal = self.actual == self.expected
 
         # Apply negation
-        passed = not equal if negate else equal
+        passed = not equal if self.negate else equal
 
         return {'passed': passed}
