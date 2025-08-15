@@ -705,16 +705,32 @@ class TestEvaluationEngine:
         )
         time.time() - start_time
 
-        # Debug: print result details if there are errors
-        if result.status == 'error':
-            for test_result in result.results:
-                if test_result.status == 'error':
-                    for check_result in test_result.check_results:
-                        if check_result.status == 'error' and check_result.error:
-                            print(f"Error in {test_result.execution_context.test_case.id}: {check_result.error.message}")  # noqa: E501
+        # Assert all components completed successfully
+        assert result.status == 'completed', (
+            f"Expected result status 'completed', got '{result.status}'"
+        )
 
-        # Verify the evaluation completed successfully
-        assert result.status == 'completed'
+        # Verify all test case results completed successfully
+        for i, test_result in enumerate(result.results):
+            assert test_result.status == 'completed', (
+                f"Test case {i} ({test_result.execution_context.test_case.id}) status "
+                f"expected 'completed', got '{test_result.status}'"
+            )
+
+            # Verify all check results within each test case completed successfully
+            for j, check_result in enumerate(test_result.check_results):
+                assert check_result.status == 'completed', (
+                    f"Test case {i} ({test_result.execution_context.test_case.id}), check {j} "
+                    f"status expected 'completed', got '{check_result.status}', "
+                    f"error: {check_result.error.message if check_result.error else 'None'}"
+                )
+                assert check_result.error is None, (
+                    f"Test case {i} ({test_result.execution_context.test_case.id}), check {j} "
+                    f"should not have error when completed, "
+                    f"got error: {check_result.error.message}"
+                )
+
+        # Verify basic evaluation structure
         assert len(result.results) == num_test_cases
 
         # All test cases should pass (matching expected values)

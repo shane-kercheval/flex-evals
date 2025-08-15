@@ -569,7 +569,7 @@ class TestPerformanceOptimization:
     def test_sync_checks_have_no_async_overhead(self):
         """Test that sync-only evaluations don't create event loops."""
         # Create many test cases with sync checks
-        num_test_cases = 100  # Reduced for testing
+        num_test_cases = 100
 
         test_cases = [
             TestCase(id=str(i), input={"value": i})
@@ -599,16 +599,27 @@ class TestPerformanceOptimization:
         assert total_time < 2.0  # more generous upper bound for new architecture
 
         # Verify all checks completed
-        if result.status != "completed":
-            print(f"Result status: {result.status}")
-            print(f"Summary: {result.summary}")
-            for i, test_result in enumerate(result.results[:5]):  # Print first 5
-                print(f"Test {i}: {test_result.status}")
-                for j, check_result in enumerate(test_result.check_results):
-                    print(f"  Check {j}: {check_result.status}, error: {check_result.error}")
-        assert result.status == "completed"
+        assert result.status == "completed", (
+            f"Expected result status 'completed', got '{result.status}'"
+        )
         assert result.summary.total_test_cases == num_test_cases
         assert result.summary.completed_test_cases == num_test_cases
+
+        # Verify all test case results completed successfully
+        for i, test_result in enumerate(result.results):
+            assert test_result.status == 'completed', (
+                f"Test case {i} status expected 'completed', got '{test_result.status}'"
+            )
+            # Verify all check results within each test case completed successfully
+            for j, check_result in enumerate(test_result.check_results):
+                assert check_result.status == 'completed', (
+                    f"Test case {i}, check {j} status expected 'completed', "
+                    f"got '{check_result.status}', error: {check_result.error}"
+                )
+                assert check_result.error is None, (
+                    f"Test case {i}, check {j} should not have error when completed, "
+                    f"got error: {check_result.error}"
+                )
 
     def test_max_async_concurrent_applies_globally(self):
         """Test that max_async_concurrent limits concurrency across all test cases."""
@@ -725,9 +736,3 @@ class TestPerformanceOptimization:
             # Verify all checks completed successfully
             for check_result in test_result.check_results:
                 assert check_result.status == "completed"
-
-        print("\nPerformance test results:")
-        print(f"Total async checks: {total_async_checks}")
-        print(f"Sequential time would be: {sequential_time:.3f}s")
-        print(f"Actual time: {total_time:.3f}s")
-        print(f"Speedup: {sequential_time / total_time:.1f}x")
