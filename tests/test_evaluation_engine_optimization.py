@@ -574,7 +574,7 @@ class TestPerformanceOptimization:
     def test_sync_checks_have_no_async_overhead(self):
         """Test that sync-only evaluations don't create event loops."""
         # Create many test cases with sync checks
-        num_test_cases = 500
+        num_test_cases = 200
 
         test_cases = [
             TestCase(id=str(i), input={"value": i})

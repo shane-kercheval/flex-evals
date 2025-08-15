@@ -6,15 +6,16 @@ from typing import Any, Optional
 from flex_evals import (
     generate_checks_schema,
     generate_check_schema,
-    ContainsCheck,
     BaseCheck,
+    ContainsCheck,
+    JSONPath,
 )
 from flex_evals.schema_generator import (
     _extract_field_schema,
     _get_python_type_string,
     _extract_class_description,
 )
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 
 class TestSchemaGeneration:
@@ -106,7 +107,7 @@ class TestSchemaGeneration:
 
         # Test text field - required, non-nullable, supports JSONPath
         text_field = fields["text"]
-        assert text_field["type"] == "union<string,JSONPath>"
+        assert text_field["type"] == "string"
         assert text_field["nullable"] is False
         assert "default" not in text_field  # Required field has no default
         assert "description" in text_field
@@ -114,19 +115,19 @@ class TestSchemaGeneration:
 
         # Test phrases field - required, non-nullable, supports JSONPath
         phrases_field = fields["phrases"]
-        assert phrases_field["type"] == "union<string,array<string>,JSONPath>"
+        assert phrases_field["type"] == "string|array<string>"
         assert phrases_field["nullable"] is False
         assert "default" not in phrases_field  # Required field has no default
 
         # Test case_sensitive field - optional, non-nullable with default, supports JSONPath
         case_sensitive_field = fields["case_sensitive"]
-        assert case_sensitive_field["type"] == "union<boolean,JSONPath>"
+        assert case_sensitive_field["type"] == "boolean"
         assert case_sensitive_field["nullable"] is False
         assert case_sensitive_field["default"] is True
 
         # Test negate field - optional, non-nullable with default, supports JSONPath
         negate_field = fields["negate"]
-        assert negate_field["type"] == "union<boolean,JSONPath>"
+        assert negate_field["type"] == "boolean"
         assert negate_field["nullable"] is False
         assert negate_field["default"] is False
 
@@ -141,14 +142,14 @@ class TestSchemaGeneration:
 
         # Test actual field - required, non-nullable, supports JSONPath
         actual_field = fields["actual"]
-        assert actual_field["type"] == "union<Any,JSONPath>"
+        assert actual_field["type"] == "Any"
         assert actual_field["nullable"] is False
         assert "default" not in actual_field  # Required field has no default
         assert actual_field["jsonpath"] == "optional"
 
         # Test expected field - required, non-nullable, supports JSONPath
         expected_field = fields["expected"]
-        assert expected_field["type"] == "union<Any,JSONPath>"
+        assert expected_field["type"] == "Any"
         assert expected_field["nullable"] is False
         assert "default" not in expected_field  # Required field has no default
         assert expected_field["jsonpath"] == "optional"
@@ -187,7 +188,7 @@ class TestFieldSchemaExtraction:
         field_info = ContainsCheck.model_fields["text"]
         field_schema = _extract_field_schema("text", field_info, ContainsCheck)
 
-        assert field_schema["type"] == "union<string,JSONPath>"
+        assert field_schema["type"] == "string"
         assert field_schema["nullable"] is False
         assert "default" not in field_schema  # Required field has no default
         assert field_schema["jsonpath"] == "optional"
@@ -198,7 +199,7 @@ class TestFieldSchemaExtraction:
         field_info = ContainsCheck.model_fields["case_sensitive"]
         field_schema = _extract_field_schema("case_sensitive", field_info, ContainsCheck)
 
-        assert field_schema["type"] == "union<boolean,JSONPath>"
+        assert field_schema["type"] == "boolean"
         assert field_schema["nullable"] is False
         assert field_schema["default"] is True
 
@@ -207,9 +208,213 @@ class TestFieldSchemaExtraction:
         field_info = ContainsCheck.model_fields["phrases"]
         field_schema = _extract_field_schema("phrases", field_info, ContainsCheck)
 
-        assert field_schema["type"] == "union<string,array<string>,JSONPath>"
+        assert field_schema["type"] == "string|array<string>"
         assert field_schema["nullable"] is False
         assert "default" not in field_schema  # Required field has no default
+
+    def test_extract_field_schema_non_jsonpath(self):
+        """Test extracting schema for field that doesn't support JSONPath."""
+        # Create a test check class with non-JSONPath fields
+        class TestCheck(BaseCheck):
+            regular_str: str = Field("default", description="Regular string field")
+            regular_int: int = Field(42, description="Regular integer field")
+
+            def __call__(self) -> dict[str, Any]:
+                return {"passed": True}
+
+        # Test string field
+        str_field_info = TestCheck.model_fields["regular_str"]
+        str_field_schema = _extract_field_schema("regular_str", str_field_info, TestCheck)
+
+        assert str_field_schema["type"] == "string"
+        assert str_field_schema["nullable"] is False
+        assert str_field_schema["default"] == "default"
+        assert str_field_schema["description"] == "Regular string field"
+        assert "jsonpath" not in str_field_schema  # No JSONPath support
+
+        # Test integer field
+        int_field_info = TestCheck.model_fields["regular_int"]
+        int_field_schema = _extract_field_schema("regular_int", int_field_info, TestCheck)
+
+        assert int_field_schema["type"] == "integer"
+        assert int_field_schema["nullable"] is False
+        assert int_field_schema["default"] == 42
+        assert int_field_schema["description"] == "Regular integer field"
+        assert "jsonpath" not in int_field_schema  # No JSONPath support
+
+    def test_extract_field_schema_complex_union_types(self):
+        """Test extracting schema for complex union types with JSONPath."""
+        # Create a test check class with complex union types
+        class ComplexUnionCheck(BaseCheck):
+            # Complex union like in EqualsCheck
+            multi_type: str | list | dict | set | tuple | int | float | bool | None | JSONPath = Field(  # noqa: E501
+                ..., description="Field that accepts many types with JSONPath support",
+            )
+            # Nullable union with JSONPath
+            nullable_union: str | int | None | JSONPath = Field(
+                None, description="Nullable union with JSONPath support",
+            )
+            # Generic types in union with JSONPath
+            generic_union: list[str] | dict[str, Any] | JSONPath = Field(
+                ..., description="Generic types with JSONPath",
+            )
+            # Simple union with JSONPath
+            simple_union: str | int | JSONPath = Field(
+                ..., description="Simple union with JSONPath",
+            )
+
+            def __call__(self) -> dict[str, Any]:
+                return {"passed": True}
+
+        # Test complex multi-type union
+        multi_field_info = ComplexUnionCheck.model_fields["multi_type"]
+        multi_field_schema = _extract_field_schema("multi_type", multi_field_info, ComplexUnionCheck)  # noqa: E501
+
+        expected_type = "string|array|object|set|tuple|integer|number|boolean"  # JSONPath and None filtered out  # noqa: E501
+        assert multi_field_schema["type"] == expected_type
+        assert multi_field_schema["nullable"] is True  # Because None is in the original union
+        assert multi_field_schema["jsonpath"] == "optional"
+        assert "default" not in multi_field_schema  # Required field
+
+        # Test nullable union
+        nullable_field_info = ComplexUnionCheck.model_fields["nullable_union"]
+        nullable_field_schema = _extract_field_schema("nullable_union", nullable_field_info, ComplexUnionCheck)  # noqa: E501
+
+        assert nullable_field_schema["type"] == "string|integer"  # JSONPath and None filtered out
+        assert nullable_field_schema["nullable"] is True  # Because None is in the original union
+        assert nullable_field_schema["jsonpath"] == "optional"
+        assert nullable_field_schema["default"] is None
+
+        # Test generic types union
+        generic_field_info = ComplexUnionCheck.model_fields["generic_union"]
+        generic_field_schema = _extract_field_schema("generic_union", generic_field_info, ComplexUnionCheck)  # noqa: E501
+
+        assert generic_field_schema["type"] == "array<string>|object<string,Any>"  # JSONPath filtered out  # noqa: E501
+        assert generic_field_schema["nullable"] is False
+        assert generic_field_schema["jsonpath"] == "optional"
+
+        # Test simple union
+        simple_field_info = ComplexUnionCheck.model_fields["simple_union"]
+        simple_field_schema = _extract_field_schema("simple_union", simple_field_info, ComplexUnionCheck)  # noqa: E501
+
+        assert simple_field_schema["type"] == "string|integer"  # JSONPath filtered out
+        assert simple_field_schema["nullable"] is False
+        assert simple_field_schema["jsonpath"] == "optional"
+
+    def test_extract_field_schema_required_jsonpath(self):
+        """Test extracting schema for field that requires JSONPath."""
+        class RequiredJSONPathCheck(BaseCheck):
+            # Field that ONLY accepts JSONPath (like path in AttributeExistsCheck)
+            path_only: JSONPath = Field(..., description="Must be a JSONPath expression")
+
+            def __call__(self) -> dict[str, Any]:
+                return {"passed": True}
+
+        field_info = RequiredJSONPathCheck.model_fields["path_only"]
+        field_schema = _extract_field_schema("path_only", field_info, RequiredJSONPathCheck)
+
+        assert field_schema["type"] == "JSONPath"  # Pure JSONPath type
+        assert field_schema["nullable"] is False
+        assert field_schema["jsonpath"] == "required"  # Required JSONPath behavior
+        assert "default" not in field_schema
+
+    def test_extract_field_schema_edge_cases(self):
+        """Test edge cases for field schema extraction."""
+        class EdgeCaseCheck(BaseCheck):
+            # Single type that's not JSONPath (should have no jsonpath field)
+            just_string: str = Field("default", description="Just a string")
+            # Optional JSONPath only
+            optional_jsonpath: JSONPath | None = Field(None, description="Optional JSONPath")
+            # Nested generic with JSONPath
+            nested_generic: dict[str, list[int]] | JSONPath = Field(..., description="Nested generic with JSONPath")  # noqa: E501
+
+            def __call__(self) -> dict[str, Any]:
+                return {"passed": True}
+
+        # Test pure string type (no JSONPath support)
+        string_field = _extract_field_schema("just_string", EdgeCaseCheck.model_fields["just_string"], EdgeCaseCheck)  # noqa: E501
+        assert string_field["type"] == "string"
+        assert string_field["nullable"] is False
+        assert "jsonpath" not in string_field  # No JSONPath support
+        assert string_field["default"] == "default"
+
+        # Test optional JSONPath
+        optional_field = _extract_field_schema("optional_jsonpath", EdgeCaseCheck.model_fields["optional_jsonpath"], EdgeCaseCheck)  # noqa: E501
+        assert optional_field["type"] == "JSONPath"  # After filtering None, only JSONPath remains
+        assert optional_field["nullable"] is True  # Because None was in the union
+        assert optional_field["jsonpath"] == "optional"
+        assert optional_field["default"] is None
+
+        # Test nested generic
+        nested_field = _extract_field_schema("nested_generic", EdgeCaseCheck.model_fields["nested_generic"], EdgeCaseCheck)  # noqa: E501
+        assert nested_field["type"] == "object<string,array<integer>>"  # JSONPath filtered out
+        assert nested_field["nullable"] is False
+        assert nested_field["jsonpath"] == "optional"
+
+    def test_nullable_field_edge_cases(self):
+        """Test edge cases for nullable field handling."""
+        class NullableTestCheck(BaseModel):
+            # Required field that can be None (must provide, can be None)
+            required_nullable: str | None = Field(..., description="Required but can be None")
+            # Optional nullable with None default
+            optional_null_default: str | None = Field(None, description="Optional nullable with None default")  # noqa: E501
+            # Optional nullable with value default
+            optional_value_default: str | None = Field("hello", description="Optional nullable with value default")  # noqa: E501
+            # Required non-nullable
+            required_non_nullable: str = Field(..., description="Required non-nullable")
+            # Optional non-nullable with default
+            optional_non_nullable: bool = Field(True, description="Optional non-nullable with default")  # noqa: E501
+
+        # Test required nullable field
+        required_nullable_schema = _extract_field_schema(
+            "required_nullable",
+            NullableTestCheck.model_fields["required_nullable"],
+            NullableTestCheck,
+        )
+        assert required_nullable_schema["type"] == "string"
+        assert required_nullable_schema["nullable"] is True
+        assert "default" not in required_nullable_schema  # Required field
+        assert required_nullable_schema["description"] == "Required but can be None"
+
+        # Test optional nullable with None default
+        optional_null_schema = _extract_field_schema(
+            "optional_null_default",
+            NullableTestCheck.model_fields["optional_null_default"],
+            NullableTestCheck,
+        )
+        assert optional_null_schema["type"] == "string"
+        assert optional_null_schema["nullable"] is True
+        assert optional_null_schema["default"] is None
+
+        # Test optional nullable with value default
+        optional_value_schema = _extract_field_schema(
+            "optional_value_default",
+            NullableTestCheck.model_fields["optional_value_default"],
+            NullableTestCheck,
+        )
+        assert optional_value_schema["type"] == "string"
+        assert optional_value_schema["nullable"] is True
+        assert optional_value_schema["default"] == "hello"
+
+        # Test required non-nullable
+        required_non_null_schema = _extract_field_schema(
+            "required_non_nullable",
+            NullableTestCheck.model_fields["required_non_nullable"],
+            NullableTestCheck,
+        )
+        assert required_non_null_schema["type"] == "string"
+        assert required_non_null_schema["nullable"] is False
+        assert "default" not in required_non_null_schema
+
+        # Test optional non-nullable
+        optional_non_null_schema = _extract_field_schema(
+            "optional_non_nullable",
+            NullableTestCheck.model_fields["optional_non_nullable"],
+            NullableTestCheck,
+        )
+        assert optional_non_null_schema["type"] == "boolean"
+        assert optional_non_null_schema["nullable"] is False
+        assert optional_non_null_schema["default"] is True
 
 
 class TestTypeStringGeneration:
@@ -223,6 +428,37 @@ class TestTypeStringGeneration:
         assert _get_python_type_string(bool) == "boolean"
         assert _get_python_type_string(dict) == "object"
         assert _get_python_type_string(list) == "array"
+
+    def test_optional_syntax_types(self):
+        """Test Optional[T] syntax converts to clean type (nullable handled separately)."""
+        test_cases = [
+            (Optional[str], "string"),  # noqa: UP045
+            (Optional[int], "integer"),  # noqa: UP045
+            (Optional[bool], "boolean"),  # noqa: UP045
+            (Optional[dict], "object"),  # noqa: UP045
+            (Optional[list], "array"),  # noqa: UP045
+            (Optional[float], "number"),  # noqa: UP045
+        ]
+
+        for annotation, expected_type in test_cases:
+            result = _get_python_type_string(annotation)
+            # Should return just the base type, nullable handled separately
+            assert result == expected_type, f"Optional[{expected_type}] should return '{expected_type}', got '{result}'"  # noqa: E501
+
+    def test_union_syntax_types(self):
+        """Test T | None syntax converts to clean type (nullable handled separately)."""
+        test_cases = [
+            (str | None, "string"),
+            (int | None, "integer"),
+            (bool | None, "boolean"),
+            (dict | None, "object"),
+            (list | None, "array"),
+            (float | None, "number"),
+        ]
+
+        for annotation, expected_type in test_cases:
+            result = _get_python_type_string(annotation)
+            assert result == expected_type, f"{expected_type} | None should return '{expected_type}', got '{result}'"  # noqa: E501
 
     def test_get_python_type_string_generic_types(self):
         """Test conversion of generic types."""

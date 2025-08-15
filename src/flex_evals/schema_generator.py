@@ -12,7 +12,7 @@ from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
 
 from .registry import list_registered_checks, get_check_info, get_latest_version, get_check_class
-from .checks.base import get_jsonpath_behavior
+from .checks.base import get_jsonpath_behavior, JSONPath
 
 
 def _extract_class_description(check_class: type) -> str:
@@ -27,17 +27,17 @@ def _extract_class_description(check_class: type) -> str:
 
 
 def _is_nullable_type(annotation: Any) -> bool:  # noqa: ANN401
-    """Check if a type annotation is nullable (Union[T, None] or T | None)."""
+    """Check if a type annotation is nullable (contains None in union)."""
     origin = get_origin(annotation)
     args = get_args(annotation)
 
     # Handle Python 3.10+ union syntax (str | None) - uses types.UnionType
     if origin is types.UnionType:
-        return len(args) == 2 and type(None) in args
+        return type(None) in args
 
     # Handle typing.Union syntax (Union[str, None], Optional[str])
     if origin is Union:
-        return len(args) == 2 and type(None) in args
+        return type(None) in args
 
     return False
 
@@ -131,19 +131,33 @@ def _get_python_type_string(annotation: Any) -> str:  # noqa: ANN401, PLR0911, P
 
     # Handle Python 3.10+ union syntax (str | None) - uses types.UnionType
     if origin is types.UnionType:
-        types_list = [_get_python_type_string(arg) for arg in args if arg is not type(None)]
+        # Filter out JSONPath and None types
+        filtered_args = [arg for arg in args if arg is not JSONPath and arg is not type(None)]
+        types_list = [_get_python_type_string(arg) for arg in filtered_args]
+
+        # If no types remain after filtering (e.g., JSONPath | None), return JSONPath
+        if len(types_list) == 0 and JSONPath in args:
+            return "JSONPath"
+
         if len(types_list) == 1:
-            # This is a nullable type (T | None) - return just the base type
+            # This is a nullable type (T | None) or single type after filtering
             return types_list[0]
-        return f"union<{','.join(types_list)}>"
+        return '|'.join(types_list)
 
     # Handle typing.Union syntax (Union[str, None], Optional[str])
     if origin is Union:
-        types_list = [_get_python_type_string(arg) for arg in args if arg is not type(None)]
+        # Filter out JSONPath and None types
+        filtered_args = [arg for arg in args if arg is not JSONPath and arg is not type(None)]
+        types_list = [_get_python_type_string(arg) for arg in filtered_args]
+
+        # If no types remain after filtering (e.g., JSONPath | None), return JSONPath
+        if len(types_list) == 0 and JSONPath in args:
+            return "JSONPath"
+
         if len(types_list) == 1:
-            # This is a nullable type (Optional[T]) - return just the base type
+            # This is a nullable type (Optional[T]) or single type after filtering
             return types_list[0]
-        return f"union<{','.join(types_list)}>"
+        return '|'.join(types_list)
 
     # Handle Literal types
     if hasattr(annotation, '__origin__') and str(annotation.__origin__) == 'typing.Literal':
