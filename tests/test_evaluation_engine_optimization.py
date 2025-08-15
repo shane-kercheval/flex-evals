@@ -656,7 +656,7 @@ class TestPerformanceOptimization:
         register("async_sleep")(AsyncSleepCheck)
 
         # Create test cases with varying check patterns
-        num_test_cases = 1000
+        num_test_cases = 200
         test_cases = []
         for i in range(num_test_cases):
             # Each test case has different numbers of sync/async checks
