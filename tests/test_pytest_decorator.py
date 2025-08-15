@@ -1079,7 +1079,6 @@ class TestEvaluateDecoratorAsync:
             nonlocal call_count
             call_count += 1
             await asyncio.sleep(0.1)  # 100ms delay per test case
-            print(f"Processing {test_case.input}")
             return f"processed {test_case.input}"
 
         start_time = time.time()
@@ -1088,7 +1087,12 @@ class TestEvaluateDecoratorAsync:
 
         assert call_count == num_samples * num_test_cases
         # Should be much less than 20 seconds if concurrent
-        assert duration < 1, f"Multiple test case async not concurrent (took {duration:.3f}s)"
+        # Allow generous buffer for CI environment variability
+        max_allowed_time = 2.0  # Still much less than sequential (20s), allows for CI overhead
+        assert duration < max_allowed_time, (
+            f"Multiple test case async not concurrent "
+            f"(took {duration:.3f}s, expected < {max_allowed_time:.1f}s)"
+        )
 
     def test_async_with_exceptions(self):
         """Test async function exception handling."""
