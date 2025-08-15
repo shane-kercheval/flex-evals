@@ -17,16 +17,16 @@ from .checks.base import get_jsonpath_behavior
 
 def _get_check_class_for_type_version(check_type: str, version: str):
     """
-    Get the combined check class for a given check type and version.
+    Get the check class for a given check type and version.
 
-    Uses the registry to get the registered combined check class directly.
+    Uses the registry to get the registered check class directly.
 
     Args:
         check_type: String identifier for the check type
         version: Version string
 
     Returns:
-        Combined check class that matches the check_type and version
+        check class that matches the check_type and version
 
     Raises:
         ValueError: If no check class found for the given check_type and version
@@ -38,7 +38,7 @@ def _get_check_class_for_type_version(check_type: str, version: str):
 
 
 def _extract_class_description(check_class: type) -> str:
-    """Extract class description from docstring of the combined check class."""
+    """Extract class description from docstring of the check class."""
     # Use the class's own __doc__ to avoid fallback to parent class
     if check_class.__doc__:
         # Use inspect.cleandoc to get proper dedenting without parent fallback

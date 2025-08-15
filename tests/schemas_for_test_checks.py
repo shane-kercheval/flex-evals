@@ -1,4 +1,4 @@
-"""Combined check classes for test utility checks."""
+"""Check classes for test utility checks."""
 
 from typing import Any
 from pydantic import Field, field_validator
@@ -9,7 +9,7 @@ from flex_evals.registry import register
 
 @register("test_check", version="1.0.0")
 class TestCheck(BaseCheck):
-    """Combined test utility check."""
+    """Test utility check."""
 
     expected: str | JSONPath = Field(
         "Paris",
@@ -41,7 +41,7 @@ class TestCheck(BaseCheck):
 
 @register("test_async_check", version="1.0.0")
 class TestAsyncCheck(BaseAsyncCheck):
-    """Combined test utility async check."""
+    """Test utility async check."""
 
     expected: str | JSONPath = Field(
         "Paris",

@@ -48,6 +48,25 @@ class TestJSONPathValidation:
         for expr in invalid_expressions:
             assert not validate_jsonpath(expr), f"Should be invalid JSONPath: {expr}"
 
+    def test_validate_jsonpath_robustness(self):
+        """Test that validate_jsonpath handles edge cases robustly."""
+        # Non-string inputs should return False, not crash
+        assert not validate_jsonpath(None)
+        assert not validate_jsonpath(123)
+        assert not validate_jsonpath([])
+        assert not validate_jsonpath({})
+        assert not validate_jsonpath(True)
+        
+        # Empty string and non-$ prefixed should return False
+        assert not validate_jsonpath("")
+        assert not validate_jsonpath("root.value")
+        
+        # Basic valid JSONPath patterns should work
+        assert validate_jsonpath("$")
+        assert validate_jsonpath("$.value")
+        assert validate_jsonpath("$[0]")
+        assert validate_jsonpath("$.*")
+
     def test_is_jsonpath_expression_detection(self):
         """Test detection of JSONPath-like expressions."""
         jsonpath_expressions = [
@@ -70,6 +89,16 @@ class TestJSONPathValidation:
 
         for expr in non_jsonpath_expressions:
             assert not is_jsonpath_expression(expr), f"Should NOT detect as JSONPath: {expr}"
+
+    def test_is_jsonpath_expression_escape_mechanism(self):
+        """Test the escape mechanism for literal values that start with $."""
+        # The key business value: users can escape literal $ values
+        assert is_jsonpath_expression("$.value") is True      # JSONPath
+        assert is_jsonpath_expression("\\$.literal") is False  # Escaped literal
+        
+        # Non-string inputs should be handled gracefully
+        assert is_jsonpath_expression(None) is False
+        assert is_jsonpath_expression(123) is False
 
     def test_get_jsonpath_behavior_with_type_annotations(self):
         """Test reading JSONPath behavior from type annotations."""
@@ -95,6 +124,26 @@ class TestJSONPathValidation:
 
         # Test non-existent field
         assert get_jsonpath_behavior(TestModelRequired, 'non_existent') is None
+
+    def test_get_jsonpath_behavior_union_types(self):
+        """Test the core business logic: detecting optional vs required JSONPath fields."""
+        from typing import Union
+        
+        class TestModel(JSONPathValidatedModel):
+            # The two patterns that matter for our architecture
+            required_jsonpath: JSONPath = Field(..., description="Required JSONPath")
+            optional_jsonpath: str | JSONPath = Field(..., description="Optional JSONPath")
+            regular_field: str = Field("default", description="Regular field")
+            
+            # Test both union syntaxes work
+            old_style_union: Union[str, JSONPath] = Field(..., description="Old Union syntax")
+        
+        # These are the behaviors that actually matter for check execution
+        assert get_jsonpath_behavior(TestModel, 'required_jsonpath') == JSONPathBehavior.REQUIRED
+        assert get_jsonpath_behavior(TestModel, 'optional_jsonpath') == JSONPathBehavior.OPTIONAL  
+        assert get_jsonpath_behavior(TestModel, 'old_style_union') == JSONPathBehavior.OPTIONAL
+        assert get_jsonpath_behavior(TestModel, 'regular_field') is None
+        assert get_jsonpath_behavior(TestModel, 'nonexistent_field') is None
 
 
 class TestJSONPathValidatedModel:

@@ -18,6 +18,7 @@ from flex_evals.engine import (
     evaluate,
 )
 from flex_evals.registry import register
+from flex_evals.checks.exact_match import ExactMatchCheck
 
 
 class AsyncSleepCheck(BaseAsyncCheck):
@@ -81,7 +82,10 @@ class TestFlattenUnflatten:
         test_case = TestCase(id="1", input={"value": 1})
         output = Output(value={"result": 10})
 
-        sync_check = Check(type="exact_match", arguments={"actual": "$.output.value.result", "expected": 10})
+        sync_check = Check(
+            type="exact_match",
+            arguments={"actual": "$.output.value.result", "expected": 10},
+        )
         async_check = Check(type="async_sleep", arguments={"sleep_duration": 0.1})
 
         # Convert Check objects to BaseCheck/BaseAsyncCheck instances
@@ -195,7 +199,10 @@ class TestFlattenUnflatten:
             id="tc1",
             input={"value": 100},
             checks=[
-                Check(type="exact_match", arguments={"actual": "$.output.value.result", "expected": 100}),
+                Check(
+                    type="exact_match",
+                    arguments={"actual": "$.output.value.result", "expected": 100},
+                ),
                 Check(type="async_sleep", arguments={"sleep_duration": 0.01}),
             ],
         )
@@ -203,10 +210,19 @@ class TestFlattenUnflatten:
             id="tc2",
             input={"value": 200},
             checks=[
-                Check(type="exact_match", arguments={"actual": "$.output.value.result", "expected": 200}),
-                Check(type="exact_match", arguments={"actual": "$.output.value.result", "expected": 201}),
+                Check(
+                    type="exact_match",
+                    arguments={"actual": "$.output.value.result", "expected": 200},
+                ),
+                Check(
+                    type="exact_match",
+                    arguments={"actual": "$.output.value.result", "expected": 201},
+                ),
                 Check(type="async_sleep", arguments={"sleep_duration": 0.02}),
-                Check(type="exact_match", arguments={"actual": "$.output.value.result", "expected": 202}),
+                Check(
+                    type="exact_match",
+                    arguments={"actual": "$.output.value.result", "expected": 202},
+                ),
             ],
         )
         test_case3 = TestCase(
@@ -221,7 +237,10 @@ class TestFlattenUnflatten:
             id="tc4",
             input={"value": 400},
             checks=[  # Only sync checks
-                Check(type="exact_match", arguments={"actual": "$.output.value.result", "expected": 400}),
+                Check(
+                    type="exact_match",
+                    arguments={"actual": "$.output.value.result", "expected": 400},
+                ),
             ],
         )
         test_case5 = TestCase(
@@ -302,7 +321,9 @@ class TestFlattenUnflatten:
         ]
 
         # Unflatten results
-        results = _unflatten_check_results(converted_work_items, sync_results, async_results, tracking)
+        results = _unflatten_check_results(
+            converted_work_items, sync_results, async_results, tracking,
+        )
 
         # Verify unflattening
         assert len(results) == 5
@@ -329,6 +350,97 @@ class TestFlattenUnflatten:
 
         # TC5: 0 checks
         assert len(results[4].check_results) == 0
+
+
+class TestConvertCheckInput:
+    """Test the _convert_check_input function."""
+
+    def test_convert_check_input_preserves_metadata(self):
+        """Test that metadata is preserved when converting Check to BaseCheck instance."""
+        # Create a Check object with metadata
+        custom_metadata = {
+            "priority": "high",
+            "category": "validation",
+            "author": "test_team",
+        }
+        check = Check(
+            type="exact_match",
+            arguments={"actual": "$.output.value", "expected": "test"},
+            metadata=custom_metadata,
+        )
+
+        # Convert to BaseCheck instance
+        converted = _convert_check_input(check)
+
+        # Verify metadata is preserved
+        assert converted.metadata == custom_metadata
+        assert converted.metadata["priority"] == "high"
+        assert converted.metadata["category"] == "validation"
+        assert converted.metadata["author"] == "test_team"
+
+    def test_convert_check_input_without_metadata(self):
+        """Test conversion when Check has no metadata."""
+        check = Check(
+            type="exact_match",
+            arguments={"actual": "$.output.value", "expected": "test"},
+            metadata=None,
+        )
+
+        # Convert to BaseCheck instance
+        converted = _convert_check_input(check)
+
+        # Verify metadata is None
+        assert converted.metadata is None
+
+    def test_convert_check_input_empty_metadata(self):
+        """Test conversion when Check has empty metadata dict."""
+        check = Check(
+            type="exact_match",
+            arguments={"actual": "$.output.value", "expected": "test"},
+            metadata={},
+        )
+
+        # Convert to BaseCheck instance
+        converted = _convert_check_input(check)
+
+        # Empty dict should not be set (truthy check in engine)
+        assert converted.metadata is None
+
+    def test_convert_check_input_basecheck_passthrough(self):
+        """Test that BaseCheck instances are returned as-is with metadata intact."""
+        # Create BaseCheck instance with metadata
+        base_check = ExactMatchCheck(actual="$.output.value", expected="test")
+        base_check.metadata = {"custom": "value", "test": True}
+
+        # Convert (should be pass-through)
+        converted = _convert_check_input(base_check)
+
+        # Should be the same instance
+        assert converted is base_check
+        assert converted.metadata == {"custom": "value", "test": True}
+
+    def test_convert_check_input_metadata_integration_with_evaluation(self):
+        """Test metadata flows through the entire evaluation pipeline."""
+        # Create test case and output
+        test_case = TestCase(id="meta-test", input="test input")
+        output = Output(value="test output")
+
+        # Create check with metadata
+        check_metadata = {"experiment": "metadata_test", "version": "v2.1"}
+        check = Check(
+            type="exact_match",
+            arguments={"actual": "$.output.value", "expected": "test output"},
+            metadata=check_metadata,
+        )
+
+        # Run evaluation
+        result = evaluate([test_case], [output], [check])
+
+        # Verify metadata appears in results
+        check_result = result.results[0].check_results[0]
+        assert check_result.metadata is not None
+        assert check_result.metadata["experiment"] == "metadata_test"
+        assert check_result.metadata["version"] == "v2.1"
 
     def test_flatten_unflatten_end_to_end(self):
         """Test end-to-end flattening and unflattening with actual evaluation."""

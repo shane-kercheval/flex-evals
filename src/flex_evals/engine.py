@@ -106,9 +106,9 @@ def evaluate(
 
 def _convert_check_input(
         check_input: CheckTypes,
-) -> BaseCheck | BaseAsyncCheck:
+    ) -> BaseCheck | BaseAsyncCheck:
     """
-    Convert a Check or BaseCheck to a validated BaseCheck/BaseAsyncCheck instance.
+    Convert a Check to a validated BaseCheck/BaseAsyncCheck instance.
 
     For BaseCheck/BaseAsyncCheck objects: Return as-is (validation already done)
     For Check objects: Instantiate corresponding BaseCheck/BaseAsyncCheck class with arguments
@@ -116,7 +116,7 @@ def _convert_check_input(
     if isinstance(check_input, BaseCheck | BaseAsyncCheck):
         return check_input
 
-    # For Check objects, instantiate the corresponding combined check class
+    # For Check objects, instantiate the corresponding check class
     check_type_str = str(check_input.type)
 
     # Check registry first - better error messages
@@ -132,20 +132,13 @@ def _convert_check_input(
     # Get the registered check class
     check_class = get_check_class(check_type_str, version)
 
-    # Ensure it's a combined check class
-    if not issubclass(check_class, BaseCheck | BaseAsyncCheck):
-        raise ValidationError(
-            f"Check type '{check_type_str}' v{version} is not a combined check class. "
-            f"Expected BaseCheck or BaseAsyncCheck, got {check_class.__bases__}",
-        )
-
-    # Instantiate the combined check class with validation
+    # Instantiate the check class with validation
     try:
-        combined_instance = check_class(**check_input.arguments)
+        check_instance = check_class(**check_input.arguments)
         # Set metadata if provided
         if check_input.metadata:
-            combined_instance.metadata = check_input.metadata
-        return combined_instance
+            check_instance.metadata = check_input.metadata
+        return check_instance
     except Exception as e:
         # Validation failed - provide clear error message
         raise ValidationError(
@@ -197,17 +190,22 @@ def _resolve_checks(
     """
     Resolve checks for each test case according to FEP patterns.
 
-    Converts BaseCheck objects to resolved arguments and returns List[List[BaseCheck]]
-    where result[i] contains checks for test_cases[i].
+    Extracts checks from TestCase.checks fields and merges them with the checks parameter.
+    Converts all Check objects to BaseCheck/BaseAsyncCheck instances with resolved arguments.
 
-    When both TestCase.checks and the checks parameter are provided, both sets of checks
-    are executed for each test case.
+    Args:
+        test_cases: Test cases, may contain checks in their .checks field
+        checks: Additional checks to apply (shared, per-test-case, or None)
+
+    Returns:
+        List where result[i] contains all merged checks for test_cases[i].
+        Each test case gets: testcase_checks[i] + parameter_checks (merged and converted).
     """
     # Start by extracting TestCase-specific checks
     testcase_checks_per_case = []
     for test_case in test_cases:
         if test_case.checks is not None:
-            # Convert any BaseCheck/BaseAsyncCheck objects
+            # Convert any Check objects to BaseCheck/BaseAsyncCheck
             converted_checks = [_convert_check_input(check) for check in test_case.checks]
             testcase_checks_per_case.append(converted_checks)
         else:
@@ -250,12 +248,20 @@ def _flatten_checks_for_execution(
         list[tuple[int, int, bool, int]],
     ]:
     """
-    Flatten checks across all test cases and separate by type.
+    Flatten checks across all test cases and separate by sync/async type.
+
+    Takes pre-resolved checks from work_items and creates flattened lists optimized for
+    batch execution, while maintaining tracking info to reconstruct results by test case.
+
+    Args:
+        work_items: Contains TestCase (for context), Output, and resolved checks (i.e. checks
+            from TestCase.checks + evaluate() parameter)
 
     Returns:
-        - flattened_sync_checks: List of (combined_check, context) for sync checks
-        - flattened_async_checks: List of (combined_check, context) for async checks
-        - check_tracking: List of (test_idx, check_idx, is_async, flattened_idx)
+        - flattened_sync_checks: All sync checks with their contexts
+        - flattened_async_checks: All async checks with their contexts
+        - check_tracking: Mapping to reconstruct results: (test_idx, check_idx, is_async,
+            flattened_idx)
     """
     flattened_sync_checks = []
     flattened_async_checks = []
@@ -268,13 +274,11 @@ def _flatten_checks_for_execution(
             # Determine if check is async based on its type
             if isinstance(check, BaseAsyncCheck):
                 flattened_async_checks.append((check, context))
-                check_tracking.append((test_idx, check_idx, True,
-                                     len(flattened_async_checks) - 1))
+                check_tracking.append((test_idx, check_idx, True, len(flattened_async_checks) - 1))
             else:
                 # BaseCheck (sync)
                 flattened_sync_checks.append((check, context))
-                check_tracking.append((test_idx, check_idx, False,
-                                     len(flattened_sync_checks) - 1))
+                check_tracking.append((test_idx, check_idx, False, len(flattened_sync_checks) - 1))
 
     return flattened_sync_checks, flattened_async_checks, check_tracking
 
@@ -324,15 +328,26 @@ def _evaluate(
         work_items: list[tuple[TestCase, Output, list[BaseCheck | BaseAsyncCheck]]],
         max_async_concurrent: int | None = None,
     ) -> list[TestCaseResult]:
-    """Execute evaluation with optimal sync/async separation across all test cases."""
+    """
+    Execute evaluation with optimal sync/async separation across all test cases.
+
+    Args:
+        work_items: List of (test_case, output, checks) tuples where:
+            - test_case: Used only for evaluation context, not for its .checks field
+            - output: System output to evaluate against
+            - checks: Pre-resolved and merged checks (from TestCase.checks + evaluate() parameter)
+        max_async_concurrent: Maximum number of concurrent async check executions
+    """
     # Flatten all checks across all test cases
     flattened_sync_checks, flattened_async_checks, check_tracking = (
         _flatten_checks_for_execution(work_items)
     )
 
     # Execute ALL sync checks at once (no event loop overhead)
-    sync_results = [_execute_sync_check(check, context)
-                    for check, context in flattened_sync_checks]
+    sync_results = [
+        _execute_sync_check(check, context)
+        for check, context in flattened_sync_checks
+    ]
 
     # Execute ALL async checks concurrently in a single event loop
     if flattened_async_checks:
@@ -399,22 +414,16 @@ def _evaluate_with_registry(
     return _evaluate(work_items, max_async_concurrent)
 
 
-
-
 def _execute_sync_check(check: BaseCheck, context: EvaluationContext) -> CheckResult:
-    """Execute a single synchronous combined check and return the result."""
+    """Execute a single synchronous check and return the result."""
     try:
-        # Execute the check using the new architecture
         return check.execute(
             context=context,
             check_metadata=check.metadata,
         )
-
     except Exception as e:
         # Create error result for unhandled exceptions
         return _create_error_check_result_for_base_check(check, str(e))
-
-
 
 
 async def _execute_all_async_checks(
@@ -433,8 +442,6 @@ async def _execute_all_async_checks(
     return await asyncio.gather(*tasks)
 
 
-
-
 async def _execute_async_check(
         check: BaseAsyncCheck,
         context: EvaluationContext,
@@ -443,7 +450,6 @@ async def _execute_async_check(
     """Execute a single asynchronous check and return the result."""
     async def _run_check() -> CheckResult:
         try:
-            # Execute the check using the new architecture
             return await check.execute(
                 context=context,
                 check_metadata=check.metadata,
@@ -459,8 +465,6 @@ async def _execute_async_check(
             return await _run_check()
     else:
         return await _run_check()
-
-
 
 
 def _create_error_check_result_for_base_check(

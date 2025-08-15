@@ -36,7 +36,34 @@ class JSONPathBehavior(Enum):
 
 
 def get_jsonpath_behavior(model_class: type, field_name: str) -> JSONPathBehavior | None:
-    """Get JSONPath behavior for a field by inspecting its type annotation."""
+    """
+    Get JSONPath behavior for a field by inspecting its type annotation.
+
+    This function determines whether a Pydantic field should be treated as:
+    - REQUIRED: Field must be a JSONPath (type annotation is exactly `JSONPath`)
+    - OPTIONAL: Field can be literal or JSONPath (type annotation is union like `str | JSONPath`)
+    - None: Field doesn't support JSONPath (no JSONPath in type annotation)
+
+    Used by the schema generator and validation systems to understand how to handle
+    field values during check execution.
+
+    Args:
+        model_class: Pydantic model class to inspect
+        field_name: Name of the field to check
+
+    Returns:
+        JSONPathBehavior.REQUIRED if field type is exactly JSONPath
+        JSONPathBehavior.OPTIONAL if field type is a union containing JSONPath
+        None if field doesn't exist or doesn't support JSONPath
+
+    Examples:
+        >>> class MyCheck(BaseCheck):
+        ...     path: JSONPath = Field(...)  # REQUIRED
+        ...     text: str | JSONPath = Field(...)  # OPTIONAL
+        ...     literal: str = Field(...)  # None
+        >>> get_jsonpath_behavior(MyCheck, 'path')
+        JSONPathBehavior.REQUIRED
+    """
     field_info = model_class.model_fields.get(field_name)
     if not field_info:
         return None
@@ -62,7 +89,38 @@ def get_jsonpath_behavior(model_class: type, field_name: str) -> JSONPathBehavio
 
 
 def validate_jsonpath(expression: str) -> bool:
-    """Validate that a string is a valid JSONPath expression."""
+    """
+    Validate that a string is a valid JSONPath expression.
+
+    Uses the jsonpath-ng library to parse and validate JSONPath syntax.
+    Only expressions starting with '$' are considered valid JSONPath.
+
+    This function is used during:
+    - JSONPath object creation (JSONPath.__init__)
+    - Field validation in JSONPathValidatedModel
+    - Schema generation to verify JSONPath field definitions
+
+    Args:
+        expression: String to validate as JSONPath (gracefully handles non-strings)
+
+    Returns:
+        True if expression is a valid JSONPath starting with '$'
+        False for invalid JSONPath, non-strings, or expressions not starting with '$'
+
+    Examples:
+        >>> validate_jsonpath("$.output.value")  # Valid
+        True
+        >>> validate_jsonpath("invalid_path")    # No $ prefix
+        False
+        >>> validate_jsonpath("$[invalid")       # Malformed syntax
+        False
+        >>> validate_jsonpath(None)              # Non-string
+        False
+    """
+    # Handle non-string inputs gracefully
+    if not isinstance(expression, str):
+        return False
+
     # Must start with $ to be considered a JSONPath expression
     if not expression.startswith('$'):
         return False
@@ -115,7 +173,33 @@ class JSONPath(BaseModel):
 
 
 class JSONPathValidatedModel(BaseModel):
-    """Base class that automatically validates JSONPath fields based on metadata."""
+    """
+    Base class that automatically validates JSONPath fields based on type annotations.
+
+    This class provides automatic validation for fields that support JSONPath expressions.
+    It inspects field type annotations to determine validation behavior:
+
+    - Fields typed as `JSONPath` (REQUIRED): Must be valid JSONPath expressions
+    - Fields typed as union with JSONPath (OPTIONAL): Validates JSONPath syntax only
+      if the value looks like JSONPath (starts with '$.')
+    - Regular fields: No JSONPath validation applied
+
+    Used as the base class for all check implementations (BaseCheck, BaseAsyncCheck)
+    to ensure consistent JSONPath validation across the system.
+
+    The validation runs after Pydantic's normal field validation and will raise
+    ValueError for invalid JSONPath expressions.
+
+    Examples:
+        >>> class MyModel(JSONPathValidatedModel):
+        ...     required_path: JSONPath = Field(...)  # Must be valid JSONPath
+        ...     optional_path: str | JSONPath = Field(...)  # Validates if starts with '$.'
+        ...     regular_field: str = Field(...)  # No JSONPath validation
+
+        >>> MyModel(required_path="$.valid", optional_path="literal")  # OK
+        >>> MyModel(required_path="invalid", ...)  # Raises ValueError
+        >>> MyModel(..., optional_path="$.invalid[")  # Raises ValueError (looks like JSONPath but invalid)
+    """
 
     @model_validator(mode='after')
     def validate_jsonpath_fields(self) -> 'JSONPathValidatedModel':
@@ -174,7 +258,6 @@ class BaseCheck(JSONPathValidatedModel, ABC):
 
     # Pydantic configuration
     model_config: ClassVar[dict[str, Any]] = {'extra': 'forbid'}
-
     metadata: dict[str, Any] | None = None
 
     def __init__(self, **data: Any) -> None:  # noqa: ANN401

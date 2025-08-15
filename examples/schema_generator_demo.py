@@ -84,45 +84,6 @@ def demo_all_checks_schema() -> None:
             print(f"   └── Optional: {', '.join(optional_fields)}")
 
 
-def demo_schema_for_api() -> None:
-    """Demonstrate how this would be used in an API context."""
-    print("\n\n" + "=" * 60)
-    print("API USAGE DEMONSTRATION")
-    print("=" * 60)
-
-    print("🌐 Example: API endpoint /api/v1/checks/schema")
-    print("\n# Get all check schemas (what an API might return)")
-
-    # This is what an API endpoint might return
-    api_response = {
-        "status": "success",
-        "data": {
-            "check_types": generate_checks_schema(include_latest_only=True),
-        },
-        "meta": {
-            "total_types": len(generate_checks_schema(include_latest_only=True)),
-            "generated_at": "2025-01-01T00:00:00Z",
-        },
-    }
-
-    # Show a subset for brevity
-    print("Response structure:")
-    print(f"- status: {api_response['status']}")
-    print(f"- total_types: {api_response['meta']['total_types']}")
-    print(f"- check_types: {list(api_response['data']['check_types'].keys())}")
-
-    print("\n🔍 Example: Get specific check schema")
-    print("GET /api/v1/checks/contains/schema?version=1.0.0")
-
-    specific_response = {
-        "status": "success",
-        "data": generate_check_schema("contains", "1.0.0"),
-    }
-
-    print("Response:")
-    print(json.dumps(specific_response, indent=2)[:500] + "...")
-
-
 def demo_yaml_generation() -> None:
     """Demonstrate how schemas could be used for YAML config generation."""
     print("\n\n" + "=" * 60)
@@ -134,7 +95,7 @@ def demo_yaml_generation() -> None:
     # Get contains check schema
     schema = generate_check_schema("contains", "1.0.0")
 
-    print(f"\n# Based on {schema['schema_class']} v{schema['version']}")
+    print(f"\n# Based on {schema['check_class']} v{schema['version']}")
     print("checks:")
     print("  - type: contains")
     print(f"    version: \"{schema['version']}\"  # Optional, uses latest if omitted")
@@ -191,7 +152,7 @@ def demo_validation_helper() -> None:
         print(f"❌ Unknown check type: {check_type}")
         return
 
-    print(f"\n✅ Validating against {schema['schema_class']} v{schema['version']}:")
+    print(f"\n✅ Validating against {schema['check_class']} v{schema['version']}:")
 
     # Check required fields
     provided_fields = set(user_check_config.get("arguments", {}).keys())
@@ -250,7 +211,6 @@ def main() -> None:
 
     demo_single_check_schema()
     demo_all_checks_schema()
-    demo_schema_for_api()
     demo_yaml_generation()
     demo_validation_helper()
 
