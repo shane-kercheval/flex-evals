@@ -1,7 +1,8 @@
-"""Comprehensive tests for ThresholdCheck implementation.
+"""
+Comprehensive tests for ThresholdCheck implementation.
 
 This module consolidates all tests for the ThresholdCheck including:
-- Pydantic validation tests 
+- Pydantic validation tests
 - Implementation execution tests
 - Engine integration tests
 - Edge cases and error handling
@@ -13,9 +14,10 @@ import pytest
 from typing import Any
 
 from flex_evals.checks.threshold import ThresholdCheck
-from flex_evals.checks.base import JSONPath
-from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
+from flex_evals.checks.base import JSONPath, EvaluationContext
+from flex_evals import CheckType, Status, evaluate, Check
 from flex_evals.exceptions import ValidationError
+from flex_evals.schemas import TestCase, Output
 from pydantic import ValidationError as PydanticValidationError
 
 
@@ -223,10 +225,10 @@ class TestThresholdEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value=output_value)]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.summary.error_test_cases == 0
@@ -250,10 +252,10 @@ class TestThresholdEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value={"confidence": 0.95})]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
@@ -278,10 +280,10 @@ class TestThresholdEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value={"score": 0.5})]  # Below minimum
         results = evaluate(test_cases, outputs)
-        
+
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_threshold_exclusivity_via_evaluate(self):
@@ -304,10 +306,10 @@ class TestThresholdEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value={"score": 0.8})]  # Exactly at minimum
         results = evaluate(test_cases, outputs)
-        
+
         # Should fail because 0.8 is not > 0.8 (exclusive minimum)
         assert results.results[0].check_results[0].results == {"passed": False}
 
@@ -332,9 +334,9 @@ class TestThresholdErrorHandling:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="test")]
-        
+
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
             evaluate(test_cases, outputs)
@@ -356,9 +358,9 @@ class TestThresholdErrorHandling:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value={"response": "test"})]
-        
+
         results = evaluate(test_cases, outputs)
         # Should result in error when JSONPath resolution fails
         assert results.results[0].status == Status.ERROR
@@ -376,6 +378,90 @@ class TestThresholdErrorHandling:
         # by the field validators
         with pytest.raises((PydanticValidationError, ValueError)):
             ThresholdCheck(value=50, min_value="invalid")  # type: ignore
+
+    def test_threshold_jsonpath_comprehensive(self):
+        """Comprehensive JSONPath string conversion and execution test."""
+        # 1. Create check with all JSONPath fields as strings
+        check = ThresholdCheck(
+            value="$.output.value.score",
+            min_value="$.test_case.expected.min_threshold",
+            max_value="$.test_case.expected.max_threshold",
+            min_inclusive="$.test_case.expected.min_inclusive",
+            max_inclusive="$.test_case.expected.max_inclusive",
+            negate="$.test_case.expected.should_negate",
+        )
+
+        # 2. Verify conversion happened
+        assert isinstance(check.value, JSONPath)
+        assert check.value.expression == "$.output.value.score"
+        assert isinstance(check.min_value, JSONPath)
+        assert check.min_value.expression == "$.test_case.expected.min_threshold"
+        assert isinstance(check.max_value, JSONPath)
+        assert check.max_value.expression == "$.test_case.expected.max_threshold"
+        assert isinstance(check.min_inclusive, JSONPath)
+        assert check.min_inclusive.expression == "$.test_case.expected.min_inclusive"
+        assert isinstance(check.max_inclusive, JSONPath)
+        assert check.max_inclusive.expression == "$.test_case.expected.max_inclusive"
+        assert isinstance(check.negate, JSONPath)
+        assert check.negate.expression == "$.test_case.expected.should_negate"
+
+        # 3. Test execution with EvaluationContext
+
+        test_case = TestCase(
+            id="test_001",
+            input="test",
+            expected={
+                "min_threshold": 80,
+                "max_threshold": 100,
+                "min_inclusive": True,
+                "max_inclusive": True,
+                "should_negate": False,
+            },
+        )
+        output = Output(value={"score": 85})
+        context = EvaluationContext(test_case, output)
+
+        result = check.execute(context)
+        assert result.status == "completed"
+        assert result.results["passed"] is True  # 85 is within [80, 100]
+        assert result.resolved_arguments["value"]["value"] == 85
+        assert result.resolved_arguments["min_value"]["value"] == 80
+        assert result.resolved_arguments["max_value"]["value"] == 100
+        assert result.resolved_arguments["min_inclusive"]["value"] is True
+        assert result.resolved_arguments["max_inclusive"]["value"] is True
+        assert result.resolved_arguments["negate"]["value"] is False
+
+        # 4. Test invalid JSONPath string (should raise exception during validation)
+        with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
+            ThresholdCheck(value="$.invalid[", min_value=10)
+
+        with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
+            ThresholdCheck(value="$.valid.value", min_value="$.invalid[")
+
+        # 5. Test non-JSONPath strings that are valid for their types (should remain unchanged)
+        check_non_jsonpath = ThresholdCheck(
+            value=42,  # Numeric literal
+            min_value=10,  # Valid numeric value
+            max_value=100,  # Valid numeric value
+            min_inclusive=True,  # Valid boolean value
+            max_inclusive=False,  # Valid boolean value
+            negate=False,  # Valid boolean value
+        )
+        assert check_non_jsonpath.value == 42
+        assert check_non_jsonpath.min_value == 10
+        assert check_non_jsonpath.max_value == 100
+        assert check_non_jsonpath.min_inclusive is True
+        assert check_non_jsonpath.max_inclusive is False
+        assert check_non_jsonpath.negate is False
+
+        # 6. Test that invalid non-JSONPath strings are rejected for non-string fields
+        # min_value: float | int | JSONPath | None - "not_a_number" is none of these
+        with pytest.raises(PydanticValidationError):
+            ThresholdCheck(value=42, min_value="not_a_number")
+
+        # negate: bool | JSONPath - "not_a_boolean" is neither bool nor JSONPath
+        with pytest.raises(PydanticValidationError):
+            ThresholdCheck(value=42, min_value=10, negate="not_a_boolean")
 
 
 class TestThresholdJSONPathIntegration:
@@ -399,7 +485,7 @@ class TestThresholdJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "analysis": {
@@ -409,7 +495,7 @@ class TestThresholdJSONPathIntegration:
                 "timestamp": "2024-01-01",
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -431,14 +517,14 @@ class TestThresholdJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "scores": [95, 87, 92],
                 "average": 91.3,
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -464,13 +550,13 @@ class TestThresholdJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "score": 85,
                 "category": "high",
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}

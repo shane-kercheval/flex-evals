@@ -30,14 +30,25 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
     """Computes semantic similarity between two texts using embeddings."""
 
     # Pydantic fields with validation - can be literals or JSONPath objects
-    text: str | JSONPath = Field(..., description='First text to compare or JSONPath expression')
-    reference: str | JSONPath = Field(..., description='Second text to compare against or JSONPath expression')  # noqa: E501
-    threshold: ThresholdConfig | JSONPath | None = Field(
-        None, description='Threshold configuration for pass/fail determination',
+    text: str | JSONPath = Field(
+        ...,
+        description="First text to compare or JSONPath expression",
     )
-    embedding_function: Any = Field(..., description='User-provided function to generate embeddings')  # noqa: E501
+    reference: str | JSONPath = Field(
+        ...,
+        description="Second text to compare against or JSONPath expression",
+    )
+    threshold: ThresholdConfig | JSONPath | None = Field(
+        None,
+        description="Threshold configuration for pass/fail determination",
+    )
+    embedding_function: Any = Field(
+        ...,
+        description="User-provided function to generate embeddings",
+    )
     similarity_metric: SimilarityMetric | JSONPath = Field(
-        SimilarityMetric.COSINE, description='Similarity calculation method',
+        SimilarityMetric.COSINE,
+        description="Similarity calculation method",
     )
 
     @field_validator('text', 'reference', 'threshold', 'similarity_metric', mode='before')

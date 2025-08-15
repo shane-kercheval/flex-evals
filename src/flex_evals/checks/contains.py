@@ -20,19 +20,19 @@ class ContainsCheck(BaseCheck):
     # Pydantic fields with validation - can be literals or JSONPath objects
     text: str | JSONPath = Field(
         ...,
-        description='Text to search or JSONPath expression pointing to the text',
+        description="Text to search or JSONPath expression pointing to the text",
     )
     phrases: str | list[str] | JSONPath = Field(
         ...,
-        description='Single string or array of strings that must be present',
+        description="Single string or array of strings that must be present",
     )
     case_sensitive: bool | JSONPath = Field(
         True,
-        description='Whether phrase matching is case-sensitive',
+        description="Whether phrase matching is case-sensitive",
     )
     negate: bool | JSONPath = Field(
         False,
-        description='If true, passes when text contains none of the phrases',
+        description="If true, passes when text contains none of the phrases",
     )
 
     @field_validator('text', 'phrases', 'case_sensitive', 'negate', mode='before')
@@ -59,7 +59,7 @@ class ContainsCheck(BaseCheck):
         if isinstance(self.phrases, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'phrases' field: {self.phrases}")
         if isinstance(self.case_sensitive, JSONPath):
-            raise RuntimeError(f"JSONPath not resolved for 'case_sensitive' field: {self.case_sensitive}")
+            raise RuntimeError(f"JSONPath not resolved for 'case_sensitive' field: {self.case_sensitive}")  # noqa: E501
         if isinstance(self.negate, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'negate' field: {self.negate}")
 

@@ -1,8 +1,9 @@
-"""Comprehensive tests for ContainsCheck implementation.
+"""
+Comprehensive tests for ContainsCheck implementation.
 
 This module consolidates all tests for the ContainsCheck including:
 - Pydantic validation tests (from test_schema_check_classes.py)
-- Implementation execution tests (from test_standard_checks.py) 
+- Implementation execution tests (from test_standard_checks.py)
 - Engine integration tests
 - Edge cases and error handling
 
@@ -10,12 +11,12 @@ Tests are organized by functionality rather than implementation details.
 """
 
 import pytest
-from typing import Any
 
 from flex_evals.checks.contains import ContainsCheck
-from flex_evals.checks.base import JSONPath
-from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
+from flex_evals.checks.base import JSONPath, EvaluationContext
+from flex_evals import CheckType, Status, evaluate, Check
 from flex_evals.exceptions import ValidationError
+from flex_evals.schemas import TestCase, Output
 from pydantic import ValidationError as PydanticValidationError
 
 
@@ -46,6 +47,84 @@ class TestContainsValidation:
 
         assert check.case_sensitive is False
         assert check.negate is True
+
+    def test_contains_jsonpath_comprehensive(self):
+        """Comprehensive JSONPath string conversion and execution test."""
+        # 1. Create check with all JSONPath fields as strings
+        check = ContainsCheck(
+            text="$.output.value.message",
+            phrases="$.test_case.expected.required_phrases",
+            case_sensitive="$.test_case.expected.case_sensitive",
+            negate="$.test_case.expected.should_negate",
+        )
+
+        # 2. Verify conversion happened
+        assert isinstance(check.text, JSONPath)
+        assert check.text.expression == "$.output.value.message"
+        assert isinstance(check.phrases, JSONPath)
+        assert check.phrases.expression == "$.test_case.expected.required_phrases"
+        assert isinstance(check.case_sensitive, JSONPath)
+        assert check.case_sensitive.expression == "$.test_case.expected.case_sensitive"
+        assert isinstance(check.negate, JSONPath)
+        assert check.negate.expression == "$.test_case.expected.should_negate"
+
+        # 3. Test execution with EvaluationContext
+
+        test_case = TestCase(
+            id="test_001",
+            input="test",
+            expected={
+                "required_phrases": ["success", "completed"],
+                "case_sensitive": True,
+                "should_negate": False,
+            },
+        )
+        output = Output(value={"message": "Task completed successfully!"})
+        context = EvaluationContext(test_case, output)
+
+        result = check.execute(context)
+        assert result.status == "completed"
+        assert result.results["passed"] is True  # Contains both "success" and "completed"
+        assert result.resolved_arguments["text"]["value"] == "Task completed successfully!"
+        assert result.resolved_arguments["phrases"]["value"] == ["success", "completed"]
+        assert result.resolved_arguments["case_sensitive"]["value"] is True
+        assert result.resolved_arguments["negate"]["value"] is False
+
+        # 4. Test invalid JSONPath string (should raise exception during validation)
+        with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
+            ContainsCheck(text="$.invalid[", phrases=["test"])
+
+        with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
+            ContainsCheck(text="$.valid.text", phrases="$.invalid[")
+
+        # 5. Test valid literal values (should work)
+        check_literal = ContainsCheck(
+            text="literal text content",  # str | JSONPath - string literal works
+            phrases=["phrase1", "phrase2"],  # str | list[str] | JSONPath - list works
+            case_sensitive=True,  # bool | JSONPath - boolean literal works
+            negate=False,  # bool | JSONPath - boolean literal works
+        )
+        assert check_literal.text == "literal text content"
+        assert check_literal.phrases == ["phrase1", "phrase2"]
+        assert check_literal.case_sensitive is True
+        assert check_literal.negate is False
+
+        # 6. Test invalid non-JSONPath strings for fields that don't support string
+        # case_sensitive: bool | JSONPath - "not_a_boolean" is neither bool nor JSONPath
+        with pytest.raises(PydanticValidationError):
+            ContainsCheck(text="test", phrases=["test"], case_sensitive="not_a_boolean")
+
+        # negate: bool | JSONPath - "not_a_boolean" is neither bool nor JSONPath
+        with pytest.raises(PydanticValidationError):
+            ContainsCheck(text="test", phrases=["test"], negate="not_a_boolean")
+
+        # But text and phrases fields DO support strings, so non-JSONPath strings should work
+        check_string_fields = ContainsCheck(
+            text="not_a_jsonpath_but_valid_string",  # Valid string
+            phrases="also_not_jsonpath_but_valid_string",  # Valid string
+        )
+        assert check_string_fields.text == "not_a_jsonpath_but_valid_string"
+        assert check_string_fields.phrases == "also_not_jsonpath_but_valid_string"
 
     def test_contains_check_validation_empty_text(self):
         """Test ContainsCheck validation for empty text - now allowed."""
@@ -192,18 +271,6 @@ class TestContainsExecution:
         result = check()
         assert result == {"passed": True}
 
-    def test_contains_missing_text(self):
-        """Test missing text argument raises TypeError."""
-        # This test is no longer valid with new architecture - text is required at construction
-        with pytest.raises(PydanticValidationError):
-            ContainsCheck(phrases=["test"])  # Missing required text field
-
-    def test_contains_missing_phrases(self):
-        """Test missing phrases argument raises TypeError."""
-        # This test is no longer valid with new architecture - phrases is required at construction
-        with pytest.raises(PydanticValidationError):
-            ContainsCheck(text="test text")  # Missing required phrases field
-
     def test_contains_single_string_phrase_found(self):
         """Test single string phrase that is found."""
         check = ContainsCheck(
@@ -313,10 +380,10 @@ class TestContainsEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="The capital of France is Paris.")]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
@@ -341,10 +408,10 @@ class TestContainsEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="The capital of France is Paris.")]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_contains_negate_via_evaluate(self):
@@ -366,10 +433,10 @@ class TestContainsEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="The capital of France is Paris.")]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.results[0].check_results[0].results == {"passed": True}
 
 
@@ -398,10 +465,10 @@ class TestContainsErrorHandling:
         """Test that required fields are enforced."""
         with pytest.raises(PydanticValidationError):
             ContainsCheck()  # type: ignore
-        
+
         with pytest.raises(PydanticValidationError):
             ContainsCheck(text="test")  # type: ignore
-        
+
         with pytest.raises(PydanticValidationError):
             ContainsCheck(phrases=["test"])  # type: ignore
 
@@ -422,9 +489,9 @@ class TestContainsErrorHandling:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="test")]
-        
+
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
             evaluate(test_cases, outputs)
@@ -451,7 +518,7 @@ class TestContainsJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "response": {
@@ -460,7 +527,7 @@ class TestContainsJSONPathIntegration:
                 },
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -482,7 +549,7 @@ class TestContainsJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "logs": [
@@ -492,9 +559,9 @@ class TestContainsJSONPathIntegration:
                 ],
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
-        # Should fail because text contains "error" but not "failed" (ContainsCheck requires ALL phrases)
+        # Should fail because text contains "error" but not "failed" (ContainsCheck requires ALL phrases)  # noqa: E501
         assert results.results[0].check_results[0].results == {"passed": False}
 
     def test_contains_complex_phrases_structure(self):
@@ -517,13 +584,13 @@ class TestContainsJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
-                "content": "This article discusses machine learning and artificial intelligence, particularly focusing on neural networks and deep learning architectures.",
+                "content": "This article discusses machine learning and artificial intelligence, particularly focusing on neural networks and deep learning architectures.",  # noqa: E501
                 "category": "tech",
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}

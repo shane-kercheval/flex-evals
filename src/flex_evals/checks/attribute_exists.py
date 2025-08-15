@@ -20,8 +20,14 @@ class AttributeExistsCheck(BaseCheck):
     """Tests whether an attribute/field exists as defined by the JSONPath; useful for checking if optional fields."""  # noqa: E501
 
     # Pydantic fields with validation - path must be JSONPath, negate can be literal or JSONPath
-    path: JSONPath = Field(..., description='JSONPath expression to check for existence (e.g., "$.output.error")')
-    negate: bool | JSONPath = Field(False, description='If true, passes when attribute does NOT exist')
+    path: JSONPath = Field(
+        ...,
+        description="JSONPath expression to check for existence (e.g., \"$.output.error\")",
+    )
+    negate: bool | JSONPath = Field(
+        False,
+        description="If true, passes when attribute does NOT exist",
+    )
 
     @field_validator('path', mode='before')
     @classmethod
@@ -88,7 +94,9 @@ class AttributeExistsCheck(BaseCheck):
 
             # Try to resolve the JSONPath to determine existence
             try:
-                resolved_arg = self._resolver.resolve_argument(path_expression, context.context_dict)
+                resolved_arg = self._resolver.resolve_argument(
+                    path_expression, context.context_dict,
+                )
                 # If we get here, the path exists
                 attribute_exists = True
                 resolved_arguments = {'path': resolved_arg, 'negate': {'value': negate}}

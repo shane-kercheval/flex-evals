@@ -143,7 +143,7 @@ class TestCheckValidation:
             version="99.0.0",  # Non-existent version
         )
 
-        with pytest.raises(ValueError, match="Version '99.0.0' not found for check type 'exact_match'"):
+        with pytest.raises(ValueError, match="Version '99.0.0' not found for check type 'exact_match'"):  # noqa: E501
             evaluate([self.test_case], [self.output], [check])
 
     def test_unregistered_check_type_fails(self):

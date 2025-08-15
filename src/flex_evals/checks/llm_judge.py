@@ -31,15 +31,15 @@ class LLMJudgeCheck(BaseAsyncCheck):
     # Pydantic fields with validation - can be literals or JSONPath objects
     prompt: str | JSONPath = Field(
         ...,
-        description='Prompt template with optional {{$.jsonpath}} placeholders',
+        description="Prompt template with optional {{$.jsonpath}} placeholders",
     )
     response_format: type[BaseModel] = Field(
         ...,
-        description='Pydantic model defining expected LLM response structure',
+        description="Pydantic model defining expected LLM response structure",
     )
     llm_function: Any = Field(
         ...,
-        description='Function to call LLM with signature: (prompt, response_format) -> tuple[BaseModel, dict]',  # noqa: E501
+        description="Function to call LLM with signature: (prompt, response_format) -> tuple[BaseModel, dict]",  # noqa: E501
     )
 
     @field_validator('prompt', mode='before')

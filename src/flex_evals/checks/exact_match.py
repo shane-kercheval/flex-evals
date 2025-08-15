@@ -19,16 +19,16 @@ class ExactMatchCheck(BaseCheck):
 
     # Pydantic fields with validation - can be literals or JSONPath objects
     actual: Any | JSONPath = Field(
-        ..., description='Value to check or JSONPath expression pointing to the value',
+        ..., description="Value to check or JSONPath expression pointing to the value",
     )
     expected: Any | JSONPath = Field(
-        ..., description='Expected value or JSONPath expression pointing to the value',
+        ..., description="Expected value or JSONPath expression pointing to the value",
     )
     case_sensitive: bool | JSONPath = Field(
-        True, description='Whether string comparison is case-sensitive',
+        True, description="Whether string comparison is case-sensitive",
     )
     negate: bool | JSONPath = Field(
-        False, description='If true, passes when values don\'t match',
+        False, description="If true, passes when values don't match",
     )
 
     @field_validator('actual', 'expected', 'case_sensitive', 'negate', mode='before')

@@ -1,8 +1,9 @@
-"""Comprehensive tests for ExactMatchCheck implementation.
+"""
+Comprehensive tests for ExactMatchCheck implementation.
 
 This module consolidates all tests for the ExactMatchCheck including:
 - Pydantic validation tests (from test_schema_check_classes.py)
-- Implementation execution tests (from test_standard_checks.py) 
+- Implementation execution tests (from test_standard_checks.py)
 - Engine integration tests
 - Edge cases and error handling
 
@@ -10,12 +11,12 @@ Tests are organized by functionality rather than implementation details.
 """
 
 import pytest
-from typing import Any
 
 from flex_evals.checks.exact_match import ExactMatchCheck
-from flex_evals.checks.base import JSONPath
-from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
+from flex_evals.checks.base import JSONPath, EvaluationContext
+from flex_evals import CheckType, Status, evaluate, Check
 from flex_evals.exceptions import ValidationError
+from flex_evals.schemas import TestCase, Output
 from pydantic import ValidationError as PydanticValidationError
 
 
@@ -50,6 +51,76 @@ class TestExactMatchValidation:
 
         assert check.case_sensitive is False
         assert check.negate is True
+
+    def test_exact_match_jsonpath_comprehensive(self):
+        """Comprehensive JSONPath string conversion and execution test."""
+        # 1. Create check with all JSONPath fields as strings
+        check = ExactMatchCheck(
+            actual="$.output.value.text",
+            expected="$.test_case.expected.target_text",
+            case_sensitive="$.test_case.expected.case_sensitive",
+            negate="$.test_case.expected.should_negate",
+        )
+
+        # 2. Verify conversion happened
+        assert isinstance(check.actual, JSONPath)
+        assert check.actual.expression == "$.output.value.text"
+        assert isinstance(check.expected, JSONPath)
+        assert check.expected.expression == "$.test_case.expected.target_text"
+        assert isinstance(check.case_sensitive, JSONPath)
+        assert check.case_sensitive.expression == "$.test_case.expected.case_sensitive"
+        assert isinstance(check.negate, JSONPath)
+        assert check.negate.expression == "$.test_case.expected.should_negate"
+
+        # 3. Test execution with EvaluationContext
+
+        test_case = TestCase(
+            id="test_001",
+            input="test",
+            expected={
+                "target_text": "Hello World",
+                "case_sensitive": False,
+                "should_negate": False,
+            },
+        )
+        output = Output(value={"text": "hello world"})
+        context = EvaluationContext(test_case, output)
+
+        result = check.execute(context)
+        assert result.status == "completed"
+        assert result.results["passed"] is True  # Case-insensitive match
+        assert result.resolved_arguments["actual"]["value"] == "hello world"
+        assert result.resolved_arguments["expected"]["value"] == "Hello World"
+        assert result.resolved_arguments["case_sensitive"]["value"] is False
+        assert result.resolved_arguments["negate"]["value"] is False
+
+        # 4. Test invalid JSONPath string (should raise exception during validation)
+        with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
+            ExactMatchCheck(actual="$.invalid[", expected="valid_value")
+
+        with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
+            ExactMatchCheck(actual="$.valid.actual", expected="$.invalid[")
+
+        # 5. Test valid literal values (should work)
+        check_literal = ExactMatchCheck(
+            actual="literal_actual",  # Any | JSONPath - any value works
+            expected="literal_expected",  # Any | JSONPath - any value works
+            case_sensitive=True,  # bool | JSONPath - boolean literal works
+            negate=False,  # bool | JSONPath - boolean literal works
+        )
+        assert check_literal.actual == "literal_actual"
+        assert check_literal.expected == "literal_expected"
+        assert check_literal.case_sensitive is True
+        assert check_literal.negate is False
+
+        # 6. Test invalid non-JSONPath strings for fields that don't support string
+        # case_sensitive: bool | JSONPath - "not_a_boolean" is neither bool nor JSONPath
+        with pytest.raises(PydanticValidationError):
+            ExactMatchCheck(actual="test", expected="test", case_sensitive="not_a_boolean")
+
+        # negate: bool | JSONPath - "not_a_boolean" is neither bool nor JSONPath
+        with pytest.raises(PydanticValidationError):
+            ExactMatchCheck(actual="test", expected="test", negate="not_a_boolean")
 
     def test_exact_match_check_validation_empty_actual(self):
         """Test ExactMatchCheck validation for empty actual - now allowed."""
@@ -130,18 +201,6 @@ class TestExactMatchExecution:
         result = check()
         assert result == {"passed": True}  # None converts to empty string
 
-    def test_exact_match_missing_actual(self):
-        """Test missing actual argument raises TypeError."""
-        # This test is no longer valid with new architecture - missing fields caught at construction
-        with pytest.raises(PydanticValidationError):
-            ExactMatchCheck(expected="Paris")  # Missing required actual field
-
-    def test_exact_match_missing_expected(self):
-        """Test missing expected argument raises TypeError."""
-        # This test is no longer valid with new architecture - missing fields caught at construction
-        with pytest.raises(PydanticValidationError):
-            ExactMatchCheck(actual="Paris")  # Missing required expected field
-
     def test_exact_match_result_schema(self):
         r"""Test result matches {\"passed\": boolean} exactly."""
         check = ExactMatchCheck(actual="test", expected="test")
@@ -211,10 +270,10 @@ class TestExactMatchEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="Paris")]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
@@ -239,10 +298,10 @@ class TestExactMatchEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="Paris")]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_exact_match_with_negate_via_evaluate(self):
@@ -264,10 +323,10 @@ class TestExactMatchEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="Paris")]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.results[0].check_results[0].results == {"passed": True}
 
 
@@ -280,7 +339,7 @@ class TestExactMatchErrorHandling:
         check1 = ExactMatchCheck(actual=123, expected="test")
         assert check1.actual == 123
         assert check1.expected == "test"
-        
+
         check2 = ExactMatchCheck(actual="test", expected=123)
         assert check2.actual == "test"
         assert check2.expected == 123
@@ -289,10 +348,10 @@ class TestExactMatchErrorHandling:
         """Test that required fields are enforced."""
         with pytest.raises(PydanticValidationError):
             ExactMatchCheck()  # type: ignore
-        
+
         with pytest.raises(PydanticValidationError):
             ExactMatchCheck(actual="test")  # type: ignore
-        
+
         with pytest.raises(PydanticValidationError):
             ExactMatchCheck(expected="test")  # type: ignore
 
@@ -313,9 +372,9 @@ class TestExactMatchErrorHandling:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="test")]
-        
+
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
             evaluate(test_cases, outputs)
@@ -328,17 +387,17 @@ class TestExactMatchErrorHandling:
         check1 = ExactMatchCheck(actual=actual, expected=expected)
         result = check1()
         assert result == {"passed": True}
-        
+
         # Test with lists
         check2 = ExactMatchCheck(actual=[1, 2, 3], expected=[1, 2, 3])
         result = check2()
         assert result == {"passed": True}
-        
+
         # Test with mixed types (string representation matches)
         check3 = ExactMatchCheck(actual="123", expected=123)
         result = check3()
         assert result == {"passed": True}  # str(123) == "123"
-        
+
         # Test with truly different types that don't match
         check4 = ExactMatchCheck(actual="hello", expected=123)
         result = check4()
@@ -366,7 +425,7 @@ class TestExactMatchJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "response": {
@@ -375,7 +434,7 @@ class TestExactMatchJSONPathIntegration:
                 },
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -397,14 +456,14 @@ class TestExactMatchJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "cities": ["Paris", "London", "Berlin"],
                 "total": 3,
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -425,9 +484,9 @@ class TestExactMatchJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value={"response": "test"})]
-        
+
         results = evaluate(test_cases, outputs)
         # Should result in error when JSONPath resolution fails
         assert results.results[0].status == Status.ERROR

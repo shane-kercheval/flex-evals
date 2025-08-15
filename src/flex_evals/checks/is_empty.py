@@ -18,13 +18,16 @@ class IsEmptyCheck(BaseCheck):
 
     # Pydantic fields with validation - can be literals or JSONPath objects
     value: str | list | dict | set | tuple | int | float | bool | None | JSONPath = Field(
-        ..., description='Value to test for emptiness or JSONPath expression',
+        ...,
+        description="Value to test for emptiness or JSONPath expression",
     )
     negate: bool | JSONPath = Field(
-        False, description='If true, passes when value is not empty',
+        False,
+        description="If true, passes when value is not empty",
     )
     strip_whitespace: bool | JSONPath = Field(
-        True, description='If true, strips whitespace before checking (strings only)',
+        True,
+        description="If true, strips whitespace before checking (strings only)",
     )
 
     @field_validator('value', 'negate', 'strip_whitespace', mode='before')
@@ -51,7 +54,7 @@ class IsEmptyCheck(BaseCheck):
         if isinstance(self.negate, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'negate' field: {self.negate}")
         if isinstance(self.strip_whitespace, JSONPath):
-            raise RuntimeError(f"JSONPath not resolved for 'strip_whitespace' field: {self.strip_whitespace}")
+            raise RuntimeError(f"JSONPath not resolved for 'strip_whitespace' field: {self.strip_whitespace}")  # noqa: E501
 
         # Handle None directly
         if self.value is None:

@@ -3,6 +3,8 @@
 from datetime import datetime, UTC
 from typing import Any
 
+import pytest
+
 from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext, JSONPath
 from flex_evals.registry import register
 from flex_evals.schemas import TestCase, Output, CheckResult
@@ -11,14 +13,14 @@ from pydantic import Field, field_validator
 
 class TestExampleCheck(BaseCheck):
     """Test implementation of BaseCheck for testing."""
-    
+
     # Pydantic fields with validation - can be literals or JSONPath objects
     value: str | JSONPath = Field(..., description='Test value to compare')
     literal: str | JSONPath = Field('expected', description='Expected value to match against')
 
     @field_validator('value', 'literal', mode='before')
     @classmethod
-    def convert_jsonpath(cls, v):
+    def convert_jsonpath(cls, v):  # noqa: ANN001
         """Convert JSONPath-like strings to JSONPath objects."""
         if isinstance(v, str) and v.startswith('$.'):
             return JSONPath(expression=v)
@@ -31,7 +33,7 @@ class TestExampleCheck(BaseCheck):
             raise RuntimeError(f"JSONPath not resolved for 'value' field: {self.value}")
         if isinstance(self.literal, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'literal' field: {self.literal}")
-            
+
         # Simple test check that validates required arguments
         return {
             "passed": self.value == self.literal,
@@ -41,14 +43,14 @@ class TestExampleCheck(BaseCheck):
 
 class TestExampleAsyncCheck(BaseAsyncCheck):
     """Test implementation of BaseAsyncCheck for testing."""
-    
+
     # Pydantic fields with validation - can be literals or JSONPath objects
     value: str | JSONPath = Field(..., description='Test value to compare')
     literal: str | JSONPath = Field('expected', description='Expected value to match against')
 
     @field_validator('value', 'literal', mode='before')
     @classmethod
-    def convert_jsonpath(cls, v):
+    def convert_jsonpath(cls, v):  # noqa: ANN001
         """Convert JSONPath-like strings to JSONPath objects."""
         if isinstance(v, str) and v.startswith('$.'):
             return JSONPath(expression=v)
@@ -61,7 +63,7 @@ class TestExampleAsyncCheck(BaseAsyncCheck):
             raise RuntimeError(f"JSONPath not resolved for 'value' field: {self.value}")
         if isinstance(self.literal, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'literal' field: {self.literal}")
-            
+
         # Simple async test check
         return {
             "passed": self.value == self.literal,
@@ -143,7 +145,7 @@ class TestBaseCheck:
         # Create check with JSONPath and literal values
         check = TestExampleCheck(
             value=JSONPath(expression="$.output.value.answer"),  # Should resolve to "Paris"
-            literal="Paris"
+            literal="Paris",
         )
         result = check.execute(self.context)
 
@@ -165,11 +167,11 @@ class TestBaseCheck:
         # Missing required "value" field should raise validation error during instantiation
         try:
             check = TestExampleCheck()  # Missing required value field
-            result = check.execute(self.context)
-            assert False, "Should have raised validation error"
+            check.execute(self.context)
+            pytest.fail("Should have raised validation error")
         except Exception as e:
             # Either during instantiation or execution, we should get validation error
-            assert "value" in str(e).lower() or "required" in str(e).lower()
+            assert "value" in str(e).lower() or "required" in str(e).lower()  # noqa: PT017
 
     def test_check_jsonpath_error(self):
         """Test check execution with JSONPath resolution error."""
@@ -191,7 +193,7 @@ class TestBaseCheck:
         class FailingCheck(BaseCheck):
             # Add required Pydantic field
             value: str = Field(default="test")
-            
+
             def __call__(self) -> dict[str, Any]:
                 raise RuntimeError("Unexpected error")
 
@@ -268,7 +270,7 @@ class TestBaseAsyncCheck:
         # Create check with JSONPath and literal values
         check = TestExampleAsyncCheck(
             value=JSONPath(expression="$.output.value.answer"),  # Should resolve to "Paris"
-            literal="Paris"
+            literal="Paris",
         )
         result = await check.execute(self.context)
 
@@ -289,18 +291,18 @@ class TestBaseAsyncCheck:
         # Missing required "value" field should raise validation error during instantiation
         try:
             check = TestExampleAsyncCheck()  # Missing required value field
-            result = await check.execute(self.context)
-            assert False, "Should have raised validation error"
+            await check.execute(self.context)
+            pytest.fail("Should have raised validation error")
         except Exception as e:
             # Either during instantiation or execution, we should get validation error
-            assert "value" in str(e).lower() or "required" in str(e).lower()
+            assert "value" in str(e).lower() or "required" in str(e).lower()  # noqa: PT017
 
     async def test_async_check_execution_error(self):
         """Test async check execution with unexpected error."""
         class FailingAsyncCheck(BaseAsyncCheck):
             # Add required Pydantic field
             value: str = Field(default="test")
-            
+
             async def __call__(self) -> dict[str, Any]:
                 raise RuntimeError("Async error")
 

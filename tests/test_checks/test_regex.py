@@ -1,7 +1,8 @@
-"""Comprehensive tests for RegexCheck implementation.
+"""
+Comprehensive tests for RegexCheck implementation.
 
 This module consolidates all tests for the RegexCheck including:
-- Pydantic validation tests 
+- Pydantic validation tests
 - Implementation execution tests
 - Engine integration tests
 - Edge cases and error handling
@@ -10,12 +11,12 @@ Tests are organized by functionality rather than implementation details.
 """
 
 import pytest
-from typing import Any
 
 from flex_evals.checks.regex import RegexCheck, RegexFlags
-from flex_evals.checks.base import JSONPath
-from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
+from flex_evals.checks.base import JSONPath, EvaluationContext
+from flex_evals import CheckType, Status, evaluate, Check
 from flex_evals.exceptions import ValidationError
+from flex_evals.schemas import TestCase, Output
 from pydantic import ValidationError as PydanticValidationError
 
 
@@ -48,6 +49,72 @@ class TestRegexValidation:
         assert check.pattern == "\\d+"
         assert check.negate is True
 
+    def test_regex_jsonpath_comprehensive(self):
+        """Comprehensive JSONPath string conversion and execution test."""
+        # 1. Create check with all JSONPath fields as strings
+        check = RegexCheck(
+            text="$.output.value.message",
+            pattern="$.test_case.expected.regex_pattern",
+            negate="$.test_case.expected.should_negate",
+            flags="$.test_case.expected.regex_flags",
+        )
+
+        # 2. Verify conversion happened
+        assert isinstance(check.text, JSONPath)
+        assert check.text.expression == "$.output.value.message"
+        assert isinstance(check.pattern, JSONPath)
+        assert check.pattern.expression == "$.test_case.expected.regex_pattern"
+        assert isinstance(check.negate, JSONPath)
+        assert check.negate.expression == "$.test_case.expected.should_negate"
+        assert isinstance(check.flags, JSONPath)
+        assert check.flags.expression == "$.test_case.expected.regex_flags"
+
+        # 3. Test execution with EvaluationContext
+
+        test_case = TestCase(
+            id="test_001",
+            input="test",
+            expected={
+                "regex_pattern": r"\d+",  # Match digits
+                "should_negate": False,
+                "regex_flags": RegexFlags(),  # Default RegexFlags instance
+            },
+        )
+        output = Output(value={"message": "Score: 95 points"})
+        context = EvaluationContext(test_case, output)
+
+        result = check.execute(context)
+        assert result.status == "completed"
+        assert result.results["passed"] is True  # Contains digits
+        assert result.resolved_arguments["text"]["value"] == "Score: 95 points"
+        assert result.resolved_arguments["pattern"]["value"] == r"\d+"
+        assert result.resolved_arguments["negate"]["value"] is False
+
+        # 4. Test invalid JSONPath string (should raise exception during validation)
+        with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
+            RegexCheck(text="$.invalid[", pattern="test")
+
+        # 5. Test valid literal values (should work)
+        check_literal = RegexCheck(
+            text="literal text",  # str | JSONPath - string literal works
+            pattern="literal_pattern",  # str | JSONPath - string literal works
+            negate=False,  # bool | JSONPath - boolean literal works
+            flags=RegexFlags(),  # RegexFlags | JSONPath - RegexFlags instance works
+        )
+        assert check_literal.text == "literal text"
+        assert check_literal.pattern == "literal_pattern"
+        assert check_literal.negate is False
+        assert isinstance(check_literal.flags, RegexFlags)
+
+        # 6. Test invalid non-JSONPath strings for fields that don't support string
+        # negate: bool | JSONPath - "not_a_boolean" is neither bool nor JSONPath
+        with pytest.raises(PydanticValidationError):
+            RegexCheck(text="test", pattern="test", negate="not_a_boolean")
+
+        # flags: RegexFlags | JSONPath - "not_flags" is neither RegexFlags nor JSONPath
+        with pytest.raises(PydanticValidationError):
+            RegexCheck(text="test", pattern="test", flags="not_flags")
+
     def test_regex_check_with_flags(self):
         """Test RegexCheck with custom flags."""
         flags = RegexFlags(
@@ -74,10 +141,10 @@ class TestRegexValidation:
         """Test that required fields are enforced."""
         with pytest.raises(PydanticValidationError):
             RegexCheck()  # type: ignore
-        
+
         with pytest.raises(PydanticValidationError):
             RegexCheck(text="test")  # type: ignore
-        
+
         with pytest.raises(PydanticValidationError):
             RegexCheck(pattern="\\d+")  # type: ignore
 
@@ -142,7 +209,7 @@ class TestRegexExecution:
         """Test complex regex pattern."""
         check = RegexCheck(
             text="user@example.com",
-            pattern="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+            pattern="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
         )
         result = check()
         assert result == {"passed": True}
@@ -211,10 +278,10 @@ class TestRegexEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value=output_value)]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.summary.error_test_cases == 0
@@ -237,10 +304,10 @@ class TestRegexEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value={"message": "An error occurred during processing"})]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
@@ -268,10 +335,10 @@ class TestRegexEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="hello world")]  # Lowercase
         results = evaluate(test_cases, outputs)
-        
+
         # Should pass due to case_insensitive=True
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -293,10 +360,10 @@ class TestRegexEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="hello world")]  # No digits
         results = evaluate(test_cases, outputs)
-        
+
         assert results.results[0].check_results[0].results == {"passed": True}
 
 
@@ -320,9 +387,9 @@ class TestRegexErrorHandling:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="test")]
-        
+
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
             evaluate(test_cases, outputs)
@@ -344,9 +411,9 @@ class TestRegexErrorHandling:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value={"response": "test"})]
-        
+
         results = evaluate(test_cases, outputs)
         # Should result in error when JSONPath resolution fails
         assert results.results[0].status == Status.ERROR
@@ -362,11 +429,11 @@ class TestRegexErrorHandling:
         """Test various regex compilation errors."""
         patterns_and_errors = [
             ("[unclosed", "Invalid regex pattern"),
-            ("(?P<incomplete", "Invalid regex pattern"), 
+            ("(?P<incomplete", "Invalid regex pattern"),
             ("*invalid", "Invalid regex pattern"),
             ("+invalid", "Invalid regex pattern"),
         ]
-        
+
         for pattern, error_match in patterns_and_errors:
             check = RegexCheck(text="test", pattern=pattern)
             with pytest.raises(ValidationError, match=error_match):
@@ -394,7 +461,7 @@ class TestRegexJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "user": {
@@ -404,7 +471,7 @@ class TestRegexJSONPathIntegration:
                 "timestamp": "2024-01-01",
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -425,7 +492,7 @@ class TestRegexJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "messages": [
@@ -434,7 +501,7 @@ class TestRegexJSONPathIntegration:
                 ],
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -449,7 +516,7 @@ class TestRegexJSONPathIntegration:
                         type=CheckType.REGEX,
                         arguments={
                             "text": "$.output.value.log_entry",
-                            "pattern": "\\[(\\d{4}-\\d{2}-\\d{2})\\s(\\d{2}:\\d{2}:\\d{2})\\]\\s(ERROR|WARN|INFO)",
+                            "pattern": "\\[(\\d{4}-\\d{2}-\\d{2})\\s(\\d{2}:\\d{2}:\\d{2})\\]\\s(ERROR|WARN|INFO)",  # noqa: E501
                             "flags": {
                                 "case_insensitive": False,
                                 "multiline": True,
@@ -460,14 +527,14 @@ class TestRegexJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "log_entry": "[2024-01-15 14:30:22] ERROR Failed to process request",
                 "source": "application.log",
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -488,13 +555,13 @@ class TestRegexJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "message": "Café résumé naïve",
                 "language": "french",
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}

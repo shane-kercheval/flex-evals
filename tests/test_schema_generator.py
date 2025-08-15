@@ -2,7 +2,7 @@
 
 import json
 import pytest
-from typing import Any, Optional, ClassVar
+from typing import Any, Optional
 from flex_evals.schema_generator import (
     generate_checks_schema,
     generate_check_schema,
@@ -11,13 +11,8 @@ from flex_evals.schema_generator import (
     _extract_class_description,
 )
 from flex_evals.checks.contains import ContainsCheck
-from flex_evals.checks.exact_match import ExactMatchCheck
-from flex_evals.checks.attribute_exists import AttributeExistsCheck
 from flex_evals.checks.base import BaseCheck
 from pydantic import Field
-
-
-# Removed mock_schema_classes fixture - not needed in unified architecture
 
 
 class TestSchemaGeneration:
@@ -142,7 +137,7 @@ class TestSchemaGeneration:
         assert "actual" in fields
         assert "expected" in fields
 
-        # Test actual field - required, non-nullable, supports JSONPath  
+        # Test actual field - required, non-nullable, supports JSONPath
         actual_field = fields["actual"]
         assert actual_field["type"] == "union<Any,JSONPath>"
         assert actual_field["nullable"] is False
@@ -150,7 +145,7 @@ class TestSchemaGeneration:
         assert actual_field["jsonpath"] == "optional"
 
         # Test expected field - required, non-nullable, supports JSONPath
-        expected_field = fields["expected"]  
+        expected_field = fields["expected"]
         assert expected_field["type"] == "union<Any,JSONPath>"
         assert expected_field["nullable"] is False
         assert "default" not in expected_field  # Required field has no default

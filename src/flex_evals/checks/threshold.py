@@ -19,22 +19,28 @@ class ThresholdCheck(BaseCheck):
 
     # Pydantic fields with validation
     value: float | int | JSONPath = Field(
-        ..., description='Numeric value to check or JSONPath expression',
+        ...,
+        description="Numeric value to check or JSONPath expression",
     )
     min_value: float | int | JSONPath | None = Field(
-        None, description='Minimum acceptable value or JSONPath expression',
+        None,
+        description="Minimum acceptable value or JSONPath expression",
     )
     max_value: float | int | JSONPath | None = Field(
-        None, description='Maximum acceptable value or JSONPath expression',
+        None,
+        description="Maximum acceptable value or JSONPath expression",
     )
     min_inclusive: bool | JSONPath = Field(
-        True, description='If true, min_value is inclusive (>=), else exclusive (>)',
+        True,
+        description="If true, min_value is inclusive (>=), else exclusive (>)",
     )
     max_inclusive: bool | JSONPath = Field(
-        True, description='If true, max_value is inclusive (<=), else exclusive (<)',
+        True,
+        description="If true, max_value is inclusive (<=), else exclusive (<)",
     )
     negate: bool | JSONPath = Field(
-        False, description='If true, passes when value is outside the specified range',
+        False,
+        description="If true, passes when value is outside the specified range",
     )
 
 

@@ -1,6 +1,6 @@
 """Test configuration for package."""
 from flex_evals.checks.attribute_exists import AttributeExistsCheck
-from flex_evals.checks.contains import ContainsCheck  
+from flex_evals.checks.contains import ContainsCheck
 from flex_evals.checks.custom_function import CustomFunctionCheck
 from flex_evals.checks.equals import EqualsCheck
 from flex_evals.checks.exact_match import ExactMatchCheck

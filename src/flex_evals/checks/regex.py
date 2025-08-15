@@ -29,19 +29,19 @@ class RegexCheck(BaseCheck):
     # Pydantic fields with validation - can be literals or JSONPath objects
     text: str | JSONPath = Field(
         ...,
-        description='Text to test against the pattern or JSONPath expression',
+        description="Text to test against the pattern or JSONPath expression",
     )
     pattern: str | JSONPath = Field(
         ...,
-        description='Regular expression pattern to match against the text',
+        description="Regular expression pattern to match against the text",
     )
     negate: bool | JSONPath = Field(
         False,
-        description='If true, passes when pattern doesn\'t match',
+        description="If true, passes when pattern doesn't match",
     )
     flags: RegexFlags | JSONPath = Field(
         default_factory=RegexFlags,
-        description='Regex matching options',
+        description="Regex matching options",
     )
 
     @field_validator('text', 'pattern', 'negate', 'flags', mode='before')

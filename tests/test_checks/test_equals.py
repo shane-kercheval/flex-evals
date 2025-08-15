@@ -1,7 +1,8 @@
-"""Comprehensive tests for EqualsCheck implementation.
+"""
+Comprehensive tests for EqualsCheck implementation.
 
 This module consolidates all tests for the EqualsCheck including:
-- Pydantic validation tests 
+- Pydantic validation tests
 - Implementation execution tests
 - Engine integration tests
 - Edge cases and error handling
@@ -13,9 +14,10 @@ import pytest
 from typing import Any
 
 from flex_evals.checks.equals import EqualsCheck
-from flex_evals.checks.base import JSONPath
-from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
+from flex_evals.checks.base import JSONPath, EvaluationContext
+from flex_evals import CheckType, Status, evaluate, Check
 from flex_evals.exceptions import ValidationError
+from flex_evals.schemas import TestCase, Output
 from pydantic import ValidationError as PydanticValidationError
 
 
@@ -45,6 +47,65 @@ class TestEqualsValidation:
 
         assert check.negate is True
 
+    def test_equals_jsonpath_comprehensive(self):
+        """Comprehensive JSONPath string conversion and execution test."""
+        # 1. Create check with all JSONPath fields as strings
+        check = EqualsCheck(
+            actual="$.output.value.result",
+            expected="$.test_case.expected.target_value",
+            negate="$.test_case.expected.should_negate",
+        )
+
+        # 2. Verify conversion happened
+        assert isinstance(check.actual, JSONPath)
+        assert check.actual.expression == "$.output.value.result"
+        assert isinstance(check.expected, JSONPath)
+        assert check.expected.expression == "$.test_case.expected.target_value"
+        assert isinstance(check.negate, JSONPath)
+        assert check.negate.expression == "$.test_case.expected.should_negate"
+
+        # 3. Test execution with EvaluationContext
+
+        test_case = TestCase(
+            id="test_001",
+            input="test",
+            expected={
+                "target_value": {"status": "success", "count": 42},
+                "should_negate": False,
+            },
+        )
+        output = Output(value={"result": {"status": "success", "count": 42}})
+        context = EvaluationContext(test_case, output)
+
+        result = check.execute(context)
+        assert result.status == "completed"
+        assert result.results["passed"] is True  # Objects are equal, no negate
+        assert result.resolved_arguments["actual"]["value"] == {"status": "success", "count": 42}
+        assert result.resolved_arguments["expected"]["value"] == {"status": "success", "count": 42}
+        assert result.resolved_arguments["negate"]["value"] is False
+
+        # 4. Test invalid JSONPath string (should raise exception during validation)
+        with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
+            EqualsCheck(actual="$.invalid[", expected="valid_value")
+
+        with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
+            EqualsCheck(actual="$.valid.actual", expected="$.invalid[")
+
+        # 5. Test valid literal values (should work)
+        check_literal = EqualsCheck(
+            actual="literal_actual_value",  # Any | JSONPath - any value works
+            expected="literal_expected_value",  # Any | JSONPath - any value works
+            negate=False,  # bool | JSONPath - boolean literal works
+        )
+        assert check_literal.actual == "literal_actual_value"
+        assert check_literal.expected == "literal_expected_value"
+        assert check_literal.negate is False
+
+        # 6. Test invalid non-JSONPath strings for fields that don't support string
+        # negate: bool | JSONPath - "not_a_boolean" is neither bool nor JSONPath
+        with pytest.raises(PydanticValidationError):
+            EqualsCheck(actual="test", expected="test", negate="not_a_boolean")
+
     def test_equals_check_with_literals(self):
         """Test EqualsCheck with literal values."""
         check = EqualsCheck(
@@ -66,10 +127,10 @@ class TestEqualsValidation:
         """Test that required fields are enforced."""
         with pytest.raises(PydanticValidationError):
             EqualsCheck()  # type: ignore
-        
+
         with pytest.raises(PydanticValidationError):
             EqualsCheck(actual="test")  # type: ignore
-        
+
         with pytest.raises(PydanticValidationError):
             EqualsCheck(expected="test")  # type: ignore
 
@@ -147,7 +208,7 @@ class TestEqualsExecution:
         """Test identical dictionaries."""
         check = EqualsCheck(
             actual={"name": "Alice", "age": 30},
-            expected={"name": "Alice", "age": 30}
+            expected={"name": "Alice", "age": 30},
         )
         result = check()
         assert result == {"passed": True}
@@ -156,7 +217,7 @@ class TestEqualsExecution:
         """Test dictionaries with different values."""
         check = EqualsCheck(
             actual={"name": "Alice", "age": 30},
-            expected={"name": "Bob", "age": 30}
+            expected={"name": "Bob", "age": 30},
         )
         result = check()
         assert result == {"passed": False}
@@ -195,7 +256,7 @@ class TestEqualsExecution:
         """Test nested data structures."""
         check = EqualsCheck(
             actual={"users": [{"name": "Alice"}, {"name": "Bob"}]},
-            expected={"users": [{"name": "Alice"}, {"name": "Bob"}]}
+            expected={"users": [{"name": "Alice"}, {"name": "Bob"}]},
         )
         result = check()
         assert result == {"passed": True}
@@ -229,8 +290,8 @@ class TestEqualsEngineIntegration:
     ):
         """Test using JSONPath for actual and expected with various combinations."""
         # Use different JSONPath based on output structure
-        actual_path = "$.output.value.result" if isinstance(output_value, dict) and "result" in output_value else "$.output.value"
-        
+        actual_path = "$.output.value.result" if isinstance(output_value, dict) and "result" in output_value else "$.output.value"  # noqa: E501
+
         test_cases = [
             TestCase(
                 id="test_001",
@@ -247,10 +308,10 @@ class TestEqualsEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value=output_value)]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.summary.error_test_cases == 0
@@ -274,10 +335,10 @@ class TestEqualsEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="Paris")]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
@@ -302,10 +363,10 @@ class TestEqualsEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="Paris")]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.results[0].check_results[0].results == {"passed": True}
 
 
@@ -329,9 +390,9 @@ class TestEqualsErrorHandling:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="test")]
-        
+
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
             evaluate(test_cases, outputs)
@@ -353,9 +414,9 @@ class TestEqualsErrorHandling:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value={"response": "test"})]
-        
+
         results = evaluate(test_cases, outputs)
         # Should result in error when JSONPath resolution fails
         assert results.results[0].status == Status.ERROR
@@ -383,14 +444,14 @@ class TestEqualsJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "answer": "Paris",
                 "confidence": 0.95,
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -412,14 +473,14 @@ class TestEqualsJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "items": ["item1", "item2", "item3"],
                 "count": 3,
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -432,8 +493,8 @@ class TestEqualsJSONPathIntegration:
                 expected={
                     "user_data": {
                         "profile": {"name": "Alice", "age": 30},
-                        "preferences": ["reading", "coding"]
-                    }
+                        "preferences": ["reading", "coding"],
+                    },
                 },
                 checks=[
                     Check(
@@ -446,16 +507,16 @@ class TestEqualsJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "user": {
                     "profile": {"name": "Alice", "age": 30},
-                    "preferences": ["reading", "coding"]
+                    "preferences": ["reading", "coding"],
                 },
                 "timestamp": "2024-01-01T00:00:00Z",
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}

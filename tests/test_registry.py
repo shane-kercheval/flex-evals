@@ -833,7 +833,6 @@ class TestRegistryReverseMapping:
         # Clear registry
         clear_registry()
 
-        # Should no longer work after clear
         with pytest.raises(ValueError, match="Class .* is not registered"):
             get_version_for_class(ClearTest)
 

@@ -1,7 +1,8 @@
-"""Comprehensive tests for IsEmptyCheck implementation.
+"""
+Comprehensive tests for IsEmptyCheck implementation.
 
 This module consolidates all tests for the IsEmptyCheck including:
-- Pydantic validation tests 
+- Pydantic validation tests
 - Implementation execution tests
 - Engine integration tests
 - Edge cases and error handling
@@ -13,9 +14,10 @@ import pytest
 from typing import Any
 
 from flex_evals.checks.is_empty import IsEmptyCheck
-from flex_evals.checks.base import JSONPath
-from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
+from flex_evals.checks.base import JSONPath, EvaluationContext
+from flex_evals import CheckType, Status, evaluate, Check
 from flex_evals.exceptions import ValidationError
+from flex_evals.schemas import TestCase, Output
 from pydantic import ValidationError as PydanticValidationError
 
 
@@ -41,6 +43,69 @@ class TestIsEmptyValidation:
 
         assert check.negate is True
         assert check.strip_whitespace is False
+
+    def test_is_empty_jsonpath_comprehensive(self):
+        """Comprehensive JSONPath string conversion and execution test."""
+        # 1. Create check with all JSONPath fields as strings
+        check = IsEmptyCheck(
+            value="$.output.value.content",
+            negate="$.test_case.expected.should_negate",
+            strip_whitespace="$.test_case.expected.strip_whitespace",
+        )
+
+        # 2. Verify conversion happened
+        assert isinstance(check.value, JSONPath)
+        assert check.value.expression == "$.output.value.content"
+        assert isinstance(check.negate, JSONPath)
+        assert check.negate.expression == "$.test_case.expected.should_negate"
+        assert isinstance(check.strip_whitespace, JSONPath)
+        assert check.strip_whitespace.expression == "$.test_case.expected.strip_whitespace"
+
+        # 3. Test execution with EvaluationContext
+
+        test_case = TestCase(
+            id="test_001",
+            input="test",
+            expected={
+                "should_negate": False,
+                "strip_whitespace": True,
+            },
+        )
+        output = Output(value={"content": "   "})  # Whitespace only
+        context = EvaluationContext(test_case, output)
+
+        result = check.execute(context)
+        assert result.status == "completed"
+        assert result.results["passed"] is True  # Empty after stripping whitespace
+        assert result.resolved_arguments["value"]["value"] == "   "
+        assert result.resolved_arguments["negate"]["value"] is False
+        assert result.resolved_arguments["strip_whitespace"]["value"] is True
+
+        # 4. Test invalid JSONPath string (should raise exception during validation)
+        with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
+            IsEmptyCheck(value="$.invalid[")
+
+        with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
+            IsEmptyCheck(value="$.valid.value", negate="$.invalid[")
+
+        # 5. Test valid literal values (should work)
+        check_literal = IsEmptyCheck(
+            value=[],  # Any supported type | JSONPath - empty list works
+            negate=False,  # bool | JSONPath - boolean literal works
+            strip_whitespace=True,  # bool | JSONPath - boolean literal works
+        )
+        assert check_literal.value == []
+        assert check_literal.negate is False
+        assert check_literal.strip_whitespace is True
+
+        # 6. Test invalid non-JSONPath strings for fields that don't support string
+        # negate: bool | JSONPath - "not_a_boolean" is neither bool nor JSONPath
+        with pytest.raises(PydanticValidationError):
+            IsEmptyCheck(value="", negate="not_a_boolean")
+
+        # strip_whitespace: bool | JSONPath - "not_a_boolean" is neither bool nor JSONPath
+        with pytest.raises(PydanticValidationError):
+            IsEmptyCheck(value="", strip_whitespace="not_a_boolean")
 
     def test_is_empty_check_with_literal_value(self):
         """Test IsEmptyCheck with literal value."""
@@ -201,8 +266,8 @@ class TestIsEmptyEngineIntegration:
     def test_is_empty_via_evaluate(self, output_value: Any, expected_passed: bool):
         """Test using JSONPath for value with various combinations."""
         # Use different JSONPath based on output structure
-        value_path = "$.output.value.result" if isinstance(output_value, dict) and "result" in output_value else "$.output.value"
-        
+        value_path = "$.output.value.result" if isinstance(output_value, dict) and "result" in output_value else "$.output.value"  # noqa: E501
+
         test_cases = [
             TestCase(
                 id="test_001",
@@ -217,10 +282,10 @@ class TestIsEmptyEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value=output_value)]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.summary.error_test_cases == 0
@@ -242,10 +307,10 @@ class TestIsEmptyEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value={"content": ""})]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
@@ -268,10 +333,10 @@ class TestIsEmptyEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="not empty")]
         results = evaluate(test_cases, outputs)
-        
+
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_is_empty_strip_whitespace_via_evaluate(self):
@@ -291,10 +356,10 @@ class TestIsEmptyEngineIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="   ")]  # Whitespace only
         results = evaluate(test_cases, outputs)
-        
+
         # With strip_whitespace=False, whitespace is not empty
         assert results.results[0].check_results[0].results == {"passed": False}
 
@@ -318,9 +383,9 @@ class TestIsEmptyErrorHandling:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value="test")]
-        
+
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
             evaluate(test_cases, outputs)
@@ -341,9 +406,9 @@ class TestIsEmptyErrorHandling:
                 ],
             ),
         ]
-        
+
         outputs = [Output(value={"response": "test"})]
-        
+
         results = evaluate(test_cases, outputs)
         # Should result in error when JSONPath resolution fails
         assert results.results[0].status == Status.ERROR
@@ -369,7 +434,7 @@ class TestIsEmptyJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "response": {
@@ -381,7 +446,7 @@ class TestIsEmptyJSONPathIntegration:
                 },
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -401,7 +466,7 @@ class TestIsEmptyJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "messages": [
@@ -410,7 +475,7 @@ class TestIsEmptyJSONPathIntegration:
                 ],
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -430,7 +495,7 @@ class TestIsEmptyJSONPathIntegration:
                 ],
             ),
         ]
-        
+
         outputs = [
             Output(value={
                 "user": {
@@ -440,6 +505,6 @@ class TestIsEmptyJSONPathIntegration:
                 "timestamp": "2024-01-01T00:00:00Z",
             }),
         ]
-        
+
         results = evaluate(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}

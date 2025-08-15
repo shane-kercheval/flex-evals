@@ -23,8 +23,14 @@ class CustomFunctionCheck(BaseAsyncCheck):
     """Executes user-provided python validation functions."""
 
     # Pydantic fields with validation - function_args can contain JSONPath objects
-    validation_function: Any = Field(..., description='User-provided function or string function definition')
-    function_args: dict[str, Any] = Field(..., description='Arguments to pass to validation_function (JSONPath expressions supported)')
+    validation_function: Any = Field(
+        ...,
+        description="User-provided function or string function definition",
+    )
+    function_args: dict[str, Any] = Field(
+        ...,
+        description="Arguments to pass to validation_function (JSONPath expressions supported)",
+    )
 
     async def execute(
         self,

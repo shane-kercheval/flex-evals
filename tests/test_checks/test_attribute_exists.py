@@ -1,7 +1,8 @@
-"""Comprehensive tests for AttributeExistsCheck implementation.
+"""
+Comprehensive tests for AttributeExistsCheck implementation.
 
 This module consolidates all tests for the AttributeExistsCheck including:
-- Implementation execution tests (from test_standard_checks.py) 
+- Implementation execution tests (from test_standard_checks.py)
 - Engine integration tests
 - Edge cases and error handling
 
@@ -9,12 +10,12 @@ Tests are organized by functionality rather than implementation details.
 """
 
 import pytest
-from typing import Any
 
 from flex_evals.checks.attribute_exists import AttributeExistsCheck
-from flex_evals.checks.base import JSONPath
-from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
+from flex_evals.checks.base import JSONPath, EvaluationContext
+from flex_evals import CheckType, Status, evaluate, Check
 from flex_evals.exceptions import ValidationError
+from flex_evals.schemas import TestCase, Output
 from pydantic import ValidationError as PydanticValidationError
 
 
@@ -46,6 +47,56 @@ class TestAttributeExistsValidation:
         """Test AttributeExistsCheck check_type property returns correct type."""
         check = AttributeExistsCheck(path="$.test")
         assert check.check_type == CheckType.ATTRIBUTE_EXISTS
+
+    def test_attribute_exists_jsonpath_comprehensive(self):
+        """Comprehensive JSONPath string conversion and execution test."""
+        # 1. Create check with all JSONPath fields as strings
+        check = AttributeExistsCheck(
+            path="$.output.value.has_error",
+            negate="$.test_case.expected.should_negate",
+        )
+
+        # 2. Verify conversion happened
+        assert isinstance(check.path, JSONPath)
+        assert check.path.expression == "$.output.value.has_error"
+        assert isinstance(check.negate, JSONPath)
+        assert check.negate.expression == "$.test_case.expected.should_negate"
+
+        # 3. Test execution with EvaluationContext
+
+        test_case = TestCase(
+            id="test_001",
+            input="test",
+            expected={"should_negate": False},
+        )
+        output = Output(value={"has_error": True})
+        context = EvaluationContext(test_case, output)
+
+        result = check.execute(context)
+        assert result.status == "completed"
+        assert result.results["passed"] is True  # has_error exists, negate is False
+        assert result.resolved_arguments["path"]["value"] is True
+        assert result.resolved_arguments["negate"]["value"] is False
+
+        # 4. Test invalid JSONPath string for path field (should raise exception)
+        with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
+            AttributeExistsCheck(path="invalid_path")
+
+        # Test invalid JSONPath for negate field (should raise exception during validation)
+        with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
+            AttributeExistsCheck(path="$.valid.path", negate="$.invalid[")
+
+        # 5. Test valid literal values (should work)
+        check_literal = AttributeExistsCheck(
+            path="$.output.value.error",
+            negate=True,  # Valid boolean literal
+        )
+        assert check_literal.negate is True
+
+        # 6. Test invalid non-JSONPath string for negate field (should raise ValidationError)
+        # negate: bool | JSONPath - "not_a_jsonpath" is neither bool nor valid JSONPath
+        with pytest.raises(PydanticValidationError):
+            AttributeExistsCheck(path="$.output.error", negate="not_a_jsonpath")
 
 
 class TestAttributeExistsEngineIntegration:
@@ -234,11 +285,11 @@ class TestAttributeExistsEngineIntegration:
                 id="test_001",
                 input="Test various types",
                 checks=[
-                    Check(type=CheckType.ATTRIBUTE_EXISTS, arguments={"path": "$.output.value.number"}),
-                    Check(type=CheckType.ATTRIBUTE_EXISTS, arguments={"path": "$.output.value.boolean"}),
-                    Check(type=CheckType.ATTRIBUTE_EXISTS, arguments={"path": "$.output.value.null_value"}),
-                    Check(type=CheckType.ATTRIBUTE_EXISTS, arguments={"path": "$.output.value.array"}),
-                    Check(type=CheckType.ATTRIBUTE_EXISTS, arguments={"path": "$.output.value.missing", "negate": True}),
+                    Check(type=CheckType.ATTRIBUTE_EXISTS, arguments={"path": "$.output.value.number"}),  # noqa: E501
+                    Check(type=CheckType.ATTRIBUTE_EXISTS, arguments={"path": "$.output.value.boolean"}),  # noqa: E501
+                    Check(type=CheckType.ATTRIBUTE_EXISTS, arguments={"path": "$.output.value.null_value"}),  # noqa: E501
+                    Check(type=CheckType.ATTRIBUTE_EXISTS, arguments={"path": "$.output.value.array"}),  # noqa: E501
+                    Check(type=CheckType.ATTRIBUTE_EXISTS, arguments={"path": "$.output.value.missing", "negate": True}),  # noqa: E501
                 ],
             ),
         ]
@@ -263,9 +314,9 @@ class TestAttributeExistsEngineIntegration:
     @pytest.mark.parametrize(("output_value", "path", "negate", "expected_passed"), [
         ({"error": "failed"}, "$.output.value.error", False, True),  # Attribute exists, no negate
         ({"success": True}, "$.output.value.error", False, False),  # Attribute missing, no negate
-        ({"error": "failed"}, "$.output.value.error", True, False),  # Attribute exists, with negate
+        ({"error": "failed"}, "$.output.value.error", True, False),  # Attribute exists, with negate  # noqa: E501
         ({"success": True}, "$.output.value.error", True, True),  # Attribute missing, with negate
-        ({"nested": {"field": "value"}}, "$.output.value.nested.field", False, True),  # Nested exists
+        ({"nested": {"field": "value"}}, "$.output.value.nested.field", False, True),  # Nested exists  # noqa: E501
         ({"nested": {}}, "$.output.value.nested.field", False, False),  # Nested missing
     ])
     def test_attribute_exists_parametrized(

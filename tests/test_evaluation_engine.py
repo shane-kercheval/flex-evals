@@ -30,7 +30,7 @@ class TestExampleCheck(BaseCheck):
 
     @field_validator('expected', 'actual', mode='before')
     @classmethod
-    def convert_jsonpath(cls, v):
+    def convert_jsonpath(cls, v):  # noqa: ANN001
         """Convert JSONPath-like strings to JSONPath objects."""
         if isinstance(v, str) and v.startswith('$.'):
             return JSONPath(expression=v)
@@ -43,7 +43,7 @@ class TestExampleCheck(BaseCheck):
             raise RuntimeError(f"JSONPath not resolved for 'expected' field: {self.expected}")
         if isinstance(self.actual, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'actual' field: {self.actual}")
-        
+
         # For test purposes, compare string representations
         return {"passed": str(self.actual) == str(self.expected)}
 
@@ -57,7 +57,7 @@ class TestExampleAsyncCheck(BaseAsyncCheck):
 
     @field_validator('expected', 'actual', mode='before')
     @classmethod
-    def convert_jsonpath(cls, v):
+    def convert_jsonpath(cls, v):  # noqa: ANN001
         """Convert JSONPath-like strings to JSONPath objects."""
         if isinstance(v, str) and v.startswith('$.'):
             return JSONPath(expression=v)
@@ -70,7 +70,7 @@ class TestExampleAsyncCheck(BaseAsyncCheck):
             raise RuntimeError(f"JSONPath not resolved for 'expected' field: {self.expected}")
         if isinstance(self.actual, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'actual' field: {self.actual}")
-        
+
         # For test purposes, compare string representations
         return {"passed": str(self.actual) == str(self.expected)}
 
