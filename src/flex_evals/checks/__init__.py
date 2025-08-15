@@ -5,7 +5,15 @@ This module provides both built-in standard checks and the infrastructure
 for registering custom checks.
 """
 
-from ..registry import register, get_check_class, list_registered_checks
+from ..registry import (
+    register,
+    get_check_class,
+    list_registered_checks,
+    get_check_info,
+    is_async_check,
+    get_latest_version,
+    list_versions,
+)
 from .base import BaseCheck, BaseAsyncCheck, EvaluationContext
 
 # Import all combined checks to trigger registration
@@ -16,7 +24,7 @@ from .equals import EqualsCheck
 from .exact_match import ExactMatchCheck
 from .is_empty import IsEmptyCheck
 from .llm_judge import LLMJudgeCheck
-from .regex import RegexCheck
+from .regex import RegexCheck, RegexFlags
 from .semantic_similarity import SemanticSimilarityCheck
 from .threshold import ThresholdCheck
 
@@ -33,9 +41,15 @@ __all__ = [
     "IsEmptyCheck",
     "LLMJudgeCheck",
     "RegexCheck",
+    "RegexFlags",
     "SemanticSimilarityCheck",
     "ThresholdCheck",
+    # Registry functions
     "get_check_class",
+    "get_check_info",
+    "get_latest_version",
+    "is_async_check",
     "list_registered_checks",
+    "list_versions",
     "register",
 ]
