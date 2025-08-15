@@ -42,3 +42,5 @@ jobs:
       - name: tests
         run: |
           make unittests
+        env:
+          SKIP_CI_TESTS: "true"

@@ -5,10 +5,11 @@ Tests the flattening/unflattening logic and performance improvements.
 """
 
 import asyncio
+import os
 import time
 from datetime import datetime, UTC
 from typing import Any
-
+import pytest
 from flex_evals import (
     TestCase,
     Output,
@@ -517,6 +518,10 @@ class TestConvertCheckInput:
         assert result.results[2].status == "completed"
 
 
+@pytest.mark.skipif(
+    os.getenv("SKIP_CI_TESTS") == "true",
+    reason="Performance tests skipped in CI environment",
+)
 class TestPerformanceOptimization:
     """Test performance improvements from the optimization."""
 
@@ -569,7 +574,7 @@ class TestPerformanceOptimization:
     def test_sync_checks_have_no_async_overhead(self):
         """Test that sync-only evaluations don't create event loops."""
         # Create many test cases with sync checks
-        num_test_cases = 100
+        num_test_cases = 500
 
         test_cases = [
             TestCase(id=str(i), input={"value": i})

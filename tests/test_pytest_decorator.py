@@ -1088,7 +1088,7 @@ class TestEvaluateDecoratorAsync:
         assert call_count == num_samples * num_test_cases
         # Should be much less than 20 seconds if concurrent
         # Allow generous buffer for CI environment variability
-        max_allowed_time = 3  # Still much less than sequential (20s), allows for CI overhead
+        max_allowed_time = 2  # Still much less than sequential (20s), allows for CI overhead
         assert duration < max_allowed_time, (
             f"Multiple test case async not concurrent "
             f"(took {duration:.3f}s, expected < {max_allowed_time:.1f}s)"
