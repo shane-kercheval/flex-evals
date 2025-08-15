@@ -1051,7 +1051,13 @@ class TestEvaluateDecoratorAsync:
         assert num_func_calls == num_samples, "Function should be called exactly num_samples times"
 
     def test_async_with_multiple_test_cases_timing(self):
-        """Test async concurrency with multiple test cases per sample."""
+        """
+        Test async concurrency with multiple test cases per sample.
+
+        Expected time if sequential: num_samples * num_test_cases * delay
+            (e.g. 10 * 20 * 0.1 = 20s)
+        Expected time if concurrent: roughly just the delay (0.1s) plus overhead
+        """
         num_samples = 10
         num_test_cases = 20
         call_count = 0
