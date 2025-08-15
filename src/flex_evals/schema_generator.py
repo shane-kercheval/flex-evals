@@ -15,7 +15,7 @@ from .registry import list_registered_checks, get_check_info, get_latest_version
 from .checks.base import get_jsonpath_behavior
 
 
-def _get_check_class_for_type_version(check_type: str, version: str):
+def _get_check_class_for_type_version(check_type: str, version: str) -> type:
     """
     Get the check class for a given check type and version.
 

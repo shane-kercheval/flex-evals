@@ -61,6 +61,10 @@ def get_jsonpath_behavior(model_class: type, field_name: str) -> JSONPathBehavio
         >>> get_jsonpath_behavior(MyCheck, 'path')
         JSONPathBehavior.REQUIRED
     """
+    # Handle None or invalid model_class gracefully
+    if not model_class or not hasattr(model_class, 'model_fields'):
+        return None
+
     field_info = model_class.model_fields.get(field_name)
     if not field_info:
         return None
