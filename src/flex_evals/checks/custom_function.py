@@ -1,7 +1,7 @@
 """
-Custom Function check implementation for FEP.
+Combined CustomFunctionCheck implementation for FEP.
 
-Allows users to provide custom validation functions for flexible argument checking.
+Combines schema validation with execution logic in a single class.
 """
 
 import asyncio
@@ -9,25 +9,28 @@ from datetime import datetime, UTC
 from typing import Any
 from collections.abc import Callable
 from collections.abc import Mapping
+from pydantic import Field
 
-from ..base import BaseAsyncCheck, EvaluationContext
-from ...registry import register
-from ...exceptions import ValidationError, CheckExecutionError
-from ...schemas import CheckResult
+from .base import BaseAsyncCheck, EvaluationContext, JSONPath
+from ..registry import register
+from ..exceptions import ValidationError, CheckExecutionError
+from ..schemas import CheckResult
+from ..constants import CheckType
 
 
-@register("custom_function", version="1.0.0")
-class CustomFunctionCheck_v1_0_0(BaseAsyncCheck):  # noqa: N801
-    """
-    Executes user-provided validation functions for flexible argument checking.
+@register(CheckType.CUSTOM_FUNCTION, version='1.0.0')
+class CustomFunctionCheck(BaseAsyncCheck):
+    """Executes user-provided python validation functions."""
 
-    Arguments Schema:
-    - validation_function: callable|string - User-provided function or string function definition
-    - function_args: dict (required) - Arguments to pass to validation_function (JSONPath OK)
-
-    Results Schema:
-    - Returns whatever the validation function returns (no processing or structure imposed)
-    """
+    # Pydantic fields with validation - function_args can contain JSONPath objects
+    validation_function: Any = Field(
+        ...,
+        description="User-provided function or string function definition",
+    )
+    function_args: dict[str, Any] = Field(
+        ...,
+        description="Arguments to pass to validation_function (JSONPath expressions supported)",
+    )
 
     async def execute(
         self,
@@ -41,16 +44,6 @@ class CustomFunctionCheck_v1_0_0(BaseAsyncCheck):  # noqa: N801
 
         This method overrides the base class execute() to handle JSONPath resolution
         within the function_args dictionary before delegating to the parent class.
-
-        Args:
-            check_type: The check type identifier ("custom_function")
-            arguments: Raw check arguments, may contain function_args with JSONPath expressions
-            context: Evaluation context with test case and output data
-            check_version: Optional version string for the check definition
-            check_metadata: Optional metadata from the check definition
-
-        Returns:
-            CheckResult: Complete result object with execution status and results
         """
         # Get version from registry using the class
         check_version = self._get_version()
@@ -121,24 +114,37 @@ class CustomFunctionCheck_v1_0_0(BaseAsyncCheck):  # noqa: N801
             check_metadata,
         )
 
-    async def __call__(
-        self,
-        validation_function: Callable | str,
-        function_args: dict,
-    ) -> Any:  # noqa: ANN401
-        """Execute custom function check with resolved arguments."""
+    async def __call__(self) -> Any:  # noqa: ANN401
+        """
+        Execute custom function check using resolved Pydantic fields.
+
+        All JSONPath objects should have been resolved by execute() before this is called.
+
+        Returns:
+            Whatever the validation function returns (no processing or structure imposed)
+
+        Raises:
+            RuntimeError: If function_args contains unresolved JSONPath objects
+        """
+        # Validate that function_args doesn't contain unresolved JSONPath objects
+        for key, value in self.function_args.items():
+            if isinstance(value, JSONPath):
+                raise RuntimeError(f"JSONPath not resolved for function_args['{key}']: {value}")
+
         # Convert string function to callable if needed
-        if isinstance(validation_function, str):
-            validation_function = self._string_to_function(validation_function)
-        elif not callable(validation_function):
+        if isinstance(self.validation_function, str):
+            validation_function = self._string_to_function(self.validation_function)
+        elif not callable(self.validation_function):
             raise ValidationError(
                 "validation_function must be callable or string function definition",
             )
+        else:
+            validation_function = self.validation_function
 
         # Prepare function arguments (these are already resolved values from JSONPath)
-        if not isinstance(function_args, Mapping):
+        if not isinstance(self.function_args, Mapping):
             raise ValidationError("function_args must be a dictionary")
-        fn_kwargs = dict(function_args)
+        fn_kwargs = dict(self.function_args)
 
         try:
             # Execute the validation function (handle both sync and async)
@@ -151,9 +157,7 @@ class CustomFunctionCheck_v1_0_0(BaseAsyncCheck):  # noqa: N801
             return result
 
         except Exception as e:
-            raise CheckExecutionError(
-                f"Error executing validation function: {e!s}",
-            ) from e
+            raise CheckExecutionError(f"Error executing validation function: {e!s}") from e
 
     def _string_to_function(self, func_string: str) -> Callable:
         """Convert string function definition to callable."""

@@ -6,62 +6,92 @@ that produces complex or variable outputs.
 """
 
 from .engine import evaluate
-from . import schemas
 from .constants import CheckType, Status, ErrorType, SimilarityMetric
 # Import checks to trigger registration of standard checks
 from . import checks  # noqa: F401
-from .schemas.check import (
-    Check, CheckError, CheckResult, SchemaCheck,
-    JSONPathBehavior, RequiredJSONPath, OptionalJSONPath, JSONPathValidatedModel,
-    get_jsonpath_behavior, validate_jsonpath, is_jsonpath_expression,
-)
-from .schemas.checks import (
-    AttributeExistsCheck, ContainsCheck, EqualsCheck, ExactMatchCheck, IsEmptyCheck,
-    RegexCheck, RegexFlags, ThresholdCheck, SemanticSimilarityCheck, LLMJudgeCheck,
-    CustomFunctionCheck, ThresholdConfig,
-)
+from .schemas.check import Check, CheckError, CheckResult
 from .schemas.test_case import TestCase
 from .schemas.output import Output
-from .schemas.results import TestCaseResult, EvaluationRunResult
+from .schemas.results import (
+    TestCaseResult,
+    EvaluationRunResult,
+    TestCaseSummary,
+    EvaluationSummary,
+)
 from .schemas.experiments import ExperimentMetadata
 from .schema_generator import generate_checks_schema, generate_check_schema
 
+# Import individual check classes for direct end-user access
+from .checks import (
+    AttributeExistsCheck,
+    BaseAsyncCheck,
+    BaseCheck,
+    ContainsCheck,
+    CustomFunctionCheck,
+    EqualsCheck,
+    EvaluationContext,
+    ExactMatchCheck,
+    IsEmptyCheck,
+    LLMJudgeCheck,
+    RegexCheck,
+    RegexFlags,
+    SemanticSimilarityCheck,
+    ThresholdCheck,
+    get_check_class,
+    list_registered_checks,
+    register,
+)
+
+# Import useful classes for advanced users
+from .checks.base import JSONPath
+from .exceptions import CheckExecutionError, FlexEvalsError, JSONPathError, ValidationError
+
 __version__ = "0.1.0"
 __all__ = [
+    # Check classes
     "AttributeExistsCheck",
+    "BaseAsyncCheck",
+    "BaseCheck",
+    # Schema classes
     "Check",
     "CheckError",
+    "CheckExecutionError",
     "CheckResult",
+    # Constants and enums
     "CheckType",
     "ContainsCheck",
     "CustomFunctionCheck",
     "EqualsCheck",
     "ErrorType",
+    # Check system utilities
+    "EvaluationContext",
     "EvaluationRunResult",
+    "EvaluationSummary",
     "ExactMatchCheck",
     "ExperimentMetadata",
+    "FlexEvalsError",
     "IsEmptyCheck",
-    "JSONPathBehavior",
-    "JSONPathValidatedModel",
+    "JSONPath",
+    "JSONPathError",
     "LLMJudgeCheck",
-    "OptionalJSONPath",
     "Output",
     "RegexCheck",
     "RegexFlags",
-    "RequiredJSONPath",
-    "SchemaCheck",
     "SemanticSimilarityCheck",
     "SimilarityMetric",
     "Status",
     "TestCase",
     "TestCaseResult",
+    "TestCaseSummary",
     "ThresholdCheck",
-    "ThresholdConfig",
+    "ValidationError",
+    # Core evaluation functionality
     "evaluate",
+    # Schema generators
     "generate_check_schema",
     "generate_checks_schema",
-    "get_jsonpath_behavior",
-    "is_jsonpath_expression",
-    "schemas",
-    "validate_jsonpath",
+    # Registry functions
+    "get_check_class",
+    "list_registered_checks",
+    "register",
 ]

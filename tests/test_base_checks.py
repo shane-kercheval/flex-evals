@@ -3,30 +3,71 @@
 from datetime import datetime, UTC
 from typing import Any
 
-from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
+import pytest
+
+from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext, JSONPath
 from flex_evals.registry import register
 from flex_evals.schemas import TestCase, Output, CheckResult
+from pydantic import Field, field_validator
 
 
 class TestExampleCheck(BaseCheck):
     """Test implementation of BaseCheck for testing."""
 
-    def __call__(self, value: str, literal: str = "expected") -> dict[str, Any]:
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    value: str | JSONPath = Field(..., description='Test value to compare')
+    literal: str | JSONPath = Field('expected', description='Expected value to match against')
+
+    @field_validator('value', 'literal', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):  # noqa: ANN001
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
+    def __call__(self) -> dict[str, Any]:
+        """Execute check using resolved Pydantic fields."""
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.value, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'value' field: {self.value}")
+        if isinstance(self.literal, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'literal' field: {self.literal}")
+
         # Simple test check that validates required arguments
         return {
-            "passed": value == literal,
-            "actual_value": value,
+            "passed": self.value == self.literal,
+            "actual_value": self.value,
         }
 
 
 class TestExampleAsyncCheck(BaseAsyncCheck):
     """Test implementation of BaseAsyncCheck for testing."""
 
-    async def __call__(self, value: str, literal: str = "expected") -> dict[str, Any]:
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    value: str | JSONPath = Field(..., description='Test value to compare')
+    literal: str | JSONPath = Field('expected', description='Expected value to match against')
+
+    @field_validator('value', 'literal', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):  # noqa: ANN001
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
+    async def __call__(self) -> dict[str, Any]:
+        """Execute async check using resolved Pydantic fields."""
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.value, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'value' field: {self.value}")
+        if isinstance(self.literal, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'literal' field: {self.literal}")
+
         # Simple async test check
         return {
-            "passed": value == literal,
-            "actual_value": value,
+            "passed": self.value == self.literal,
+            "actual_value": self.value,
         }
 
 
@@ -78,15 +119,15 @@ class TestBaseCheck:
         )
 
         self.context = EvaluationContext(self.test_case, self.output)
-        self.check = TestExampleCheck()
 
     def test_successful_check_execution(self):
         """Test successful check execution."""
         # First register the test check so it can be looked up
         register("test_check", version="1.0.0")(TestExampleCheck)
 
-        arguments = {"value": "expected"}
-        result = self.check.execute("test_check", arguments, self.context)
+        # Create check with field values
+        check = TestExampleCheck(value="expected")
+        result = check.execute(self.context)
 
         assert isinstance(result, CheckResult)
         assert result.check_type == "test_check"
@@ -101,20 +142,21 @@ class TestBaseCheck:
         # Register the test check
         register("test_check", version="1.0.0")(TestExampleCheck)
 
-        arguments = {
-            "value": "$.output.value.answer",  # Should resolve to "Paris"
-            "literal": "expected",
-        }
-
-        result = self.check.execute("test_check", arguments, self.context)
+        # Create check with JSONPath and literal values
+        check = TestExampleCheck(
+            value=JSONPath(expression="$.output.value.answer"),  # Should resolve to "Paris"
+            literal="Paris",
+        )
+        result = check.execute(self.context)
 
         assert result.status == 'completed'
         assert result.results["actual_value"] == "Paris"
+        assert result.results["passed"] is True
 
         # Test resolved arguments format
         assert result.resolved_arguments["value"]["jsonpath"] == "$.output.value.answer"
         assert result.resolved_arguments["value"]["value"] == "Paris"
-        assert result.resolved_arguments["literal"]["value"] == "expected"
+        assert result.resolved_arguments["literal"]["value"] == "Paris"
         assert "jsonpath" not in result.resolved_arguments["literal"]
 
     def test_check_validation_error(self):
@@ -122,23 +164,23 @@ class TestBaseCheck:
         # Register the test check
         register("test_check", version="1.0.0")(TestExampleCheck)
 
-        arguments = {}  # Missing required "value" argument
-        result = self.check.execute("test_check", arguments, self.context)
-
-        assert result.status == 'error'
-        assert result.error is not None
-        assert result.error.type == 'validation_error'
-        assert "Invalid arguments for check" in result.error.message
-        assert result.error.recoverable is False
-        assert result.results == {}
+        # Missing required "value" field should raise validation error during instantiation
+        try:
+            check = TestExampleCheck()  # Missing required value field
+            check.execute(self.context)
+            pytest.fail("Should have raised validation error")
+        except Exception as e:
+            # Either during instantiation or execution, we should get validation error
+            assert "value" in str(e).lower() or "required" in str(e).lower()  # noqa: PT017
 
     def test_check_jsonpath_error(self):
         """Test check execution with JSONPath resolution error."""
         # Register the test check
         register("test_check", version="1.0.0")(TestExampleCheck)
 
-        arguments = {"value": "$.nonexistent.path"}
-        result = self.check.execute("test_check", arguments, self.context)
+        # Create check with invalid JSONPath
+        check = TestExampleCheck(value=JSONPath(expression="$.nonexistent.path"))
+        result = check.execute(self.context)
 
         assert result.status == 'error'
         assert result.error is not None
@@ -149,15 +191,17 @@ class TestBaseCheck:
     def test_check_execution_error(self):
         """Test check execution with unexpected error."""
         class FailingCheck(BaseCheck):
-            def __call__(self, **kwargs):  # noqa
+            # Add required Pydantic field
+            value: str = Field(default="test")
+
+            def __call__(self) -> dict[str, Any]:
                 raise RuntimeError("Unexpected error")
 
         # Register the failing check
         register("failing_check", version="1.0.0")(FailingCheck)
 
         check = FailingCheck()
-        arguments = {"value": "test"}
-        result = check.execute("failing_check", arguments, self.context)
+        result = check.execute(self.context)
 
         assert result.status == 'error'
         assert result.error is not None
@@ -169,8 +213,8 @@ class TestBaseCheck:
         # Register the test check with version 2.5.0
         register("test_check", version="2.5.0")(TestExampleCheck)
 
-        arguments = {"value": "expected"}
-        result = self.check.execute("test_check", arguments, self.context)
+        check = TestExampleCheck(value="expected")
+        result = check.execute(self.context)
 
         assert result.check_version == "2.5.0"
 
@@ -179,8 +223,8 @@ class TestBaseCheck:
         # Register the test check
         register("test_check", version="1.0.0")(TestExampleCheck)
 
-        arguments = {"value": "expected"}
-        result = self.check.execute("test_check", arguments, self.context)
+        check = TestExampleCheck(value="expected")
+        result = check.execute(self.context)
 
         assert isinstance(result.evaluated_at, datetime)
         assert result.evaluated_at.tzinfo == UTC
@@ -202,15 +246,14 @@ class TestBaseAsyncCheck:
         )
 
         self.context = EvaluationContext(self.test_case, self.output)
-        self.check = TestExampleAsyncCheck()
 
     async def test_successful_async_check_execution(self):
         """Test successful async check execution."""
         # Register the async test check
         register("test_async_check", version="1.0.0")(TestExampleAsyncCheck)
 
-        arguments = {"value": "expected"}
-        result = await self.check.execute("test_async_check", arguments, self.context)
+        check = TestExampleAsyncCheck(value="expected")
+        result = await check.execute(self.context)
 
         assert isinstance(result, CheckResult)
         assert result.check_type == "test_async_check"
@@ -224,46 +267,50 @@ class TestBaseAsyncCheck:
         # Register the async test check
         register("test_async_check", version="1.0.0")(TestExampleAsyncCheck)
 
-        arguments = {
-            "value": "$.output.value.answer",  # Should resolve to "Paris"
-            "literal": "expected",
-        }
-
-        result = await self.check.execute("test_async_check", arguments, self.context)
+        # Create check with JSONPath and literal values
+        check = TestExampleAsyncCheck(
+            value=JSONPath(expression="$.output.value.answer"),  # Should resolve to "Paris"
+            literal="Paris",
+        )
+        result = await check.execute(self.context)
 
         assert result.status == 'completed'
         assert result.results["actual_value"] == "Paris"
+        assert result.results["passed"] is True
 
         # Test resolved arguments format
         assert result.resolved_arguments["value"]["jsonpath"] == "$.output.value.answer"
         assert result.resolved_arguments["value"]["value"] == "Paris"
-        assert result.resolved_arguments["literal"]["value"] == "expected"
+        assert result.resolved_arguments["literal"]["value"] == "Paris"
 
     async def test_async_check_validation_error(self):
         """Test async check execution with validation error."""
         # Register the async test check
         register("test_async_check", version="1.0.0")(TestExampleAsyncCheck)
 
-        arguments = {}  # Missing required "value" argument
-        result = await self.check.execute("test_async_check", arguments, self.context)
-
-        assert result.status == 'error'
-        assert result.error is not None
-        assert result.error.type == 'validation_error'
-        assert "Invalid arguments for check" in result.error.message
+        # Missing required "value" field should raise validation error during instantiation
+        try:
+            check = TestExampleAsyncCheck()  # Missing required value field
+            await check.execute(self.context)
+            pytest.fail("Should have raised validation error")
+        except Exception as e:
+            # Either during instantiation or execution, we should get validation error
+            assert "value" in str(e).lower() or "required" in str(e).lower()  # noqa: PT017
 
     async def test_async_check_execution_error(self):
         """Test async check execution with unexpected error."""
         class FailingAsyncCheck(BaseAsyncCheck):
-            async def __call__(self, **kwargs):  # noqa
+            # Add required Pydantic field
+            value: str = Field(default="test")
+
+            async def __call__(self) -> dict[str, Any]:
                 raise RuntimeError("Async error")
 
         # Register the failing async check
         register("failing_async_check", version="1.0.0")(FailingAsyncCheck)
 
         check = FailingAsyncCheck()
-        arguments = {"value": "test"}
-        result = await check.execute("failing_async_check", arguments, self.context)
+        result = await check.execute(self.context)
 
         assert result.status == 'error'
         assert result.error is not None

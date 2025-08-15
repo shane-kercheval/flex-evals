@@ -17,8 +17,8 @@ test_cases = [
         input="What is the capital of France?",
         checks=[
             ContainsCheck(
-                text='$.output.value',  # JSONPath expression
-                phrases=['Paris', 'France'],
+                text='$.output.value',    # JSONPath - extract from system output
+                phrases=['Paris', 'France'], # Literal - exact phrases to find
             ),
         ],
     ),
@@ -32,7 +32,7 @@ outputs = [
 # Run evaluation
 results = evaluate(test_cases, outputs)
 print(f"Evaluation completed: {results.status}")
-print(f"Passed: {results.results[0].check_results[0].results}")
+print(f"Passed: {results.results[0].check_results[0].results['passed']}")
 ```
 
 ## Pytest Integration
@@ -524,97 +524,135 @@ class CustomAsyncCheck(BaseAsyncCheck):
 
 ## Check Versioning
 
-flex-evals supports versioned checks to maintain backward compatibility while allowing evolution of check schemas and implementations.
+flex-evals supports versioned checks to maintain backward compatibility while allowing evolution of check implementations and field definitions.
 
-### **Version Structure**
+### **Check Architecture**
 
-Each check has two components that must be versioned together:
-- **Schema Class**:
-    - Defines the user-facing API
-        - e.g. `ContainsCheck` (*latest schema does not specify version in class name*), `ContainsCheck_v1_0_0`
-    - Inherits from `SchemaCheck`
-- **Implementation Class**:
-    - Executes the check logic
-        - e.g. `ContainsCheck_v2`, `ContainsCheck_v1`
-    - Inherits from `BaseCheck` or `BaseAsyncCheck`
+Each check type is implemented as a single class that combines validation and execution:
+- **Check Class**: e.g., `ContainsCheck`, `ExactMatchCheck`
+  - Inherits from `BaseCheck` or `BaseAsyncCheck`
+  - Defines Pydantic fields with JSONPath support (`str | JSONPath`)
+  - Contains both validation logic and execution logic in one class
+  - Registered with the system using `@register(check_type, version="1.0.0")`
 
 ### **Using Versioned Checks**
 
 ```python
-# Option 1: Use latest version (recommended for new code)
+# Option 1: Use check class directly (recommended)
 from flex_evals import ContainsCheck
-check = ContainsCheck(text="$.output", phrases=["hello"])
+check = ContainsCheck(
+    text="$.output.value",     # JSONPath expression
+    phrases=["hello", "world"] # Literal value
+)
 
-# Option 2: Use specific version
-from flex_evals import ContainsCheck_v1_0_0
-check = ContainsCheck_v1_0_0(phrases=["hello"])  # v1.0.0 schema
-
-# Option 3: Use Check dataclass with version (YAML-compatible)
+# Option 2: Use Check dataclass with version (YAML-compatible)
 from flex_evals import Check
 check = Check(
     type="contains",
-    arguments={"text": "$.output", "phrases": ["hello"]},
+    arguments={
+        "text": "$.output.value", 
+        "phrases": ["hello", "world"]
+    },
     version="1.0.0"  # Use specific version
 )
 
-# Option 4: Use Check dataclass without version (uses latest)
+# Option 3: Use Check dataclass without version (uses latest)
 check = Check(
     type="contains", 
-    arguments={"text": "$.output", "phrases": ["hello"]},
-    version=None  # Uses latest version automatically
+    arguments={
+        "text": "$.output.value", 
+        "phrases": ["hello", "world"]
+    }
+    # version defaults to latest
+)
+```
+
+### **JSONPath Integration**
+
+All check fields support both literal values and JSONPath expressions:
+
+```python
+# Mixed literal and JSONPath values
+check = ExactMatchCheck(
+    actual="$.output.value",           # JSONPath - extract from output
+    expected="$.test_case.expected",   # JSONPath - extract from test case
+    case_sensitive=False               # Literal - use directly
+)
+
+# All literal values
+check = ExactMatchCheck(
+    actual="Paris",      # Literal comparison
+    expected="Paris",    # Literal expected
+    case_sensitive=True  # Literal boolean
+)
+
+# All JSONPath expressions
+check = ExactMatchCheck(
+    actual="$.output.value",
+    expected="$.test_case.expected", 
+    case_sensitive="$.test_case.metadata.case_sensitive"
 )
 ```
 
 ### **Creating New Check Versions**
 
-When creating a new version, create both schema and implementation:
+To create a new version of an existing check:
 
-**1. Create Schema Class**
-
-- Copy the current schema and add a version suffix to the class name that corresponds to the old/current version.
-- The latest version class has no suffix. Update version string and make changes as needed.
+**1. Register Updated Version**
 
 ```python
-# src/flex_evals/schemas/checks/contains.py
+# src/flex_evals/checks/contains.py
 
-# latest version
-class ContainsCheck(SchemaCheck):
-    VERSION = "2.0.0"
+@register(CheckType.CONTAINS, version="2.0.0")  # Updated version
+class ContainsCheck(BaseCheck):
+    """ContainsCheck with enhanced word boundary support."""
+    
+    # Existing fields
+    text: str | JSONPath = Field(..., description='Text to search')
+    phrases: str | list[str] | JSONPath = Field(..., description='Phrases to find')
+    case_sensitive: bool | JSONPath = Field(True, description='Case sensitive search')
+    # Additional functionality
+    word_boundaries: bool | JSONPath = Field(False, description='Match whole words only')
+    
+    @field_validator('text', 'phrases', 'case_sensitive', 'word_boundaries', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
 
-# old version
-class ContainsCheck_v1_0_0(SchemaCheck):
-    VERSION = "1.0.0"
+    def __call__(self) -> dict[str, Any]:
+        # Implementation with enhanced logic
+        pass
 ```
 
-**2. Create Implementation Class**
+**2. Version Accessibility**
+
+The registry system maintains version history automatically. All versions remain accessible:
 
 ```python
-# src/flex_evals/checks/standard/contains.py
-@register(CheckType.CONTAINS, version="2.0.0")
-class ContainsCheck_v2(BaseCheck):
-    def __call__(self, ...):
-```
+# Specific version request
+check_v1 = Check(
+    type="contains",
+    arguments={"text": "$.output", "phrases": ["hello"]},
+    version="1.0.0"  # Explicitly request version 1.0.0
+)
 
-**3. Update Exports**
-
-
-```python
-# __init__.py
-from .contains import ContainsCheck, ContainsCheck_v1_0_0
-...
-
-__all__ = [
-    ...
-    "ContainsCheck",
-    "ContainsCheck_v1_0_0",
-    ...
-]
-
+# Latest version (default behavior)
+check_latest = Check(
+    type="contains", 
+    arguments={
+        "text": "$.output", 
+        "phrases": ["hello"],
+        "word_boundaries": True  # Features available in latest version
+    }
+    # Automatically uses latest version
+)
 ```
 
 ### **Semantic Versioning Rules**
 
-- **Major** (1.0.0 → 2.0.0): Breaking changes (remove/rename fields, change behavior)
+- **Major** (1.0.0 → 2.0.0): Breaking changes (remove fields, change behavior)
 - **Minor** (1.0.0 → 1.1.0): Add optional fields, new functionality  
 - **Patch** (1.0.0 → 1.0.1): Bug fixes, implementation improvements
 
@@ -630,10 +668,23 @@ latest = get_latest_version("contains")  # "2.0.0"
 versions = list_versions("contains")  # ["1.0.0", "2.0.0"]
 ```
 
-**⚠️ Requirements:**
-- Every schema version MUST have a matching implementation version
-- Version mismatches will cause runtime errors
-- Latest version classes (e.g., `ContainsCheck`) have no version suffix in the name
+### **Field Validation and JSONPath**
+
+The check architecture provides automatic JSONPath conversion:
+
+```python
+# When you pass a string starting with '$.' it becomes a JSONPath
+check = ContainsCheck(
+    text="$.output.value",  # Automatically converted to JSONPath object
+    phrases=["hello"]       # Remains as literal list
+)
+
+# Escape literal values that start with '$.' using '\\'
+check = ContainsCheck(
+    text="\\$.99 price",  # Becomes literal "$.99 price"
+    phrases=["dollar"]
+)
+```
 
 ## Architecture
 
@@ -641,12 +692,12 @@ versions = list_versions("contains")  # ["1.0.0", "2.0.0"]
 
 ```
 src/flex_evals/
-├── schemas/          # Pydantic models for FEP protocol
+├── schemas/          # Pydantic models for FEP protocol  
 ├── engine.py         # Main evaluate() function
 ├── checks/
-│   ├── base.py       # BaseCheck and BaseAsyncCheck
-│   ├── standard/     # Built-in synchronous checks
-│   └── extended/     # Async checks (LLM, API calls)
+│   ├── base.py       # BaseCheck, BaseAsyncCheck, JSONPath classes
+│   ├── *.py          # Check implementations (sync/async)
+│   └── __init__.py   # Check exports
 ├── jsonpath_resolver.py  # JSONPath expression handling
 ├── registry.py       # Check registration and discovery
 └── exceptions.py     # Custom exception hierarchy
@@ -720,25 +771,66 @@ uv run <command>      # Run command in environment
 1. **Create check implementation:**
 
 ```python
-from flex_evals.checks.base import BaseCheck
+from flex_evals.checks.base import BaseCheck, JSONPath
 from flex_evals.registry import register
+from pydantic import Field, field_validator
+from typing import Any
 
 @register('my_check', version='1.0.0')
 class MyCheck(BaseCheck):
-    def __call__(self, text: str, pattern: str, threshold: float = 0.5) -> dict:
-        # Your check logic here
-        score = your_analysis(text, pattern)
-        return {'score': score, 'passed': score >= threshold}
+    """Custom check with JSONPath support."""
+    
+    # Define fields with JSONPath support
+    text: str | JSONPath = Field(..., description='Text to analyze')
+    pattern: str | JSONPath = Field(..., description='Pattern to match')
+    threshold: float | JSONPath = Field(0.5, description='Minimum score threshold')
+    
+    @field_validator('text', 'pattern', 'threshold', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+    
+    def __call__(self) -> dict[str, Any]:
+        """Execute the check using resolved field values."""
+        # All JSONPath expressions are resolved before this is called
+        score = your_analysis(self.text, self.pattern)
+        return {
+            'score': score, 
+            'passed': score >= self.threshold,
+            'threshold_used': self.threshold
+        }
 ```
 
 2. **Write tests:**
 
 ```python
-def test_my_check():
-    check = MyCheck()
-    result = check(text='test input', pattern='test')
+import pytest
+from flex_evals import evaluate, TestCase, Output
+
+def test_my_check_direct():
+    """Test check directly with literal values."""
+    check = MyCheck(text='test input', pattern='test', threshold=0.7)
+    result = check()
     assert 'score' in result
     assert 'passed' in result
+
+def test_my_check_with_jsonpath():
+    """Test check with JSONPath expressions via engine."""
+    test_cases = [TestCase(id='test1', input='test input')]
+    outputs = [Output(value='test response')]
+    checks = [
+        MyCheck(
+            text='$.output.value',      # JSONPath expression
+            pattern='$.test_case.input', # JSONPath expression  
+            threshold=0.8               # Literal value
+        )
+    ]
+    
+    results = evaluate(test_cases, outputs, checks)
+    assert results.results[0].check_results[0].status == 'completed'
 ```
 
 3. **Register and use:**
@@ -747,11 +839,23 @@ def test_my_check():
 # Import registers the check automatically
 from my_package.my_check import MyCheck
 
-check = Check(type='my_check', arguments={
-    'text': '$.output.value',
-    'pattern': 'success',
-    'threshold': 0.8
-})
+# Option 1: Use check class directly
+check = MyCheck(
+    text='$.output.value',
+    pattern='success',
+    threshold=0.8
+)
+
+# Option 2: Use via Check dataclass (YAML-compatible)
+from flex_evals import Check
+check = Check(
+    type='my_check', 
+    arguments={
+        'text': '$.output.value',
+        'pattern': 'success', 
+        'threshold': 0.8
+    }
+)
 ```
 
 ## Contributing

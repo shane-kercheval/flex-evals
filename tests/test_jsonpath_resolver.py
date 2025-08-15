@@ -2,8 +2,7 @@
 
 import pytest
 from flex_evals.jsonpath_resolver import JSONPathResolver
-from flex_evals.schemas import TestCase, Output
-from flex_evals.exceptions import JSONPathError
+from flex_evals import TestCase, Output, JSONPathError
 
 
 class TestJSONPathResolver:

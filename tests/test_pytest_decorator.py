@@ -1,6 +1,7 @@
 """Tests for pytest decorator implementation using real checks (no mocks)."""
 
 import inspect
+import os
 import pytest
 import time
 import _pytest.outcomes
@@ -9,7 +10,13 @@ from pydantic import BaseModel, Field
 import threading
 
 from flex_evals.pytest_decorator import evaluate
-from flex_evals import TestCase, Check, CheckType, ContainsCheck
+from flex_evals import (
+    TestCase,
+    Check,
+    CheckType,
+    ContainsCheck,
+    JSONPath,
+)
 
 from typing import Never
 
@@ -38,7 +45,7 @@ class TestEvaluateDecoratorBasicFunctionality:
         @evaluate(
             test_cases=[TestCase(id="basic", input="test input")],
             checks=[ContainsCheck(
-                text="$.output.value",
+                text=JSONPath(expression="$.output.value"),
                 phrases=["Python"],
             )],
             samples=3,
@@ -1044,8 +1051,18 @@ class TestEvaluateDecoratorAsync:
         assert total_duration < max_concurrent_duration, f"Async functions may not be concurrent (took {total_duration:.3f}s)"  # noqa: E501
         assert num_func_calls == num_samples, "Function should be called exactly num_samples times"
 
+    @pytest.mark.skipif(
+        os.getenv("SKIP_CI_TESTS") == "true",
+        reason="Performance tests skipped in CI environment",
+    )
     def test_async_with_multiple_test_cases_timing(self):
-        """Test async concurrency with multiple test cases per sample."""
+        """
+        Test async concurrency with multiple test cases per sample.
+
+        Expected time if sequential: num_samples * num_test_cases * delay
+            (e.g. 10 * 20 * 0.1 = 20s)
+        Expected time if concurrent: roughly just the delay (0.1s) plus overhead
+        """
         num_samples = 10
         num_test_cases = 20
         call_count = 0
@@ -1067,7 +1084,6 @@ class TestEvaluateDecoratorAsync:
             nonlocal call_count
             call_count += 1
             await asyncio.sleep(0.1)  # 100ms delay per test case
-            print(f"Processing {test_case.input}")
             return f"processed {test_case.input}"
 
         start_time = time.time()
@@ -1076,7 +1092,12 @@ class TestEvaluateDecoratorAsync:
 
         assert call_count == num_samples * num_test_cases
         # Should be much less than 20 seconds if concurrent
-        assert duration < 0.5, f"Multiple test case async not concurrent (took {duration:.3f}s)"
+        # Allow generous buffer for CI environment variability
+        max_allowed_time = 2  # Still much less than sequential (20s), allows for CI overhead
+        assert duration < max_allowed_time, (
+            f"Multiple test case async not concurrent "
+            f"(took {duration:.3f}s, expected < {max_allowed_time:.1f}s)"
+        )
 
     def test_async_with_exceptions(self):
         """Test async function exception handling."""

@@ -11,80 +11,16 @@ import inspect
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
 
-from .registry import list_registered_checks, get_check_info, get_latest_version
-from .schemas.check import SchemaCheck, get_jsonpath_behavior
+from .registry import list_registered_checks, get_check_info, get_latest_version, get_check_class
+from .checks.base import get_jsonpath_behavior
 
 
-def _get_schema_class_for_check_type(check_type: str, version: str) -> type[SchemaCheck]:
-    """
-    Find the schema class for a given check type and version.
-
-    This searches through all SchemaCheck subclasses to find one that matches
-    the check_type and version exactly.
-
-    Args:
-        check_type: String identifier for the check type
-        version: Version string to match against schema VERSION attribute
-
-    Returns:
-        Schema class that matches the check_type and version
-
-    Raises:
-        ValueError: If no schema class found for the given check_type and version
-    """
-    # Get all SchemaCheck subclasses
-    def get_all_subclasses(cls) -> set[type]:  # noqa: ANN001
-        """Recursively get all subclasses of a class."""
-        subclasses = set(cls.__subclasses__())
-        for subclass in list(subclasses):
-            subclasses.update(get_all_subclasses(subclass))
-        return subclasses
-
-    schema_classes = get_all_subclasses(SchemaCheck)
-    matching_classes = []
-
-    # Find all schema classes matching this check_type
-    for schema_class in schema_classes:
-        try:
-            if hasattr(schema_class, 'CHECK_TYPE') and str(schema_class.CHECK_TYPE) == check_type:
-                matching_classes.append(schema_class)
-        except Exception:
-            # Skip classes that have issues with CHECK_TYPE
-            continue
-
-    if not matching_classes:
-        raise ValueError(f"No schema class found for check type '{check_type}'")
-
-    # Look for exact version match
-    for schema_class in matching_classes:
-        try:
-            if hasattr(schema_class, 'VERSION') and str(schema_class.VERSION) == version:
-                return schema_class
-        except Exception:
-            # Skip classes that have issues with VERSION
-            continue
-
-    # No exact version match found
-    available_versions = []
-    for schema_class in matching_classes:
-        try:
-            if hasattr(schema_class, 'VERSION'):
-                available_versions.append(str(schema_class.VERSION))
-        except Exception:
-            pass
-
-    raise ValueError(
-        f"No schema class found for check type '{check_type}' version '{version}'. "
-        f"Available versions: {available_versions}",
-    )
-
-
-def _extract_class_description(schema_class: type[SchemaCheck]) -> str:
-    """Extract class description from docstring of the specific class only."""
+def _extract_class_description(check_class: type) -> str:
+    """Extract class description from docstring of the check class."""
     # Use the class's own __doc__ to avoid fallback to parent class
-    if schema_class.__doc__:
+    if check_class.__doc__:
         # Use inspect.cleandoc to get proper dedenting without parent fallback
-        cleaned = inspect.cleandoc(schema_class.__doc__)
+        cleaned = inspect.cleandoc(check_class.__doc__)
         # Return empty string if the cleaned docstring is only whitespace
         return cleaned if cleaned.strip() else ""
     return ""
@@ -235,9 +171,8 @@ def _get_version_schemas_for_check_type(check_type: str) -> dict[str, dict[str, 
     """
     Get schemas for all versions of a check type.
 
-    For each registered version, attempts to find a matching schema class.
-    If a version-specific schema class exists, it uses that; otherwise falls back
-    to the default schema class for the check type.
+    For each registered version, gets the combined check class and extracts
+    field schema information from its Pydantic model fields.
     """
     version_schemas = {}
 
@@ -246,37 +181,37 @@ def _get_version_schemas_for_check_type(check_type: str) -> dict[str, dict[str, 
     if check_type not in registered_checks:
         return {}
 
-    # For each version, try to find the appropriate schema class
+    # For each version, get the combined check class
     for version in registered_checks[check_type]:
         registry_info = get_check_info(check_type, version)
 
-        # Try to get version-specific schema class
+        # Try to get the combined check class
         try:
-            schema_class = _get_schema_class_for_check_type(check_type, version)
+            check_class = get_check_class(check_type, version)
         except ValueError:
-            # If no schema class found, create minimal schema from registry info only
+            # If no check class found, create minimal schema from registry info only
             version_schemas[version] = {
                 "version": version,
                 "is_async": registry_info["is_async"],
                 "fields": {},
-                "note": "No schema class found - registry-only information",
+                "note": "No check class found - registry-only information",
             }
             continue
 
-        # Extract fields from schema class
+        # Extract fields from combined check class
         fields_schema = {}
-        for field_name, field_info in schema_class.model_fields.items():
+        for field_name, field_info in check_class.model_fields.items():
             # Skip metadata field as it's handled specially
             if field_name == "metadata":
                 continue
-            fields_schema[field_name] = _extract_field_schema(field_name, field_info, schema_class)
+            fields_schema[field_name] = _extract_field_schema(field_name, field_info, check_class)
 
         version_schemas[version] = {
             "version": version,
             "is_async": registry_info["is_async"],
-            "description": _extract_class_description(schema_class),
+            "description": _extract_class_description(check_class),
             "fields": fields_schema,
-            "schema_class": schema_class.__name__,
+            "check_class": check_class.__name__,
         }
 
     return version_schemas

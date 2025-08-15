@@ -15,24 +15,22 @@ from .schemas import (
     EvaluationRunResult, EvaluationSummary, ExperimentMetadata,
 )
 from .schemas.results import ExecutionContext
-from .schemas.check import CheckError, SchemaCheck
-from .checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
+from .schemas.check import CheckError
+from .checks.base import EvaluationContext, BaseCheck, BaseAsyncCheck, CheckTypes
 from .registry import (
     get_check_class,
-    is_async_check,
     get_registry_state,
     restore_registry_state,
     get_latest_version,
     list_registered_checks,
 )
 from .exceptions import ValidationError
-from .schema_generator import _get_schema_class_for_check_type
 
 
 def evaluate(
         test_cases: list[TestCase],
         outputs: list[Output],
-        checks: list[Check | SchemaCheck] | list[list[Check | SchemaCheck]] | None = None,
+        checks: list[CheckTypes] | list[list[CheckTypes]] | None = None,
         experiment_metadata: ExperimentMetadata | None = None,
         max_async_concurrent: int | None = None,
         max_parallel_workers: int = 1,
@@ -52,10 +50,10 @@ def evaluate(
         test_cases: List of test cases to evaluate
         outputs: List of system outputs corresponding to test cases
         checks: Either:
-            - List[Check | SchemaCheck]: Same checks applied to all test cases (shared pattern)
-            - List[List[Check | SchemaCheck]]: checks[i] applies to test_cases[i] (per-test-case pattern)
+            - List[CheckTypes]: Same checks applied to all test cases (shared pattern)
+            - List[List[CheckTypes]]: checks[i] applies to test_cases[i] (per-test-case pattern)
             - None: Extract checks from TestCase.checks field (convenience pattern)
-            Check | SchemaCheck can be either Check or SchemaCheck objects
+            Can be Check objects or BaseCheck/BaseAsyncCheck instances
         experiment_metadata: Optional experiment context information
         max_async_concurrent: Maximum number of concurrent async "check" executions (default: no limit)
         max_parallel_workers: Number of parallel worker processes (default: 1, no parallelization)
@@ -106,18 +104,19 @@ def evaluate(
     )
 
 
-def _convert_check_input(check_input: Check | SchemaCheck) -> Check:
+def _convert_check_input(
+        check_input: CheckTypes,
+    ) -> BaseCheck | BaseAsyncCheck:
     """
-    Convert a Check | SchemaCheck to a Check object with full Pydantic validation.
+    Convert a Check to a validated BaseCheck/BaseAsyncCheck instance.
 
-    For SchemaCheck objects: Convert to Check via .to_check() (validation already done)
-    For Check objects: Validate arguments against corresponding SchemaCheck using full Pydantic
-    validation
+    For BaseCheck/BaseAsyncCheck objects: Return as-is (validation already done)
+    For Check objects: Instantiate corresponding BaseCheck/BaseAsyncCheck class with arguments
     """
-    if isinstance(check_input, SchemaCheck):
-        return check_input.to_check()
+    if isinstance(check_input, BaseCheck | BaseAsyncCheck):
+        return check_input
 
-    # For Check objects, perform full Pydantic validation against corresponding SchemaCheck
+    # For Check objects, instantiate the corresponding check class
     check_type_str = str(check_input.type)
 
     # Check registry first - better error messages
@@ -125,30 +124,32 @@ def _convert_check_input(check_input: Check | SchemaCheck) -> Check:
     if check_type_str not in registered_checks:
         raise ValueError(f"Check type '{check_type_str}' is not registered")
 
-    # Determine version to use for schema lookup
+    # Determine version to use
     version = check_input.version
     if version is None:
         version = get_latest_version(check_type_str)
 
-    # Get the corresponding SchemaCheck class
-    schema_class = _get_schema_class_for_check_type(check_type_str, version)
+    # Get the registered check class
+    check_class = get_check_class(check_type_str, version)
 
-    # Perform full Pydantic validation by attempting to create the SchemaCheck instance
+    # Instantiate the check class with validation
     try:
-        schema_class(**check_input.arguments)
+        check_instance = check_class(**check_input.arguments)
+        # Set metadata if provided
+        if check_input.metadata:
+            check_instance.metadata = check_input.metadata
+        return check_instance
     except Exception as e:
-        # Schema validation failed - provide clear error message
+        # Validation failed - provide clear error message
         raise ValidationError(
             f"Check arguments validation failed for '{check_type_str}' v{version}: {e}",
         ) from e
-
-    return check_input
 
 
 def _validate_inputs(
         test_cases: list[TestCase],
         outputs: list[Output],
-        checks: list[Check | SchemaCheck] | list[list[Check | SchemaCheck]] | None,
+        checks: list[CheckTypes] | list[list[CheckTypes]] | None,
     ) -> None:
     """Validate evaluation inputs according to FEP protocol."""
     if len(test_cases) != len(outputs):
@@ -174,32 +175,37 @@ def _validate_inputs(
                 f"When using per-test-case checks pattern, checks list must have same length as test_cases. "  # noqa: E501
                 f"Got {len(checks)} check lists and {len(test_cases)} test cases",
             )
-    # otherwise, checks must be a single list of Check | SchemaCheck objects
+    # otherwise, checks must be a single list of Check | BaseCheck objects
     else:  # noqa: PLR5501
-        if not all(isinstance(check, Check | SchemaCheck) for check in checks):
+        if not all(isinstance(check, Check | BaseCheck | BaseAsyncCheck) for check in checks):
             raise ValidationError(
-                "When using shared checks pattern, checks must be a list of Check or SchemaCheck objects",  # noqa: E501
+                "When using shared checks pattern, checks must be a list of Check or BaseCheck objects",  # noqa: E501
             )
 
 
 def _resolve_checks(
         test_cases: list[TestCase],
-        checks: list[Check | SchemaCheck] | list[list[Check | SchemaCheck]] | None,
-    ) -> list[list[Check]]:
+        checks: list[CheckTypes] | list[list[CheckTypes]] | None,
+    ) -> list[list[BaseCheck | BaseAsyncCheck]]:
     """
     Resolve checks for each test case according to FEP patterns.
 
-    Converts SchemaCheck objects to Check objects and returns List[List[Check]]
-    where result[i] contains checks for test_cases[i].
+    Extracts checks from TestCase.checks fields and merges them with the checks parameter.
+    Converts all Check objects to BaseCheck/BaseAsyncCheck instances with resolved arguments.
 
-    When both TestCase.checks and the checks parameter are provided, both sets of checks
-    are executed for each test case.
+    Args:
+        test_cases: Test cases, may contain checks in their .checks field
+        checks: Additional checks to apply (shared, per-test-case, or None)
+
+    Returns:
+        List where result[i] contains all merged checks for test_cases[i].
+        Each test case gets: testcase_checks[i] + parameter_checks (merged and converted).
     """
     # Start by extracting TestCase-specific checks
     testcase_checks_per_case = []
     for test_case in test_cases:
         if test_case.checks is not None:
-            # Convert any SchemaCheck objects to Check objects
+            # Convert any Check objects to BaseCheck/BaseAsyncCheck
             converted_checks = [_convert_check_input(check) for check in test_case.checks]
             testcase_checks_per_case.append(converted_checks)
         else:
@@ -210,7 +216,7 @@ def _resolve_checks(
         return testcase_checks_per_case
 
     # Now handle the checks parameter and combine with TestCase checks
-    if len(checks) > 0 and isinstance(checks[0], Check | SchemaCheck):
+    if len(checks) > 0 and isinstance(checks[0], Check | BaseCheck | BaseAsyncCheck):
         # Shared checks pattern: same checks for all test cases
         shared_checks = [_convert_check_input(check) for check in checks]  # type: ignore
         # Combine TestCase checks + shared checks for each test case
@@ -235,19 +241,27 @@ def _resolve_checks(
 
 
 def _flatten_checks_for_execution(
-        work_items: list[tuple[TestCase, Output, list[Check]]],
+        work_items: list[tuple[TestCase, Output, list[BaseCheck | BaseAsyncCheck]]],
     ) -> tuple[
-        list[tuple[Check, EvaluationContext]],
-        list[tuple[Check, EvaluationContext]],
+        list[tuple[BaseCheck, EvaluationContext]],
+        list[tuple[BaseAsyncCheck, EvaluationContext]],
         list[tuple[int, int, bool, int]],
     ]:
     """
-    Flatten checks across all test cases and separate by type.
+    Flatten checks across all test cases and separate by sync/async type.
+
+    Takes pre-resolved checks from work_items and creates flattened lists optimized for
+    batch execution, while maintaining tracking info to reconstruct results by test case.
+
+    Args:
+        work_items: Contains TestCase (for context), Output, and resolved checks (i.e. checks
+            from TestCase.checks + evaluate() parameter)
 
     Returns:
-        - flattened_sync_checks: List of (check, context) for sync checks
-        - flattened_async_checks: List of (check, context) for async checks
-        - check_tracking: List of (test_idx, check_idx, is_async, flattened_idx)
+        - flattened_sync_checks: All sync checks with their contexts
+        - flattened_async_checks: All async checks with their contexts
+        - check_tracking: Mapping to reconstruct results: (test_idx, check_idx, is_async,
+            flattened_idx)
     """
     flattened_sync_checks = []
     flattened_async_checks = []
@@ -257,26 +271,20 @@ def _flatten_checks_for_execution(
         context = EvaluationContext(test_case, output)
 
         for check_idx, check in enumerate(checks):
-            try:
-                if is_async_check(check.type, check.version):
-                    flattened_async_checks.append((check, context))
-                    check_tracking.append((test_idx, check_idx, True,
-                                         len(flattened_async_checks) - 1))
-                else:
-                    flattened_sync_checks.append((check, context))
-                    check_tracking.append((test_idx, check_idx, False,
-                                         len(flattened_sync_checks) - 1))
-            except ValueError:
-                # Check type not registered - treat as sync
+            # Determine if check is async based on its type
+            if isinstance(check, BaseAsyncCheck):
+                flattened_async_checks.append((check, context))
+                check_tracking.append((test_idx, check_idx, True, len(flattened_async_checks) - 1))
+            else:
+                # BaseCheck (sync)
                 flattened_sync_checks.append((check, context))
-                check_tracking.append((test_idx, check_idx, False,
-                                     len(flattened_sync_checks) - 1))
+                check_tracking.append((test_idx, check_idx, False, len(flattened_sync_checks) - 1))
 
     return flattened_sync_checks, flattened_async_checks, check_tracking
 
 
 def _unflatten_check_results(
-        work_items: list[tuple[TestCase, Output, list[Check]]],
+        work_items: list[tuple[TestCase, Output, list[BaseCheck | BaseAsyncCheck]]],
         sync_results: list[CheckResult],
         async_results: list[CheckResult],
         check_tracking: list[tuple[int, int, bool, int]],
@@ -317,18 +325,29 @@ def _unflatten_check_results(
 
 
 def _evaluate(
-        work_items: list[tuple[TestCase, Output, list[Check]]],
+        work_items: list[tuple[TestCase, Output, list[BaseCheck | BaseAsyncCheck]]],
         max_async_concurrent: int | None = None,
     ) -> list[TestCaseResult]:
-    """Execute evaluation with optimal sync/async separation across all test cases."""
+    """
+    Execute evaluation with optimal sync/async separation across all test cases.
+
+    Args:
+        work_items: List of (test_case, output, checks) tuples where:
+            - test_case: Used only for evaluation context, not for its .checks field
+            - output: System output to evaluate against
+            - checks: Pre-resolved and merged checks (from TestCase.checks + evaluate() parameter)
+        max_async_concurrent: Maximum number of concurrent async check executions
+    """
     # Flatten all checks across all test cases
     flattened_sync_checks, flattened_async_checks, check_tracking = (
         _flatten_checks_for_execution(work_items)
     )
 
     # Execute ALL sync checks at once (no event loop overhead)
-    sync_results = [_execute_sync_check(check, context)
-                    for check, context in flattened_sync_checks]
+    sync_results = [
+        _execute_sync_check(check, context)
+        for check, context in flattened_sync_checks
+    ]
 
     # Execute ALL async checks concurrently in a single event loop
     if flattened_async_checks:
@@ -345,7 +364,7 @@ def _evaluate(
 def _evaluate_parallel(
         test_cases: list[TestCase],
         outputs: list[Output],
-        resolved_checks: list[list[Check]],
+        resolved_checks: list[list[BaseCheck | BaseAsyncCheck]],
         max_async_concurrent: int | None = None,
         max_parallel_workers: int = 2,
     ) -> list[TestCaseResult]:
@@ -383,7 +402,7 @@ def _evaluate_parallel(
 
 
 def _evaluate_with_registry(
-        work_items: list[tuple[TestCase, Output, list[Check]]],
+        work_items: list[tuple[TestCase, Output, list[BaseCheck | BaseAsyncCheck]]],
         max_async_concurrent: int | None = None,
         registry_state: dict | None = None,
     ) -> list[TestCaseResult]:
@@ -395,42 +414,20 @@ def _evaluate_with_registry(
     return _evaluate(work_items, max_async_concurrent)
 
 
-
-
-def _execute_sync_check(check: Check, context: EvaluationContext) -> CheckResult:
+def _execute_sync_check(check: BaseCheck, context: EvaluationContext) -> CheckResult:
     """Execute a single synchronous check and return the result."""
     try:
-        # Resolve version - if None, get latest version
-        resolved_version = check.version
-        if resolved_version is None:
-            resolved_version = get_latest_version(check.type)
-
-        check_class = get_check_class(check.type, resolved_version)
-        check_instance = check_class()
-
-        # Ensure this is a sync check
-        if not isinstance(check_instance, BaseCheck):
-            raise ValidationError(
-                f"Check type '{check.type}' is async but was categorized as sync",
-            )
-
-        # Execute the check (version is determined automatically from registry)
-        return check_instance.execute(
-            check_type=check.type,
-            arguments=check.arguments,
+        return check.execute(
             context=context,
             check_metadata=check.metadata,
         )
-
     except Exception as e:
         # Create error result for unhandled exceptions
-        return _create_error_check_result(check, str(e))
-
-
+        return _create_error_check_result_for_base_check(check, str(e))
 
 
 async def _execute_all_async_checks(
-        async_check_contexts: list[tuple[Check, EvaluationContext]],
+        async_check_contexts: list[tuple[BaseAsyncCheck, EvaluationContext]],
         max_async_concurrent: int | None = None,
     ) -> list[CheckResult]:
     """Execute ALL async checks across all test cases concurrently."""
@@ -445,41 +442,22 @@ async def _execute_all_async_checks(
     return await asyncio.gather(*tasks)
 
 
-
-
 async def _execute_async_check(
-        check: Check,
+        check: BaseAsyncCheck,
         context: EvaluationContext,
         semaphore: asyncio.Semaphore | None = None,
     ) -> CheckResult:
     """Execute a single asynchronous check and return the result."""
     async def _run_check() -> CheckResult:
         try:
-            # Resolve version - if None, get latest version
-            resolved_version = check.version
-            if resolved_version is None:
-                resolved_version = get_latest_version(check.type)
-
-            check_class = get_check_class(check.type, resolved_version)
-            check_instance = check_class()
-
-            # Ensure this is an async check
-            if not isinstance(check_instance, BaseAsyncCheck):
-                raise ValidationError(
-                    f"Check type '{check.type}' is sync but was categorized as async",
-                )
-
-            # Execute the check (version is determined automatically from registry)
-            return await check_instance.execute(
-                check_type=check.type,
-                arguments=check.arguments,
+            return await check.execute(
                 context=context,
                 check_metadata=check.metadata,
             )
 
         except Exception as e:
             # Create error result for unhandled exceptions
-            return _create_error_check_result(check, str(e))
+            return _create_error_check_result_for_base_check(check, str(e))
 
     # Use semaphore if provided, otherwise run directly
     if semaphore:
@@ -489,25 +467,14 @@ async def _execute_async_check(
         return await _run_check()
 
 
-
-
-def _create_error_check_result(
-        check: Check,
+def _create_error_check_result_for_base_check(
+        check: BaseCheck | BaseAsyncCheck,
         error_message: str,
     ) -> CheckResult:
     """Create a CheckResult for unhandled errors during check execution."""
-    # Resolve version for error result
-    resolved_version = check.version
-    if resolved_version is None:
-        try:
-            resolved_version = get_latest_version(check.type)
-        except ValueError:
-            # If we can't resolve version, use "unknown"
-            resolved_version = "unknown"
-
     return CheckResult(
-        check_type=check.type,
-        check_version=resolved_version,
+        check_type=str(check.check_type),
+        check_version=check._get_version(),
         status='error',
         results={},
         resolved_arguments={},

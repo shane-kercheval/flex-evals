@@ -7,59 +7,114 @@ from datetime import datetime, UTC
 from typing import Any
 
 from flex_evals import (
-    evaluate, TestCase, Output, Check, EvaluationRunResult,
+    evaluate,
+    TestCase,
+    Output,
+    Check,
+    EvaluationRunResult,
+    ExperimentMetadata,
+    AttributeExistsCheck,
+    ContainsCheck,
+    EqualsCheck,
+    ExactMatchCheck,
+    IsEmptyCheck,
+    RegexCheck,
+    ThresholdCheck,
+    BaseCheck,
+    BaseAsyncCheck,
+    JSONPath,
+    register,
+    ValidationError,
 )
-from flex_evals.schemas import ExperimentMetadata
-from flex_evals.schemas.checks import (
-    AttributeExistsCheck, ContainsCheck, EqualsCheck,
-    ExactMatchCheck, IsEmptyCheck, RegexCheck, ThresholdCheck,
-)
-from flex_evals.checks.base import BaseCheck, BaseAsyncCheck
-from flex_evals.registry import register, clear_registry
-from flex_evals.exceptions import ValidationError
+from pydantic import field_validator
+from flex_evals.registry import clear_registry
 from tests.conftest import restore_standard_checks
 
 
 class TestExampleCheck(BaseCheck):
     """Test check for evaluation engine testing."""
 
-    def __call__(self, expected: str = "Paris", actual: str | None = None) -> dict[str, Any]:
-        # For test purposes, if actual is not provided, we'll handle it in the integration
-        return {"passed": str(actual) == str(expected)}
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    expected: str | JSONPath = "Paris"
+    actual: str | JSONPath | None = None
+
+    @field_validator('expected', 'actual', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):  # noqa: ANN001
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
+    def __call__(self) -> dict[str, Any]:
+        """Execute test check using resolved Pydantic fields."""
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.expected, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'expected' field: {self.expected}")
+        if isinstance(self.actual, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'actual' field: {self.actual}")
+
+        # For test purposes, compare string representations
+        return {"passed": str(self.actual) == str(self.expected)}
 
 
 class TestExampleAsyncCheck(BaseAsyncCheck):
     """Test async check for evaluation engine testing."""
 
-    async def __call__(self, expected: str = "Paris", actual: str | None = None) -> dict[str, Any]:
-        # For test purposes, if actual is not provided, we'll handle it in the integration
-        return {"passed": str(actual) == str(expected)}
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    expected: str | JSONPath = "Paris"
+    actual: str | JSONPath | None = None
+
+    @field_validator('expected', 'actual', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, v):  # noqa: ANN001
+        """Convert JSONPath-like strings to JSONPath objects."""
+        if isinstance(v, str) and v.startswith('$.'):
+            return JSONPath(expression=v)
+        return v
+
+    async def __call__(self) -> dict[str, Any]:
+        """Execute async test check using resolved Pydantic fields."""
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.expected, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'expected' field: {self.expected}")
+        if isinstance(self.actual, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'actual' field: {self.actual}")
+
+        # For test purposes, compare string representations
+        return {"passed": str(self.actual) == str(self.expected)}
 
 
 class TestFailingCheck(BaseCheck):
     """Test check that always fails for error testing."""
 
-    def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
+    def __call__(self) -> dict[str, Any]:
         raise RuntimeError("This check always fails")
 
 
 class SlowAsyncCheck(BaseAsyncCheck):
     """Test async check with configurable delay for concurrency testing."""
 
-    async def __call__(self, delay: float = 0.1, **kwargs) -> dict[str, Any]:  # noqa
-        await asyncio.sleep(delay)
-        return {"passed": True, "delay_used": delay}
+    # Pydantic fields with validation
+    delay: float = 0.1
+
+    async def __call__(self) -> dict[str, Any]:
+        await asyncio.sleep(self.delay)
+        return {"passed": True, "delay_used": self.delay}
 
 
 class CustomUserCheck(BaseCheck):
     """Custom check to verify parallel worker registry transfer."""
 
-    def __call__(self, test_value: str = "expected", **kwargs) -> dict[str, Any]:  # noqa
+    # Pydantic fields with validation
+    test_value: str = "expected"
+
+    def __call__(self) -> dict[str, Any]:
         # Return a unique identifier to prove this exact check was executed
         return {
             "passed": True,
             "check_identifier": "custom_user_check_v2",
-            "test_value": test_value,
+            "test_value": self.test_value,
         }
 
 
@@ -650,16 +705,32 @@ class TestEvaluationEngine:
         )
         time.time() - start_time
 
-        # Debug: print result details if there are errors
-        if result.status == 'error':
-            for test_result in result.results:
-                if test_result.status == 'error':
-                    for check_result in test_result.check_results:
-                        if check_result.status == 'error' and check_result.error:
-                            print(f"Error in {test_result.execution_context.test_case.id}: {check_result.error.message}")  # noqa: E501
+        # Assert all components completed successfully
+        assert result.status == 'completed', (
+            f"Expected result status 'completed', got '{result.status}'"
+        )
 
-        # Verify the evaluation completed successfully
-        assert result.status == 'completed'
+        # Verify all test case results completed successfully
+        for i, test_result in enumerate(result.results):
+            assert test_result.status == 'completed', (
+                f"Test case {i} ({test_result.execution_context.test_case.id}) status "
+                f"expected 'completed', got '{test_result.status}'"
+            )
+
+            # Verify all check results within each test case completed successfully
+            for j, check_result in enumerate(test_result.check_results):
+                assert check_result.status == 'completed', (
+                    f"Test case {i} ({test_result.execution_context.test_case.id}), check {j} "
+                    f"status expected 'completed', got '{check_result.status}', "
+                    f"error: {check_result.error.message if check_result.error else 'None'}"
+                )
+                assert check_result.error is None, (
+                    f"Test case {i} ({test_result.execution_context.test_case.id}), check {j} "
+                    f"should not have error when completed, "
+                    f"got error: {check_result.error.message}"
+                )
+
+        # Verify basic evaluation structure
         assert len(result.results) == num_test_cases
 
         # All test cases should pass (matching expected values)

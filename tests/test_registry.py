@@ -3,14 +3,23 @@
 import pytest
 import asyncio
 from typing import Any
+from flex_evals import (
+    register,
+    get_check_class,
+    list_registered_checks,
+    BaseCheck,
+    BaseAsyncCheck,
+    EvaluationContext,
+    CheckType,
+    Output,
+    TestCase,
+)
 from flex_evals.registry import (
-    CheckRegistry, register, get_check_class, get_check_info,
-    is_async_check, list_registered_checks, clear_registry,
+    CheckRegistry, get_check_info,
+    is_async_check, clear_registry,
     get_registry_state, restore_registry_state, get_latest_version, list_versions,
     get_version_for_class, get_check_type_for_class, _global_registry,
 )
-from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, EvaluationContext
-from flex_evals import CheckType, Output, TestCase
 from tests.conftest import restore_standard_checks
 
 
@@ -833,7 +842,6 @@ class TestRegistryReverseMapping:
         # Clear registry
         clear_registry()
 
-        # Should no longer work after clear
         with pytest.raises(ValueError, match="Class .* is not registered"):
             get_version_for_class(ClearTest)
 

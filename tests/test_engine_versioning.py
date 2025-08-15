@@ -1,12 +1,20 @@
 """Tests for engine version-aware check execution."""
 
 import pytest
-from flex_evals.engine import evaluate
-from flex_evals.schemas import TestCase, Output, Check
-from flex_evals.schemas.checks.contains import ContainsCheck
-from flex_evals.schemas.checks.exact_match import ExactMatchCheck
-from flex_evals.registry import register, clear_registry
-from flex_evals.checks.base import BaseCheck, BaseAsyncCheck
+from flex_evals import (
+    evaluate,
+    TestCase,
+    Output,
+    Check,
+    ContainsCheck,
+    ExactMatchCheck,
+    register,
+    BaseCheck,
+    BaseAsyncCheck,
+    JSONPath,
+)
+from flex_evals.registry import clear_registry
+from pydantic import Field, field_validator
 from tests.conftest import restore_standard_checks
 from typing import Any
 
@@ -28,12 +36,16 @@ class TestEngineVersioning:
 
         @register("version_test", version="1.0.0")
         class VersionTest_v1(BaseCheck):  # noqa: N801
-            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            placeholder: str = Field(default="test")
+
+            def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "1.0.0"}
 
         @register("version_test", version="2.0.0")
         class VersionTest_v2(BaseCheck):  # noqa: N801
-            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            placeholder: str = Field(default="test")
+
+            def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "2.0.0"}
 
         # Create test case and output
@@ -63,17 +75,23 @@ class TestEngineVersioning:
 
         @register("latest_test", version="1.0.0")
         class LatestTest_v1(BaseCheck):  # noqa: N801
-            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            placeholder: str = Field(default="test")
+
+            def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "1.0.0"}
 
         @register("latest_test", version="2.1.0")
         class LatestTest_v2_1(BaseCheck):  # noqa: N801
-            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            placeholder: str = Field(default="test")
+
+            def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "2.1.0"}
 
         @register("latest_test", version="2.0.0")
         class LatestTest_v2_0(BaseCheck):  # noqa: N801
-            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            placeholder: str = Field(default="test")
+
+            def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "2.0.0"}
 
         # Create test case and output
@@ -94,12 +112,16 @@ class TestEngineVersioning:
 
         @register("async_version_test", version="1.0.0")
         class AsyncVersionTest_v1(BaseAsyncCheck):  # noqa: N801
-            async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            placeholder: str = Field(default="test")
+
+            async def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "1.0.0"}
 
         @register("async_version_test", version="2.0.0")
         class AsyncVersionTest_v2(BaseAsyncCheck):  # noqa: N801
-            async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            placeholder: str = Field(default="test")
+
+            async def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "2.0.0"}
 
         # Create test case and output
@@ -129,12 +151,12 @@ class TestEngineVersioning:
 
         @register("mixed_test", version="1.0.0")
         class MixedTest_v1_sync(BaseCheck):  # noqa: N801
-            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "type": "sync", "version": "1.0.0"}
 
         @register("mixed_test", version="2.0.0")
         class MixedTest_v2_async(BaseAsyncCheck):  # noqa: N801
-            async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            async def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "type": "async", "version": "2.0.0"}
 
         # Create test case and output
@@ -174,7 +196,9 @@ class TestEngineVersioning:
 
         @register("error_test", version="1.0.0")
         class ErrorTest_v1(BaseCheck):  # noqa: N801
-            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            placeholder: str = Field(default="test")
+
+            def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "1.0.0"}
 
         # Create test case and output
@@ -185,7 +209,7 @@ class TestEngineVersioning:
         check_nonexistent = Check(type="error_test", arguments={}, version="99.0.0")
 
         # Should raise ValueError for version not found
-        with pytest.raises(ValueError, match="No schema class found for check type 'error_test' version '99.0.0'"):  # noqa: E501
+        with pytest.raises(ValueError, match="Version '99.0.0' not found for check type 'error_test'"):  # noqa: E501
             evaluate([test_case], [output], [check_nonexistent])
 
     def test_engine_version_in_check_result_metadata(self):
@@ -193,7 +217,9 @@ class TestEngineVersioning:
 
         @register("metadata_test", version="1.5.0")
         class MetadataTest(BaseCheck):
-            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            placeholder: str = Field(default="test")
+
+            def __call__(self) -> dict[str, Any]:
                 return {"passed": True}
 
         # Create test case and output
@@ -214,12 +240,16 @@ class TestEngineVersioning:
         """Test that engine uses latest version when Check has no version specified."""
         @register("latest_check", version="1.0.0")
         class LatestCheck_v1(BaseCheck):  # noqa: N801
-            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            placeholder: str = Field(default="test")
+
+            def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "1.0.0"}
 
         @register("latest_check", version="2.1.0")
         class LatestCheck_v2_1(BaseCheck):  # noqa: N801
-            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            placeholder: str = Field(default="test")
+
+            def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "2.1.0"}
 
         # Create test case and output
@@ -249,7 +279,7 @@ class TestEngineVersioning:
 
         # Create SchemaCheck (has VERSION = "1.0.0")
         schema_check = ContainsCheck(
-            text="$.output.value",
+            text=JSONPath(expression="$.output.value"),
             phrases=["hello"],
         )
 
@@ -265,7 +295,9 @@ class TestEngineVersioning:
         """Test engine handles mix of Check (no version) and SchemaCheck together."""
         @register("mixed_check", version="1.0.0")
         class MixedCheck_v1(BaseCheck):  # noqa: N801
-            def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
+            placeholder: str = Field(default="test")
+
+            def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "custom_field": "v1_result"}
 
         # Need standard checks for SchemaCheck objects
@@ -277,7 +309,10 @@ class TestEngineVersioning:
 
         # Mix of different check types
         check_no_version = Check(type="mixed_check", arguments={})
-        schema_check = ExactMatchCheck(actual="$.output.value", expected="$.test_case.expected")
+        schema_check = ExactMatchCheck(
+            actual=JSONPath(expression="$.output.value"),
+            expected=JSONPath(expression="$.test_case.expected"),
+        )
 
         result = evaluate([test_case], [output], [check_no_version, schema_check])
 
@@ -297,8 +332,21 @@ class TestEngineVersioning:
         """Test engine handles checks defined in TestCase.checks field."""
         @register("testcase_check", version="1.5.0")
         class TestCaseCheck(BaseCheck):
-            def __call__(self, text: str, **kwargs: Any) -> dict[str, Any]:  # noqa
-                return {"passed": True, "text_length": len(text)}
+            text: str | JSONPath = Field(..., description='Text to process')
+
+            @field_validator('text', mode='before')
+            @classmethod
+            def convert_jsonpath(cls, v):  # noqa: ANN001
+                """Convert JSONPath-like strings to JSONPath objects."""
+                if isinstance(v, str) and v.startswith('$.'):
+                    return JSONPath(expression=v)
+                return v
+
+            def __call__(self) -> dict[str, Any]:
+                # Validate that all fields are resolved (no JSONPath objects remain)
+                if isinstance(self.text, JSONPath):
+                    raise RuntimeError(f"JSONPath not resolved for 'text' field: {self.text}")
+                return {"passed": True, "text_length": len(self.text)}
 
         # Need standard checks for SchemaCheck objects
         restore_standard_checks()
@@ -309,7 +357,7 @@ class TestEngineVersioning:
             input="hello world",
             checks=[
                 Check(type="testcase_check", arguments={"text": "$.test_case.input"}),  # No version  # noqa: E501
-                ContainsCheck(text="$.test_case.input", phrases=["hello"]),  # SchemaCheck with version  # noqa: E501
+                ContainsCheck(text=JSONPath(expression="$.test_case.input"), phrases=["hello"]),  # SchemaCheck with version  # noqa: E501
             ],
         )
         output = Output(value="output not used in this test")
@@ -323,11 +371,12 @@ class TestEngineVersioning:
         # First check (no version specified - should get latest version)
         check_result_1 = result.results[0].check_results[0]
         assert check_result_1.status == "completed"
-        assert check_result_1.results["text_length"] == 11
+        assert check_result_1.results["text_length"] == 11  # Length of "hello world" after JSONPath resolution  # noqa: E501
         assert check_result_1.check_version == "1.5.0"
 
         # Second check (SchemaCheck with version)
         check_result_2 = result.results[0].check_results[1]
+        # Debug removed
         assert check_result_2.status == "completed"
         assert check_result_2.results["passed"] is True
         assert check_result_2.check_version == "1.0.0"

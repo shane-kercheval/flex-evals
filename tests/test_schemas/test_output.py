@@ -2,7 +2,7 @@
 
 import dataclasses
 import pytest
-from flex_evals.schemas import Output
+from flex_evals import Output
 
 
 class TestOutput:

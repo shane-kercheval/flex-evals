@@ -1,8 +1,14 @@
 """TestCase schema implementation for FEP."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Any
-from ..schemas.check import Check, SchemaCheck
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Import check classes for type hints only
+    from ..checks.base import CheckTypes
+
 
 
 @dataclass
@@ -24,7 +30,7 @@ class TestCase:
     input: str | dict[str, Any]
     expected: str | dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
-    checks: list[Check | SchemaCheck] | None = None  # Forward reference, convenience extension
+    checks: list[CheckTypes] | None = None  # Per-test-case checks (convenience pattern)
 
     def __post_init__(self):
         """Validate required fields and constraints."""

@@ -182,31 +182,33 @@ class TestIntegrationWithExistingChecks:
         fields = schema["fields"]
 
         # text field - required, non-nullable
-        assert fields["text"]["type"] == "string"
+        assert fields["text"]["type"] == "union<string,JSONPath>"
         assert fields["text"]["nullable"] is False
         assert "default" not in fields["text"]
 
         # phrases field - required, non-nullable
-        assert fields["phrases"]["type"] == "union<string,array<string>>"
+        assert fields["phrases"]["type"] == "union<string,array<string>,JSONPath>"
         assert fields["phrases"]["nullable"] is False
         assert "default" not in fields["phrases"]
 
         # case_sensitive field - optional, non-nullable with default
-        assert fields["case_sensitive"]["type"] == "boolean"
+        assert fields["case_sensitive"]["type"] == "union<boolean,JSONPath>"
         assert fields["case_sensitive"]["nullable"] is False
         assert fields["case_sensitive"]["default"] is True
 
         # negate field - optional, non-nullable with default
-        assert fields["negate"]["type"] == "boolean"
+        assert fields["negate"]["type"] == "union<boolean,JSONPath>"
         assert fields["negate"]["nullable"] is False
         assert fields["negate"]["default"] is False
 
     def test_regex_check_nullable_flags_field(self):
-        """Test RegexCheck flags field (nullable complex type)."""
+        """Test RegexCheck flags field (complex type with JSONPath support)."""
         schema = generate_check_schema("regex", "1.0.0")
         flags_field = schema["fields"]["flags"]
 
-        # Should be clean type name, nullable, with None default
-        assert flags_field["type"] == "RegexFlags"  # Clean type name
-        assert flags_field["nullable"] is True
-        assert flags_field["default"] is None
+        # Should be union type that supports JSONPath
+        assert flags_field["type"] == "union<RegexFlags,JSONPath>"
+        assert flags_field["nullable"] is False
+        # Field with default_factory doesn't show explicit default in schema
+        assert "default" not in flags_field
+        assert flags_field["jsonpath"] == "optional"
