@@ -17,13 +17,15 @@ class IsEmptyCheck(BaseCheck):
     """Tests whether a value is empty (None, empty string, whitespace-only, or any empty collection that supports len())."""  # noqa: E501
 
     # Pydantic fields with validation
-    value: Any = OptionalJSONPath('Value to test for emptiness or JSONPath expression')
+    value: str | list | dict | set | tuple | int | float | bool | None = OptionalJSONPath(
+        'Value to test for emptiness or JSONPath expression'
+    )
     negate: bool = Field(False, description='If true, passes when value is not empty')
     strip_whitespace: bool = Field(True, description='If true, strips whitespace before checking (strings only)')
 
     def __call__(
         self,
-        value: Any,  # noqa: ANN401
+        value: str | list | dict | set | tuple | int | float | bool | None,
         negate: bool = False,
         strip_whitespace: bool = True,
     ) -> dict[str, Any]:

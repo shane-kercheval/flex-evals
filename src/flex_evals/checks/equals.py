@@ -17,14 +17,18 @@ class EqualsCheck(BaseCheck):
     """Tests whether two values of any type are equal using Python's == operator."""
 
     # Pydantic fields with validation
-    actual: Any = OptionalJSONPath('Value to check or JSONPath expression pointing to the value')
-    expected: Any = OptionalJSONPath('Expected value or JSONPath expression pointing to the value')
+    actual: str | list | dict | set | tuple | int | float | bool | None = OptionalJSONPath(
+        'Value to check or JSONPath expression pointing to the value'
+    )
+    expected: str | list | dict | set | tuple | int | float | bool | None = OptionalJSONPath(
+        'Expected value or JSONPath expression pointing to the value'
+    )
     negate: bool = Field(False, description='If true, passes when values don\'t match')
 
     def __call__(
         self,
-        actual: Any,  # noqa: ANN401
-        expected: Any,  # noqa: ANN401
+        actual: str | list | dict | set | tuple | int | float | bool | None,
+        expected: str | list | dict | set | tuple | int | float | bool | None,
         negate: bool = False,
     ) -> dict[str, Any]:
         """

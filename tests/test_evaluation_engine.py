@@ -10,7 +10,7 @@ from flex_evals import (
     evaluate, TestCase, Output, Check, EvaluationRunResult,
 )
 from flex_evals.schemas import ExperimentMetadata
-from flex_evals.schemas.checks import (
+from flex_evals.checks import (
     AttributeExistsCheck, ContainsCheck, EqualsCheck,
     ExactMatchCheck, IsEmptyCheck, RegexCheck, ThresholdCheck,
 )
@@ -23,6 +23,10 @@ from tests.conftest import restore_standard_checks
 class TestExampleCheck(BaseCheck):
     """Test check for evaluation engine testing."""
 
+    # Pydantic fields with validation
+    expected: str = "Paris"
+    actual: str | None = None
+
     def __call__(self, expected: str = "Paris", actual: str | None = None) -> dict[str, Any]:
         # For test purposes, if actual is not provided, we'll handle it in the integration
         return {"passed": str(actual) == str(expected)}
@@ -30,6 +34,10 @@ class TestExampleCheck(BaseCheck):
 
 class TestExampleAsyncCheck(BaseAsyncCheck):
     """Test async check for evaluation engine testing."""
+
+    # Pydantic fields with validation
+    expected: str = "Paris"
+    actual: str | None = None
 
     async def __call__(self, expected: str = "Paris", actual: str | None = None) -> dict[str, Any]:
         # For test purposes, if actual is not provided, we'll handle it in the integration
@@ -46,6 +54,9 @@ class TestFailingCheck(BaseCheck):
 class SlowAsyncCheck(BaseAsyncCheck):
     """Test async check with configurable delay for concurrency testing."""
 
+    # Pydantic fields with validation
+    delay: float = 0.1
+
     async def __call__(self, delay: float = 0.1, **kwargs) -> dict[str, Any]:  # noqa
         await asyncio.sleep(delay)
         return {"passed": True, "delay_used": delay}
@@ -53,6 +64,9 @@ class SlowAsyncCheck(BaseAsyncCheck):
 
 class CustomUserCheck(BaseCheck):
     """Custom check to verify parallel worker registry transfer."""
+
+    # Pydantic fields with validation
+    test_value: str = "expected"
 
     def __call__(self, test_value: str = "expected", **kwargs) -> dict[str, Any]:  # noqa
         # Return a unique identifier to prove this exact check was executed

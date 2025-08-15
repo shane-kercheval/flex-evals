@@ -5,7 +5,7 @@ Combines schema validation with execution logic in a single class.
 """
 
 from typing import Any
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from .base import BaseCheck, OptionalJSONPath
 from ..registry import register
@@ -25,6 +25,14 @@ class ContainsCheck(BaseCheck):
     )
     case_sensitive: bool = Field(True, description='Whether phrase matching is case-sensitive')
     negate: bool = Field(False, description='If true, passes when text contains none of the phrases')
+
+    @field_validator('phrases')
+    @classmethod
+    def validate_phrases(cls, v: str | list[str]) -> str | list[str]:
+        """Validate that phrases is not an empty list."""
+        if isinstance(v, list) and len(v) == 0:
+            raise ValueError("phrases cannot be an empty list")
+        return v
 
     def __call__(
         self,

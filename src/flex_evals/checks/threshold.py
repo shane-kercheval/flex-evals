@@ -4,7 +4,7 @@ Combined ThresholdCheck implementation for FEP.
 Combines schema validation with execution logic in a single class.
 """
 
-from typing import Any
+from typing import Any, Union
 from pydantic import Field, field_validator
 
 from .base import BaseCheck, OptionalJSONPath
@@ -18,19 +18,33 @@ class ThresholdCheck(BaseCheck):
     """Checks if a numeric value meets minimum/maximum thresholds."""
 
     # Pydantic fields with validation
-    value: float | int = OptionalJSONPath('Numeric value to check or JSONPath expression')
-    min_value: float | int | None = Field(None, description='Minimum acceptable value')
-    max_value: float | int | None = Field(None, description='Maximum acceptable value')
-    min_inclusive: bool = Field(True, description='If true, min_value is inclusive (>=), else exclusive (>)')
-    max_inclusive: bool = Field(True, description='If true, max_value is inclusive (<=), else exclusive (<)')
-    negate: bool = Field(False, description='If true, passes when value is outside the specified range')
+    value: float | int | str = OptionalJSONPath(
+        'Numeric value to check or JSONPath expression'
+    )
+    min_value: float | int | str | None = OptionalJSONPath(
+        'Minimum acceptable value or JSONPath expression', default=None,
+    )
+    max_value: float | int | str | None = OptionalJSONPath(
+        'Maximum acceptable value or JSONPath expression', default=None,
+    )
+    min_inclusive: bool | str = OptionalJSONPath(
+        'If true, min_value is inclusive (>=), else exclusive (>)', default=True,
+    )
+    max_inclusive: bool | str = OptionalJSONPath(
+        'If true, max_value is inclusive (<=), else exclusive (<)', default=True,
+    )
+    negate: bool = Field(
+        False, description='If true, passes when value is outside the specified range',
+    )
 
     @field_validator('min_value', 'max_value')
     @classmethod
-    def validate_threshold_values(cls, v: float | int | None) -> float | int | None:
-        """Validate threshold values are numeric."""
-        if v is not None and not isinstance(v, int | float):
-            raise ValueError(f"Threshold values must be numeric, got: {type(v).__name__}")
+    def validate_threshold_values(cls, v: float | int | str | None) -> float | int | str | None:
+        """Validate threshold values are numeric or JSONPath strings."""
+        if v is not None and not isinstance(v, int | float | str):
+            raise ValueError(
+                f"Threshold values must be numeric or string, got: {type(v).__name__}"
+            )
         return v
 
     def model_post_init(self, __context: Any) -> None:  # noqa: ANN401

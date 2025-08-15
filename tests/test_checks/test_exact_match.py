@@ -1,0 +1,417 @@
+"""Comprehensive tests for ExactMatchCheck implementation.
+
+This module consolidates all tests for the ExactMatchCheck including:
+- Pydantic validation tests (from test_schema_check_classes.py)
+- Implementation execution tests (from test_standard_checks.py) 
+- Engine integration tests
+- Edge cases and error handling
+
+Tests are organized by functionality rather than implementation details.
+"""
+
+import pytest
+from typing import Any
+
+from flex_evals.checks.exact_match import ExactMatchCheck
+from flex_evals import CheckType, Status, evaluate, Check, Output, TestCase
+from flex_evals.exceptions import ValidationError
+from pydantic import ValidationError as PydanticValidationError
+
+
+class TestExactMatchValidation:
+    """Test Pydantic validation and field handling for ExactMatchCheck."""
+
+    def test_exact_match_check_creation(self):
+        """Test basic ExactMatchCheck creation."""
+        check = ExactMatchCheck(
+            actual="$.output.value",
+            expected="$.expected",
+        )
+
+        assert check.actual == "$.output.value"
+        assert check.expected == "$.expected"
+        assert check.case_sensitive is True
+        assert check.negate is False
+
+    def test_exact_match_check_with_options(self):
+        """Test ExactMatchCheck with all options."""
+        check = ExactMatchCheck(
+            actual="$.output.value",
+            expected="$.expected",
+            case_sensitive=False,
+            negate=True,
+        )
+
+        assert check.case_sensitive is False
+        assert check.negate is True
+
+    def test_exact_match_check_validation_empty_actual(self):
+        """Test ExactMatchCheck validation for empty actual - now allowed."""
+        check = ExactMatchCheck(actual="", expected="$.expected")
+        assert check.actual == ""
+        assert check.expected == "$.expected"
+
+    def test_exact_match_check_validation_empty_expected(self):
+        """Test ExactMatchCheck validation for empty expected - now allowed."""
+        check = ExactMatchCheck(actual="$.actual", expected="")
+        assert check.actual == "$.actual"
+        assert check.expected == ""
+
+    def test_exact_match_check_type_property(self):
+        """Test ExactMatchCheck check_type property returns correct type."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        assert check.check_type == CheckType.EXACT_MATCH
+
+    def test_exact_match_check_version_property(self):
+        """Test ExactMatchCheck version property works correctly."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        assert check._get_version() == "1.0.0"
+
+
+class TestExactMatchExecution:
+    """Test ExactMatchCheck execution logic and __call__ method."""
+
+    def test_exact_match_string_equal(self):
+        """Test matching strings return passed=true."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        result = check(actual="Paris", expected="Paris")
+        assert result == {"passed": True}
+
+    def test_exact_match_string_not_equal(self):
+        """Test non-matching strings return passed=false."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        result = check(actual="paris", expected="Paris")
+        assert result == {"passed": False}
+
+    def test_exact_match_case_sensitive_true(self):
+        """Test 'Hello' != 'hello' when case_sensitive=true."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        result = check(actual="Hello", expected="hello", case_sensitive=True)
+        assert result == {"passed": False}
+
+    def test_exact_match_case_sensitive_false(self):
+        """Test 'Hello' == 'hello' when case_sensitive=false."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        result = check(actual="Hello", expected="hello", case_sensitive=False)
+        assert result == {"passed": True}
+
+    def test_exact_match_negate_true(self):
+        """Test negate=true passes when values differ."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        result = check(actual="Paris", expected="London", negate=True)
+        assert result == {"passed": True}
+
+    def test_exact_match_negate_false(self):
+        """Test negate=false passes when values match."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        result = check(actual="Paris", expected="Paris", negate=False)
+        assert result == {"passed": True}
+
+    def test_exact_match_object_comparison(self):
+        """Test comparing complex objects."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        # Objects will be converted to strings for comparison
+        result = check(actual={"city": "Paris"}, expected="{'city': 'Paris'}")
+        assert result == {"passed": True}
+
+    def test_exact_match_null_values(self):
+        """Test comparison with null/None values."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        result = check(actual=None, expected="")
+        assert result == {"passed": True}  # None converts to empty string
+
+    def test_exact_match_missing_actual(self):
+        """Test missing actual argument raises TypeError."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        with pytest.raises(TypeError):
+            check(expected="Paris")
+
+    def test_exact_match_missing_expected(self):
+        """Test missing expected argument raises TypeError."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        with pytest.raises(TypeError):
+            check(actual="Paris")
+
+    def test_exact_match_result_schema(self):
+        r"""Test result matches {\"passed\": boolean} exactly."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        result = check(actual="test", expected="test")
+        assert isinstance(result, dict)
+        assert set(result.keys()) == {"passed"}
+        assert isinstance(result["passed"], bool)
+
+
+class TestExactMatchEngineIntegration:
+    """Test ExactMatchCheck integration with the evaluation engine."""
+
+    @pytest.mark.parametrize(("output_value", "expected_value", "expected_passed"), [
+        ("Paris", "Paris", True),  # Exact match should pass
+        ("paris", "Paris", False),  # Case mismatch should fail (case_sensitive=True by default)
+        ("London", "Paris", False),  # Different values should fail
+        ("", "", True),  # Empty strings should match
+    ])
+    def test_exact_match_via_evaluate(
+        self, output_value: str, expected_value: str, expected_passed: bool,
+    ):
+        """Test using JSONPath for actual and expected values with various combinations."""
+        # Define your test cases
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="What is the capital of France?",
+                expected=expected_value,
+                checks=[
+                    Check(
+                        type=CheckType.EXACT_MATCH,
+                        arguments={
+                            "actual": "$.output.value",
+                            "expected": "$.test_case.expected",
+                        },
+                    ),
+                ],
+            ),
+        ]
+        # System outputs to evaluate
+        outputs = [
+            Output(value=output_value),
+        ]
+        # Run evaluation
+        results = evaluate(test_cases, outputs)
+        assert results.summary.total_test_cases == 1
+        assert results.summary.completed_test_cases == 1
+        assert results.summary.error_test_cases == 0
+        assert results.summary.skipped_test_cases == 0
+        assert results.results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].results == {"passed": expected_passed}
+
+    def test_exact_match_check_instance_via_evaluate(self):
+        """Test direct check instance usage in evaluate function."""
+        # Test with check instance instead of Check dataclass
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="What is the capital of France?",
+                expected="Paris",
+                checks=[
+                    ExactMatchCheck(
+                        actual="$.output.value",
+                        expected="$.test_case.expected",
+                    ),
+                ],
+            ),
+        ]
+        
+        outputs = [Output(value="Paris")]
+        results = evaluate(test_cases, outputs)
+        
+        assert results.summary.total_test_cases == 1
+        assert results.summary.completed_test_cases == 1
+        assert results.results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].results == {"passed": True}
+
+    def test_exact_match_with_case_insensitive_via_evaluate(self):
+        """Test case insensitive matching through engine evaluation."""
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="What is the capital of France?",
+                expected="paris",
+                checks=[
+                    Check(
+                        type=CheckType.EXACT_MATCH,
+                        arguments={
+                            "actual": "$.output.value",
+                            "expected": "$.test_case.expected",
+                            "case_sensitive": False,
+                        },
+                    ),
+                ],
+            ),
+        ]
+        
+        outputs = [Output(value="Paris")]
+        results = evaluate(test_cases, outputs)
+        
+        assert results.results[0].check_results[0].results == {"passed": True}
+
+    def test_exact_match_with_negate_via_evaluate(self):
+        """Test negation through engine evaluation."""
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="What is the capital of France?",
+                expected="London",
+                checks=[
+                    Check(
+                        type=CheckType.EXACT_MATCH,
+                        arguments={
+                            "actual": "$.output.value",
+                            "expected": "$.test_case.expected",
+                            "negate": True,
+                        },
+                    ),
+                ],
+            ),
+        ]
+        
+        outputs = [Output(value="Paris")]
+        results = evaluate(test_cases, outputs)
+        
+        assert results.results[0].check_results[0].results == {"passed": True}
+
+
+class TestExactMatchErrorHandling:
+    """Test error handling and edge cases for ExactMatchCheck."""
+
+    def test_exact_match_invalid_field_type(self):
+        """Test validation error for invalid field types during construction."""
+        # Test invalid actual type
+        with pytest.raises(PydanticValidationError):
+            ExactMatchCheck(actual=123, expected="test")  # type: ignore
+        
+        # Test invalid expected type  
+        with pytest.raises(PydanticValidationError):
+            ExactMatchCheck(actual="test", expected=123)  # type: ignore
+
+    def test_exact_match_required_fields(self):
+        """Test that required fields are enforced."""
+        with pytest.raises(PydanticValidationError):
+            ExactMatchCheck()  # type: ignore
+        
+        with pytest.raises(PydanticValidationError):
+            ExactMatchCheck(actual="test")  # type: ignore
+        
+        with pytest.raises(PydanticValidationError):
+            ExactMatchCheck(expected="test")  # type: ignore
+
+    def test_exact_match_jsonpath_validation_in_engine(self):
+        """Test that invalid JSONPath expressions are caught during evaluation."""
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="test",
+                checks=[
+                    Check(
+                        type=CheckType.EXACT_MATCH,
+                        arguments={
+                            "actual": "$..[invalid",  # Invalid JSONPath syntax
+                            "expected": "test",
+                        },
+                    ),
+                ],
+            ),
+        ]
+        
+        outputs = [Output(value="test")]
+        
+        # Should raise validation error for invalid JSONPath
+        with pytest.raises(ValidationError, match="appears to be JSONPath but is invalid"):
+            evaluate(test_cases, outputs)
+
+    def test_exact_match_complex_data_types(self):
+        """Test exact match with complex data types."""
+        check = ExactMatchCheck(actual="test", expected="test")
+        
+        # Test with nested dictionaries
+        actual = {"user": {"name": "Alice", "age": 30}}
+        expected = {"user": {"name": "Alice", "age": 30}}
+        result = check(actual=actual, expected=expected)
+        assert result == {"passed": True}
+        
+        # Test with lists
+        result = check(actual=[1, 2, 3], expected=[1, 2, 3])
+        assert result == {"passed": True}
+        
+        # Test with mixed types (should fail)
+        result = check(actual="123", expected=123)
+        assert result == {"passed": False}
+
+
+class TestExactMatchJSONPathIntegration:
+    """Test ExactMatchCheck with various JSONPath expressions and data structures."""
+
+    def test_exact_match_nested_jsonpath(self):
+        """Test exact match with deeply nested JSONPath expressions."""
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="test",
+                expected={"location": {"city": "Paris", "country": "France"}},
+                checks=[
+                    Check(
+                        type=CheckType.EXACT_MATCH,
+                        arguments={
+                            "actual": "$.output.value.response.location.city",
+                            "expected": "$.test_case.expected.location.city",
+                        },
+                    ),
+                ],
+            ),
+        ]
+        
+        outputs = [
+            Output(value={
+                "response": {
+                    "location": {"city": "Paris", "country": "France"},
+                    "confidence": 0.95,
+                },
+            }),
+        ]
+        
+        results = evaluate(test_cases, outputs)
+        assert results.results[0].check_results[0].results == {"passed": True}
+
+    def test_exact_match_array_access_jsonpath(self):
+        """Test exact match with JSONPath array access."""
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="test",
+                expected=["Paris", "London", "Berlin"],
+                checks=[
+                    Check(
+                        type=CheckType.EXACT_MATCH,
+                        arguments={
+                            "actual": "$.output.value.cities[0]",
+                            "expected": "$.test_case.expected[0]",
+                        },
+                    ),
+                ],
+            ),
+        ]
+        
+        outputs = [
+            Output(value={
+                "cities": ["Paris", "London", "Berlin"],
+                "total": 3,
+            }),
+        ]
+        
+        results = evaluate(test_cases, outputs)
+        assert results.results[0].check_results[0].results == {"passed": True}
+
+    def test_exact_match_missing_jsonpath_data(self):
+        """Test behavior when JSONPath doesn't find data."""
+        test_cases = [
+            TestCase(
+                id="test_001",
+                input="test",
+                checks=[
+                    Check(
+                        type=CheckType.EXACT_MATCH,
+                        arguments={
+                            "actual": "$.output.value.nonexistent",
+                            "expected": "test",
+                        },
+                    ),
+                ],
+            ),
+        ]
+        
+        outputs = [Output(value={"response": "test"})]
+        
+        results = evaluate(test_cases, outputs)
+        # Should complete but likely fail the match due to missing data
+        assert results.results[0].status == Status.COMPLETED
+        # The specific behavior for missing JSONPath data depends on resolver implementation

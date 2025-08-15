@@ -7,9 +7,9 @@ Combines schema validation with execution logic in a single class.
 from typing import Any
 from pydantic import Field
 
-from ..base import BaseCheck, OptionalJSONPath
-from ...registry import register
-from ...constants import CheckType
+from .base import BaseCheck, OptionalJSONPath
+from ..registry import register
+from ..constants import CheckType
 
 
 @register(CheckType.EXACT_MATCH, version='1.0.0')

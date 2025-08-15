@@ -151,7 +151,6 @@ class BaseCheck(JSONPathValidatedModel, ABC):
     Subclasses should define their Pydantic fields and implement __call__().
     """
 
-
     # Pydantic configuration
     model_config: ClassVar[dict[str, Any]] = {'extra': 'forbid'}
 
@@ -165,12 +164,17 @@ class BaseCheck(JSONPathValidatedModel, ABC):
         self._resolver = get_shared_resolver()
 
     @property
-    def check_type(self) -> CheckType:
+    def check_type(self) -> CheckType | str:
         """Return the CheckType for this check."""
         # Import here to avoid circular import
         from ..registry import get_check_type_for_class  # noqa: PLC0415
         check_type_str = get_check_type_for_class(self.__class__)
-        return CheckType(check_type_str)
+        
+        # Try to convert to CheckType enum, but allow arbitrary strings for custom/test checks
+        try:
+            return CheckType(check_type_str)
+        except ValueError:
+            return check_type_str
 
     def to_arguments(self) -> dict[str, Any]:
         """Convert Pydantic fields to arguments dict for execution."""
@@ -358,12 +362,17 @@ class BaseAsyncCheck(JSONPathValidatedModel, ABC):
         self._resolver = get_shared_resolver()
 
     @property
-    def check_type(self) -> CheckType:
+    def check_type(self) -> CheckType | str:
         """Return the CheckType for this check."""
         # Import here to avoid circular import
         from ..registry import get_check_type_for_class  # noqa: PLC0415
         check_type_str = get_check_type_for_class(self.__class__)
-        return CheckType(check_type_str)
+        
+        # Try to convert to CheckType enum, but allow arbitrary strings for custom/test checks
+        try:
+            return CheckType(check_type_str)
+        except ValueError:
+            return check_type_str
 
     def to_arguments(self) -> dict[str, Any]:
         """Convert Pydantic fields to arguments dict for execution."""
