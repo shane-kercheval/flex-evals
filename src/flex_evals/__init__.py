@@ -38,11 +38,7 @@ from .checks import (
     SemanticSimilarityCheck,
     ThresholdCheck,
     get_check_class,
-    get_check_info,
-    get_latest_version,
-    is_async_check,
     list_registered_checks,
-    list_versions,
     register,
 )
 
@@ -96,10 +92,6 @@ __all__ = [
     "generate_checks_schema",
     # Registry functions
     "get_check_class",
-    "get_check_info",
-    "get_latest_version",
-    "is_async_check",
     "list_registered_checks",
-    "list_versions",
     "register",
 ]

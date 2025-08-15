@@ -9,9 +9,13 @@ from pydantic import BaseModel, Field
 import threading
 
 from flex_evals.pytest_decorator import evaluate
-from flex_evals import TestCase, Check, CheckType
-from flex_evals.checks.contains import ContainsCheck
-from flex_evals.checks.base import JSONPath
+from flex_evals import (
+    TestCase,
+    Check,
+    CheckType,
+    ContainsCheck,
+    JSONPath,
+)
 
 from typing import Never
 

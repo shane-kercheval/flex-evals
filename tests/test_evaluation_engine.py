@@ -7,17 +7,27 @@ from datetime import datetime, UTC
 from typing import Any
 
 from flex_evals import (
-    evaluate, TestCase, Output, Check, EvaluationRunResult,
+    evaluate,
+    TestCase,
+    Output,
+    Check,
+    EvaluationRunResult,
+    ExperimentMetadata,
+    AttributeExistsCheck,
+    ContainsCheck,
+    EqualsCheck,
+    ExactMatchCheck,
+    IsEmptyCheck,
+    RegexCheck,
+    ThresholdCheck,
+    BaseCheck,
+    BaseAsyncCheck,
+    JSONPath,
+    register,
+    ValidationError,
 )
-from flex_evals.schemas import ExperimentMetadata
-from flex_evals.checks import (
-    AttributeExistsCheck, ContainsCheck, EqualsCheck,
-    ExactMatchCheck, IsEmptyCheck, RegexCheck, ThresholdCheck,
-)
-from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, JSONPath
 from pydantic import field_validator
-from flex_evals.registry import register, clear_registry
-from flex_evals.exceptions import ValidationError
+from flex_evals.registry import clear_registry
 from tests.conftest import restore_standard_checks
 
 

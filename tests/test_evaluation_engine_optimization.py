@@ -9,16 +9,22 @@ import time
 from datetime import datetime, UTC
 from typing import Any
 
-from flex_evals.schemas import TestCase, Output, Check, CheckResult
-from flex_evals.checks.base import BaseAsyncCheck, EvaluationContext
+from flex_evals import (
+    TestCase,
+    Output,
+    Check,
+    CheckResult,
+    BaseAsyncCheck,
+    EvaluationContext,
+    evaluate,
+    register,
+    ExactMatchCheck,
+)
 from flex_evals.engine import (
     _flatten_checks_for_execution,
     _unflatten_check_results,
     _convert_check_input,
-    evaluate,
 )
-from flex_evals.registry import register
-from flex_evals.checks.exact_match import ExactMatchCheck
 
 
 class AsyncSleepCheck(BaseAsyncCheck):

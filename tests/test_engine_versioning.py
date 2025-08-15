@@ -1,12 +1,19 @@
 """Tests for engine version-aware check execution."""
 
 import pytest
-from flex_evals.engine import evaluate
-from flex_evals.schemas import TestCase, Output, Check
-from flex_evals.checks.contains import ContainsCheck
-from flex_evals.checks.exact_match import ExactMatchCheck
-from flex_evals.registry import register, clear_registry
-from flex_evals.checks.base import BaseCheck, BaseAsyncCheck, JSONPath
+from flex_evals import (
+    evaluate,
+    TestCase,
+    Output,
+    Check,
+    ContainsCheck,
+    ExactMatchCheck,
+    register,
+    BaseCheck,
+    BaseAsyncCheck,
+    JSONPath,
+)
+from flex_evals.registry import clear_registry
 from pydantic import Field, field_validator
 from tests.conftest import restore_standard_checks
 from typing import Any

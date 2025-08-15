@@ -1,16 +1,18 @@
 """Test configuration for package."""
-from flex_evals.checks.attribute_exists import AttributeExistsCheck
-from flex_evals.checks.contains import ContainsCheck
-from flex_evals.checks.custom_function import CustomFunctionCheck
-from flex_evals.checks.equals import EqualsCheck
-from flex_evals.checks.exact_match import ExactMatchCheck
-from flex_evals.checks.is_empty import IsEmptyCheck
-from flex_evals.checks.llm_judge import LLMJudgeCheck
-from flex_evals.checks.regex import RegexCheck
-from flex_evals.checks.semantic_similarity import SemanticSimilarityCheck
-from flex_evals.checks.threshold import ThresholdCheck
-from flex_evals import CheckType
-from flex_evals.registry import register
+from flex_evals import (
+    AttributeExistsCheck,
+    ContainsCheck,
+    CustomFunctionCheck,
+    EqualsCheck,
+    ExactMatchCheck,
+    IsEmptyCheck,
+    LLMJudgeCheck,
+    RegexCheck,
+    SemanticSimilarityCheck,
+    ThresholdCheck,
+    CheckType,
+    register,
+)
 
 # Import essential test utility combined check classes
 from tests.schemas_for_test_checks import (  # noqa: F401

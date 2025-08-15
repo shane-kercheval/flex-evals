@@ -4,24 +4,26 @@ from typing import Any, Union
 import pytest
 from pydantic import BaseModel, ValidationError, Field, field_validator
 
+from flex_evals import (
+    JSONPath,
+    AttributeExistsCheck,
+    ContainsCheck,
+    CustomFunctionCheck,
+    EqualsCheck,
+    ExactMatchCheck,
+    IsEmptyCheck,
+    LLMJudgeCheck,
+    RegexCheck,
+    SemanticSimilarityCheck,
+    ThresholdCheck,
+)
 from flex_evals.checks.base import (
     JSONPathBehavior,
     get_jsonpath_behavior,
     validate_jsonpath,
     is_jsonpath_expression,
-    JSONPath,
     _convert_to_jsonpath,
 )
-from flex_evals.checks.attribute_exists import AttributeExistsCheck
-from flex_evals.checks.contains import ContainsCheck
-from flex_evals.checks.custom_function import CustomFunctionCheck
-from flex_evals.checks.equals import EqualsCheck
-from flex_evals.checks.exact_match import ExactMatchCheck
-from flex_evals.checks.is_empty import IsEmptyCheck
-from flex_evals.checks.llm_judge import LLMJudgeCheck
-from flex_evals.checks.regex import RegexCheck
-from flex_evals.checks.semantic_similarity import SemanticSimilarityCheck
-from flex_evals.checks.threshold import ThresholdCheck
 
 
 class TestJSONPathValidation:

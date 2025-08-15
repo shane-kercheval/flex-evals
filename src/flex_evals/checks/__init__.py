@@ -9,10 +9,6 @@ from ..registry import (
     register,
     get_check_class,
     list_registered_checks,
-    get_check_info,
-    is_async_check,
-    get_latest_version,
-    list_versions,
 )
 from .base import BaseCheck, BaseAsyncCheck, EvaluationContext
 
@@ -46,10 +42,6 @@ __all__ = [
     "ThresholdCheck",
     # Registry functions
     "get_check_class",
-    "get_check_info",
-    "get_latest_version",
-    "is_async_check",
     "list_registered_checks",
-    "list_versions",
     "register",
 ]

@@ -3,15 +3,17 @@
 import json
 import pytest
 from typing import Any, Optional
-from flex_evals.schema_generator import (
+from flex_evals import (
     generate_checks_schema,
     generate_check_schema,
+    ContainsCheck,
+    BaseCheck,
+)
+from flex_evals.schema_generator import (
     _extract_field_schema,
     _get_python_type_string,
     _extract_class_description,
 )
-from flex_evals.checks.contains import ContainsCheck
-from flex_evals.checks.base import BaseCheck
 from pydantic import Field
 
 
