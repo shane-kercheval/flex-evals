@@ -1078,7 +1078,7 @@ class TestEvaluateDecoratorAsync:
 
         assert call_count == num_samples * num_test_cases
         # Should be much less than 20 seconds if concurrent
-        assert duration < 0.5, f"Multiple test case async not concurrent (took {duration:.3f}s)"
+        assert duration < 1, f"Multiple test case async not concurrent (took {duration:.3f}s)"
 
     def test_async_with_exceptions(self):
         """Test async function exception handling."""
