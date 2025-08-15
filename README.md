@@ -874,7 +874,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ### **Development Principles**
 
-- **Comphensive Unit Tests** - Ensure all new features have tests
+- **Comprehensive Unit Tests** - Ensure all new features have tests
 - **Consistent Style** - Follow PEP 8 and use `ruff` for linting
 - **Documentation** - Clear examples and comprehensive docs
 
