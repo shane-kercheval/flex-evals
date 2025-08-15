@@ -55,7 +55,7 @@ class ExactMatchCheck(BaseCheck):
         if isinstance(self.expected, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'expected' field: {self.expected}")
         if isinstance(self.case_sensitive, JSONPath):
-            raise RuntimeError(f"JSONPath not resolved for 'case_sensitive' field: {self.case_sensitive}")
+            raise RuntimeError(f"JSONPath not resolved for 'case_sensitive' field: {self.case_sensitive}")  # noqa: E501
         if isinstance(self.negate, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'negate' field: {self.negate}")
 

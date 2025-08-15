@@ -29,9 +29,18 @@ class LLMJudgeCheck(BaseAsyncCheck):
     """Uses an LLM to evaluate outputs against complex, nuanced criteria."""
 
     # Pydantic fields with validation - can be literals or JSONPath objects
-    prompt: str | JSONPath = Field(..., description='Prompt template with optional {{$.jsonpath}} placeholders')
-    response_format: type[BaseModel] = Field(..., description='Pydantic model defining expected LLM response structure')
-    llm_function: Any = Field(..., description='Function to call LLM with signature: (prompt, response_format) -> tuple[BaseModel, dict]')
+    prompt: str | JSONPath = Field(
+        ...,
+        description='Prompt template with optional {{$.jsonpath}} placeholders',
+    )
+    response_format: type[BaseModel] = Field(
+        ...,
+        description='Pydantic model defining expected LLM response structure',
+    )
+    llm_function: Any = Field(
+        ...,
+        description='Function to call LLM with signature: (prompt, response_format) -> tuple[BaseModel, dict]',  # noqa: E501
+    )
 
     @field_validator('prompt', mode='before')
     @classmethod
@@ -104,14 +113,18 @@ class LLMJudgeCheck(BaseAsyncCheck):
             try:
                 # PHASE 2: Execute with processed prompt using __call__()
                 results = await self()
-
                 # Build resolved arguments for the result
                 resolved_arguments = {
-                    'prompt': {'value': prompt_to_use, 'resolved_from': 'template_processed' if '{{$.' in str(original_prompt) else 'literal'},
-                    'response_format': {'value': str(self.response_format), 'resolved_from': 'literal'},
+                    'prompt': {
+                        'value': prompt_to_use,
+                        'resolved_from': 'template_processed' if '{{$.' in str(original_prompt) else 'literal',  # noqa: E501
+                    },
+                    'response_format': {
+                        'value': str(self.response_format),
+                        'resolved_from': 'literal',
+                    },
                     'llm_function': {'value': str(self.llm_function), 'resolved_from': 'literal'},
                 }
-
                 return CheckResult(
                     check_type=check_type,
                     check_version=check_version,
@@ -121,7 +134,6 @@ class LLMJudgeCheck(BaseAsyncCheck):
                     evaluated_at=evaluated_at,
                     metadata=check_metadata,
                 )
-
             finally:
                 # Restore original prompt
                 self.prompt = original_prompt
@@ -158,7 +170,7 @@ class LLMJudgeCheck(BaseAsyncCheck):
         if not isinstance(self.prompt, str):
             raise ValidationError("prompt must be a string")
 
-        if not (isinstance(self.response_format, type) and issubclass(self.response_format, BaseModel)):
+        if not (isinstance(self.response_format, type) and issubclass(self.response_format, BaseModel)):  # noqa: E501
             raise ValidationError("response_format must be a Pydantic BaseModel class")
 
         if not callable(self.llm_function):
@@ -166,7 +178,9 @@ class LLMJudgeCheck(BaseAsyncCheck):
 
         try:
             # Execute LLM evaluation with the fully processed prompt
-            llm_response = await self._call_llm_function(self.llm_function, self.prompt, self.response_format)
+            llm_response = await self._call_llm_function(
+                self.llm_function, self.prompt, self.response_format,
+            )
 
             # Expect tuple of (model_response, metadata)
             if not isinstance(llm_response, tuple) or len(llm_response) != 2:
@@ -175,7 +189,9 @@ class LLMJudgeCheck(BaseAsyncCheck):
                 )
 
             model_response, metadata = llm_response
-            validated_response = self._validate_response_format(model_response, self.response_format)
+            validated_response = self._validate_response_format(
+                model_response, self.response_format,
+            )
 
             # Preserve response structure and add judge_metadata field
             result = validated_response.copy()

@@ -15,28 +15,6 @@ from .registry import list_registered_checks, get_check_info, get_latest_version
 from .checks.base import get_jsonpath_behavior
 
 
-def _get_check_class_for_type_version(check_type: str, version: str) -> type:
-    """
-    Get the check class for a given check type and version.
-
-    Uses the registry to get the registered check class directly.
-
-    Args:
-        check_type: String identifier for the check type
-        version: Version string
-
-    Returns:
-        check class that matches the check_type and version
-
-    Raises:
-        ValueError: If no check class found for the given check_type and version
-    """
-    try:
-        return get_check_class(check_type, version)
-    except ValueError as e:
-        raise ValueError(f"No check class found for type '{check_type}' version '{version}': {e}") from e
-
-
 def _extract_class_description(check_class: type) -> str:
     """Extract class description from docstring of the check class."""
     # Use the class's own __doc__ to avoid fallback to parent class
@@ -209,7 +187,7 @@ def _get_version_schemas_for_check_type(check_type: str) -> dict[str, dict[str, 
 
         # Try to get the combined check class
         try:
-            check_class = _get_check_class_for_type_version(check_type, version)
+            check_class = get_check_class(check_type, version)
         except ValueError:
             # If no check class found, create minimal schema from registry info only
             version_schemas[version] = {

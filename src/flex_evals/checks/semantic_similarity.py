@@ -31,11 +31,11 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
 
     # Pydantic fields with validation - can be literals or JSONPath objects
     text: str | JSONPath = Field(..., description='First text to compare or JSONPath expression')
-    reference: str | JSONPath = Field(..., description='Second text to compare against or JSONPath expression')
+    reference: str | JSONPath = Field(..., description='Second text to compare against or JSONPath expression')  # noqa: E501
     threshold: ThresholdConfig | JSONPath | None = Field(
         None, description='Threshold configuration for pass/fail determination',
     )
-    embedding_function: Any = Field(..., description='User-provided function to generate embeddings')
+    embedding_function: Any = Field(..., description='User-provided function to generate embeddings')  # noqa: E501
     similarity_metric: SimilarityMetric | JSONPath = Field(
         SimilarityMetric.COSINE, description='Similarity calculation method',
     )
@@ -54,7 +54,7 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
             raise ValueError("embedding_function must be callable")
         return v
 
-    async def __call__(self) -> dict[str, Any]:
+    async def __call__(self) -> dict[str, Any]:  # noqa: PLR0912
         """
         Execute semantic similarity check using resolved Pydantic fields.
 
@@ -74,7 +74,7 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
         if isinstance(self.threshold, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'threshold' field: {self.threshold}")
         if isinstance(self.similarity_metric, JSONPath):
-            raise RuntimeError(f"JSONPath not resolved for 'similarity_metric' field: {self.similarity_metric}")
+            raise RuntimeError(f"JSONPath not resolved for 'similarity_metric' field: {self.similarity_metric}")  # noqa: E501
 
         # Validate embedding function is callable
         if not callable(self.embedding_function):
@@ -86,7 +86,7 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
                 similarity_metric = SimilarityMetric(self.similarity_metric)
             except ValueError:
                 valid_metrics = [m.value for m in SimilarityMetric]
-                raise ValidationError(f"Unsupported similarity metric: {self.similarity_metric}. Valid options: {valid_metrics}")
+                raise ValidationError(f"Unsupported similarity metric: {self.similarity_metric}. Valid options: {valid_metrics}")  # noqa: E501
         else:
             similarity_metric = self.similarity_metric
 
@@ -107,10 +107,10 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
         try:
             # Get embeddings for both texts
             text_embedding = await self._call_embedding_function(self.embedding_function, text_str)
-            reference_embedding = await self._call_embedding_function(self.embedding_function, reference_str)
+            reference_embedding = await self._call_embedding_function(self.embedding_function, reference_str)  # noqa: E501
 
             # Calculate similarity score
-            score = self._calculate_similarity(text_embedding, reference_embedding, similarity_metric.value)
+            score = self._calculate_similarity(text_embedding, reference_embedding, similarity_metric.value)  # noqa: E501
 
             # Ensure score is in valid range [0, 1]
             score = max(0.0, min(1.0, score))
@@ -128,7 +128,11 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
         except Exception as e:
             raise CheckExecutionError(f"Error in semantic similarity computation: {e!s}") from e
 
-    async def _call_embedding_function(self, embedding_function: Callable, text: str) -> list[float]:
+    async def _call_embedding_function(
+            self,
+            embedding_function: Callable,
+            text: str,
+        ) -> list[float]:
         """Call the user-provided embedding function with error handling."""
         try:
             # Handle both sync and async embedding functions
@@ -150,7 +154,12 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
         except Exception as e:
             raise CheckExecutionError(f"Embedding function failed: {e!s}") from e
 
-    def _calculate_similarity(self, embedding1: list[float], embedding2: list[float], metric: str) -> float:
+    def _calculate_similarity(
+            self,
+            embedding1: list[float],
+            embedding2: list[float],
+            metric: str,
+        ) -> float:
         """Calculate similarity between two embeddings."""
         if len(embedding1) != len(embedding2):
             raise ValueError("Embeddings must have the same dimensionality")

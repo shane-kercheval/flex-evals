@@ -18,15 +18,21 @@ class ContainsCheck(BaseCheck):
     """Checks if the string value contains all specified phrases."""
 
     # Pydantic fields with validation - can be literals or JSONPath objects
-    text: str | JSONPath = Field(..., description='Text to search or JSONPath expression pointing to the text')
+    text: str | JSONPath = Field(
+        ...,
+        description='Text to search or JSONPath expression pointing to the text',
+    )
     phrases: str | list[str] | JSONPath = Field(
-        ..., description='Single string or array of strings that must be present',
+        ...,
+        description='Single string or array of strings that must be present',
     )
     case_sensitive: bool | JSONPath = Field(
-        True, description='Whether phrase matching is case-sensitive',
+        True,
+        description='Whether phrase matching is case-sensitive',
     )
     negate: bool | JSONPath = Field(
-        False, description='If true, passes when text contains none of the phrases',
+        False,
+        description='If true, passes when text contains none of the phrases',
     )
 
     @field_validator('text', 'phrases', 'case_sensitive', 'negate', mode='before')
@@ -35,7 +41,7 @@ class ContainsCheck(BaseCheck):
         """Convert JSONPath-like strings to JSONPath objects."""
         return _convert_to_jsonpath(value)
 
-    def __call__(self) -> dict[str, Any]:
+    def __call__(self) -> dict[str, Any]:  # noqa: PLR0912
         """
         Execute contains check using resolved Pydantic fields.
 

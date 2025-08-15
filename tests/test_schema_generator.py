@@ -6,7 +6,6 @@ from typing import Any, Optional, ClassVar
 from flex_evals.schema_generator import (
     generate_checks_schema,
     generate_check_schema,
-    _get_check_class_for_type_version,
     _extract_field_schema,
     _get_python_type_string,
     _extract_class_description,
@@ -178,43 +177,6 @@ class TestSchemaGeneration:
 class TestCheckClassDiscovery:
     """Test schema class discovery functionality."""
 
-    def test_get_check_class_for_check_type_with_version(self):
-        """Test finding schema classes for check types with correct version."""
-        # Should find ContainsCheck for 'contains' version '1.0.0'
-        schema_class = _get_check_class_for_type_version("contains", "1.0.0")
-        assert schema_class is ContainsCheck
-
-        # Should find ExactMatchCheck for 'exact_match' version '1.0.0'
-        schema_class = _get_check_class_for_type_version("exact_match", "1.0.0")
-        assert schema_class is ExactMatchCheck
-
-        # Should find AttributeExistsCheck for 'attribute_exists' version '1.0.0'
-        schema_class = _get_check_class_for_type_version("attribute_exists", "1.0.0")
-        assert schema_class is AttributeExistsCheck
-
-    def test_get_check_class_nonexistent_check_type(self):
-        """Test finding schema class for non-existent check type raises ValueError."""
-        with pytest.raises(
-            ValueError, match="Check type 'nonexistent_check' is not registered",
-        ):
-            _get_check_class_for_type_version("nonexistent_check", "1.0.0")
-
-    def test_get_check_class_nonexistent_version(self):
-        """Test finding schema class for non-existent version raises ValueError."""
-        with pytest.raises(
-            ValueError, match="No check class found for type 'contains' version '2.0.0'",
-        ):
-            _get_check_class_for_type_version("contains", "2.0.0")
-
-    def test_get_check_class_version_mismatch_shows_available(self):
-        """Test that version mismatch error shows available versions."""
-        with pytest.raises(
-            ValueError, match="No check class found for type 'contains' version '99.0.0'",
-        ) as exc_info:
-            _get_check_class_for_type_version("contains", "99.0.0")
-
-        error_message = str(exc_info.value)
-        assert "Available versions: ['1.0.0']" in error_message
 
     # Removed test_multiple_schema_versions - not applicable in unified architecture
 
