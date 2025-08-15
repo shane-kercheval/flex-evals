@@ -8,8 +8,8 @@ from flex_evals.checks.base import (
     get_jsonpath_behavior,
     validate_jsonpath,
     is_jsonpath_expression,
-    JSONPathValidatedModel,
     JSONPath,
+    _convert_to_jsonpath,
 )
 from flex_evals.checks.attribute_exists import AttributeExistsCheck
 from flex_evals.checks.contains import ContainsCheck
@@ -102,14 +102,16 @@ class TestJSONPathValidation:
 
     def test_get_jsonpath_behavior_with_type_annotations(self):
         """Test reading JSONPath behavior from type annotations."""
+        from pydantic import BaseModel
+        
         # Test required JSONPath field (exactly JSONPath type)
-        class TestModelRequired(JSONPathValidatedModel):
+        class TestModelRequired(BaseModel):
             path: JSONPath = Field(..., description="Required JSONPath field")
 
         assert get_jsonpath_behavior(TestModelRequired, 'path') == JSONPathBehavior.REQUIRED
 
         # Test optional JSONPath field (union with JSONPath)
-        class TestModelOptional(JSONPathValidatedModel):
+        class TestModelOptional(BaseModel):
             text: str | JSONPath = Field(..., description="Optional JSONPath field")
             value: int | JSONPath = Field(42, description="Optional JSONPath with default")
 
@@ -117,7 +119,7 @@ class TestJSONPathValidation:
         assert get_jsonpath_behavior(TestModelOptional, 'value') == JSONPathBehavior.OPTIONAL
 
         # Test regular field (no JSONPath)
-        class TestModelRegular(JSONPathValidatedModel):
+        class TestModelRegular(BaseModel):
             regular_field: str = Field("default", description="Regular string field")
 
         assert get_jsonpath_behavior(TestModelRegular, 'regular_field') is None
@@ -128,8 +130,9 @@ class TestJSONPathValidation:
     def test_get_jsonpath_behavior_union_types(self):
         """Test the core business logic: detecting optional vs required JSONPath fields."""
         from typing import Union
+        from pydantic import BaseModel
         
-        class TestModel(JSONPathValidatedModel):
+        class TestModel(BaseModel):
             # The two patterns that matter for our architecture
             required_jsonpath: JSONPath = Field(..., description="Required JSONPath")
             optional_jsonpath: str | JSONPath = Field(..., description="Optional JSONPath")
@@ -146,94 +149,66 @@ class TestJSONPathValidation:
         assert get_jsonpath_behavior(TestModel, 'nonexistent_field') is None
 
 
-class TestJSONPathValidatedModel:
-    """Test the base JSONPathValidatedModel class."""
+class TestConvertToJsonpath:
+    """Test the _convert_to_jsonpath helper function."""
 
-    def test_required_jsonpath_valid(self):
-        """Test that valid JSONPath expressions are accepted for required fields."""
-        class TestModel(JSONPathValidatedModel):
-            path: JSONPath = Field(..., description="Test path")
+    def test_convert_jsonpath_string_valid(self):
+        """Test converting valid JSONPath strings."""
+        result = _convert_to_jsonpath("$.output.value")
+        assert isinstance(result, JSONPath)
+        assert result.expression == "$.output.value"
 
-        # Should work with valid JSONPath
-        model = TestModel(path=JSONPath(expression="$.output.value"))
-        assert str(model.path) == "$.output.value"
-
-    def test_required_jsonpath_invalid(self):
-        """Test that invalid JSONPath expressions are rejected for required fields."""
-        class TestModel(JSONPathValidatedModel):
-            path: JSONPath = Field(..., description="Test path")
-
-        # Should fail with invalid JSONPath
+    def test_convert_jsonpath_string_invalid(self):
+        """Test converting invalid JSONPath strings raises error."""
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
-            TestModel(path=JSONPath(expression="invalid_path"))
+            _convert_to_jsonpath("$.invalid[")
 
-    def test_optional_jsonpath_valid(self):
-        """Test that valid JSONPath expressions are accepted for optional fields."""
-        class TestModel(JSONPathValidatedModel):
-            text: str | JSONPath = Field("default", description="Test text")
+    def test_convert_regular_string_unchanged(self):
+        """Test regular strings are returned unchanged."""
+        result = _convert_to_jsonpath("regular string")
+        assert result == "regular string"
 
+    def test_convert_non_string_unchanged(self):
+        """Test non-string values are returned unchanged."""
+        values = [42, True, None, [], {}]
+        for value in values:
+            result = _convert_to_jsonpath(value)
+            assert result == value
+
+    def test_convert_existing_jsonpath_unchanged(self):
+        """Test existing JSONPath objects are returned unchanged."""
+        existing_jsonpath = JSONPath(expression="$.test.value")
+        result = _convert_to_jsonpath(existing_jsonpath)
+        assert result is existing_jsonpath
+
+
+class TestFieldValidatorIntegration:
+    """Test _convert_to_jsonpath integration with Pydantic field validators."""
+
+    def test_field_validator_with_convert_function(self):
+        """Test field validator using _convert_to_jsonpath function."""
+        from pydantic import BaseModel
+        
+        class TestModel(BaseModel):
+            text: str | JSONPath = Field(..., description="Test text field")
+            
             @field_validator('text', mode='before')
             @classmethod
-            def convert_jsonpath(cls, v):
-                if isinstance(v, str) and v.startswith('$.'):
-                    return JSONPath(expression=v)
-                return v
-
-        # Should work with valid JSONPath
-        model = TestModel(text="$.output.value")
-        assert isinstance(model.text, JSONPath)
-        assert str(model.text) == "$.output.value"
-
-        # Should work with regular string
-        model2 = TestModel(text="regular string")
-        assert model2.text == "regular string"
-
-    def test_optional_jsonpath_invalid(self):
-        """Test that invalid JSONPath expressions are rejected for optional fields."""
-        class TestModel(JSONPathValidatedModel):
-            text: str | JSONPath = Field("default", description="Test text")
-
-            @field_validator('text', mode='before')
-            @classmethod
-            def convert_jsonpath(cls, v):
-                if isinstance(v, str) and v.startswith('$.'):
-                    return JSONPath(expression=v)
-                return v
-
-        # Should fail with invalid JSONPath that looks like JSONPath
+            def convert_jsonpath(cls, value: object) -> object | JSONPath:
+                return _convert_to_jsonpath(value)
+        
+        # Test valid JSONPath conversion
+        model1 = TestModel(text="$.output.value")
+        assert isinstance(model1.text, JSONPath)
+        assert model1.text.expression == "$.output.value"
+        
+        # Test regular string unchanged
+        model2 = TestModel(text="regular text")
+        assert model2.text == "regular text"
+        
+        # Test invalid JSONPath raises error
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
             TestModel(text="$.invalid[")
-
-    def test_optional_jsonpath_no_validation_for_literals(self):
-        """Test that regular strings don't get JSONPath validation."""
-        class TestModel(JSONPathValidatedModel):
-            text: str | JSONPath = Field("default", description="Test text")
-
-            @field_validator('text', mode='before')
-            @classmethod
-            def convert_jsonpath(cls, v):
-                if isinstance(v, str) and v.startswith('$.'):
-                    return JSONPath(expression=v)
-                return v
-
-        # Should work fine with regular string
-        model = TestModel(text="just a regular string")
-        assert model.text == "just a regular string"
-
-    def test_field_without_description(self):
-        """Test field without description still works."""
-        class TestModel(JSONPathValidatedModel):
-            text: str | JSONPath = Field(...)
-
-            @field_validator('text', mode='before')
-            @classmethod
-            def convert_jsonpath(cls, v):
-                if isinstance(v, str) and v.startswith('$.'):
-                    return JSONPath(expression=v)
-                return v
-
-        model = TestModel(text="$.output.value")
-        assert isinstance(model.text, JSONPath)
 
 
 class TestJSONPathBehaviorInferenceWithRealChecks:

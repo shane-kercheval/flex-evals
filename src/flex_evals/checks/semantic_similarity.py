@@ -9,7 +9,7 @@ from typing import Any
 from collections.abc import Callable
 from pydantic import Field, BaseModel, field_validator
 
-from .base import BaseAsyncCheck, JSONPath
+from .base import BaseAsyncCheck, JSONPath, _convert_to_jsonpath
 from ..registry import register
 from ..exceptions import ValidationError, CheckExecutionError
 from ..constants import CheckType, SimilarityMetric
@@ -39,6 +39,12 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
     similarity_metric: SimilarityMetric | JSONPath = Field(
         SimilarityMetric.COSINE, description='Similarity calculation method',
     )
+
+    @field_validator('text', 'reference', 'threshold', 'similarity_metric', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, value: object) -> object | JSONPath:
+        """Convert JSONPath-like strings to JSONPath objects."""
+        return _convert_to_jsonpath(value)
 
     @field_validator('embedding_function')
     @classmethod

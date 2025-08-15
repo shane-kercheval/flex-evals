@@ -13,7 +13,7 @@ from typing import Any, ClassVar, TypeAlias, TYPE_CHECKING
 import typing
 import jsonpath_ng
 from jsonpath_ng.exceptions import JSONPathError as JSONPathNGError
-from pydantic import BaseModel, Field, model_validator, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 if TYPE_CHECKING:
     from ..schemas.check import Check
@@ -30,9 +30,6 @@ class JSONPathBehavior(Enum):
 
     REQUIRED = 'required'  # Must be valid JSONPath
     OPTIONAL = 'optional'  # Can be literal or JSONPath (validates if starts with $)
-
-
-# Helper functions removed - JSONPath behavior is now inferred from type annotations
 
 
 def get_jsonpath_behavior(model_class: type, field_name: str) -> JSONPathBehavior | None:
@@ -97,7 +94,6 @@ def validate_jsonpath(expression: str) -> bool:
 
     This function is used during:
     - JSONPath object creation (JSONPath.__init__)
-    - Field validation in JSONPathValidatedModel
     - Schema generation to verify JSONPath field definitions
 
     Args:
@@ -172,60 +168,11 @@ class JSONPath(BaseModel):
         return f"JSONPath('{self.expression}')"
 
 
-class JSONPathValidatedModel(BaseModel):
-    """
-    Base class that automatically validates JSONPath fields based on type annotations.
-
-    This class provides automatic validation for fields that support JSONPath expressions.
-    It inspects field type annotations to determine validation behavior:
-
-    - Fields typed as `JSONPath` (REQUIRED): Must be valid JSONPath expressions
-    - Fields typed as union with JSONPath (OPTIONAL): Validates JSONPath syntax only
-      if the value looks like JSONPath (starts with '$.')
-    - Regular fields: No JSONPath validation applied
-
-    Used as the base class for all check implementations (BaseCheck, BaseAsyncCheck)
-    to ensure consistent JSONPath validation across the system.
-
-    The validation runs after Pydantic's normal field validation and will raise
-    ValueError for invalid JSONPath expressions.
-
-    Examples:
-        >>> class MyModel(JSONPathValidatedModel):
-        ...     required_path: JSONPath = Field(...)  # Must be valid JSONPath
-        ...     optional_path: str | JSONPath = Field(...)  # Validates if starts with '$.'
-        ...     regular_field: str = Field(...)  # No JSONPath validation
-
-        >>> MyModel(required_path="$.valid", optional_path="literal")  # OK
-        >>> MyModel(required_path="invalid", ...)  # Raises ValueError
-        >>> MyModel(..., optional_path="$.invalid[")  # Raises ValueError (looks like JSONPath but invalid)
-    """
-
-    @model_validator(mode='after')
-    def validate_jsonpath_fields(self) -> 'JSONPathValidatedModel':
-        """Validate all fields marked as JSONPath required/optional."""
-        for field_name, field_value in self.__dict__.items():
-            if not isinstance(field_value, str):
-                continue
-
-            jsonpath_behavior = get_jsonpath_behavior(self.__class__, field_name)
-
-            if jsonpath_behavior == JSONPathBehavior.REQUIRED:
-                # Must be valid JSONPath
-                if not validate_jsonpath(field_value):
-                    raise ValueError(
-                        f"Field '{field_name}' requires valid JSONPath expression, "
-                        f"got: '{field_value}'",
-                    )
-
-            elif (jsonpath_behavior == JSONPathBehavior.OPTIONAL
-                  and is_jsonpath_expression(field_value)
-                  and not validate_jsonpath(field_value)):
-                raise ValueError(
-                    f"Field '{field_name}' appears to be JSONPath but is invalid: '{field_value}'",
-                )
-
-        return self
+def _convert_to_jsonpath(value: object) -> object | JSONPath:
+    """Convert JSONPath-like strings to JSONPath objects."""
+    if isinstance(value, str) and value.startswith('$.'):
+        return JSONPath(expression=value)
+    return value
 
 
 class EvaluationContext:
@@ -248,7 +195,7 @@ class EvaluationContext:
         return self._context_dict
 
 
-class BaseCheck(JSONPathValidatedModel, ABC):
+class BaseCheck(BaseModel, ABC):
     """
     Base class for synchronous check implementations.
 
@@ -263,7 +210,7 @@ class BaseCheck(JSONPathValidatedModel, ABC):
     def __init__(self, **data: Any) -> None:  # noqa: ANN401
         """Initialize check with field validation."""
         # Initialize Pydantic model first (validates fields)
-        JSONPathValidatedModel.__init__(self, **data)
+        BaseModel.__init__(self, **data)
         # Setup resolver for execution
         self._resolver = get_shared_resolver()
 
@@ -481,7 +428,7 @@ class BaseCheck(JSONPathValidatedModel, ABC):
         )
 
 
-class BaseAsyncCheck(JSONPathValidatedModel, ABC):
+class BaseAsyncCheck(BaseModel, ABC):
     """
     Base class for asynchronous check implementations.
 
@@ -497,7 +444,7 @@ class BaseAsyncCheck(JSONPathValidatedModel, ABC):
     def __init__(self, **data: Any) -> None:  # noqa: ANN401
         """Initialize async check with field validation."""
         # Initialize Pydantic model first (validates fields)
-        JSONPathValidatedModel.__init__(self, **data)
+        BaseModel.__init__(self, **data)
         # Setup resolver for execution
         self._resolver = get_shared_resolver()
 

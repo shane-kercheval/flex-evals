@@ -14,7 +14,7 @@ from typing import Any, TypeVar
 from collections.abc import Callable, Awaitable
 from pydantic import Field, BaseModel, field_validator
 
-from .base import BaseAsyncCheck, EvaluationContext, JSONPath
+from .base import BaseAsyncCheck, EvaluationContext, JSONPath, _convert_to_jsonpath
 from ..registry import register
 from ..exceptions import ValidationError, CheckExecutionError, JSONPathError
 from ..constants import CheckType
@@ -35,11 +35,9 @@ class LLMJudgeCheck(BaseAsyncCheck):
 
     @field_validator('prompt', mode='before')
     @classmethod
-    def convert_jsonpath(cls, v):
+    def convert_jsonpath(cls, value: object) -> object | JSONPath:
         """Convert JSONPath-like strings to JSONPath objects."""
-        if isinstance(v, str) and v.startswith('$.'):
-            return JSONPath(expression=v)
-        return v
+        return _convert_to_jsonpath(value)
 
     async def execute(
         self,

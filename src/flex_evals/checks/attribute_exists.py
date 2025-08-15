@@ -8,7 +8,7 @@ from typing import Any
 from datetime import datetime, UTC
 from pydantic import Field, field_validator
 
-from .base import BaseCheck, EvaluationContext, JSONPath
+from .base import BaseCheck, EvaluationContext, JSONPath, _convert_to_jsonpath
 from ..registry import register
 from ..constants import CheckType
 from ..exceptions import JSONPathError, ValidationError
@@ -25,19 +25,17 @@ class AttributeExistsCheck(BaseCheck):
 
     @field_validator('path', mode='before')
     @classmethod
-    def convert_path_jsonpath(cls, v):
-        """Convert JSONPath-like strings to JSONPath objects."""
-        if isinstance(v, str):
-            return JSONPath(expression=v)
-        return v
+    def convert_path_jsonpath(cls, value: object) -> object | JSONPath:
+        """Convert any strings to JSONPath objects for path field."""
+        if isinstance(value, str):
+            return JSONPath(expression=value)
+        return value
 
     @field_validator('negate', mode='before')
     @classmethod
-    def convert_negate_jsonpath(cls, v):
-        """Convert JSONPath-like strings to JSONPath objects."""
-        if isinstance(v, str) and v.startswith('$.'):
-            return JSONPath(expression=v)
-        return v
+    def convert_negate_jsonpath(cls, value: object) -> object | JSONPath:
+        """Convert JSONPath-like strings to JSONPath objects for negate field."""
+        return _convert_to_jsonpath(value)
 
     def __call__(self) -> dict[str, Any]:
         """

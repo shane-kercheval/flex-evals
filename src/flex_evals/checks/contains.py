@@ -7,7 +7,7 @@ Combines schema validation with execution logic in a single class.
 from typing import Any
 from pydantic import field_validator, Field
 
-from .base import BaseCheck, JSONPath
+from .base import BaseCheck, JSONPath, _convert_to_jsonpath
 from ..registry import register
 from ..exceptions import ValidationError
 from ..constants import CheckType
@@ -31,11 +31,9 @@ class ContainsCheck(BaseCheck):
 
     @field_validator('text', 'phrases', 'case_sensitive', 'negate', mode='before')
     @classmethod
-    def convert_jsonpath(cls, v):
+    def convert_jsonpath(cls, value: object) -> object | JSONPath:
         """Convert JSONPath-like strings to JSONPath objects."""
-        if isinstance(v, str) and v.startswith('$.'):
-            return JSONPath(expression=v)
-        return v
+        return _convert_to_jsonpath(value)
 
     def __call__(self) -> dict[str, Any]:
         """
