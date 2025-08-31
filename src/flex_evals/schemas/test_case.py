@@ -27,7 +27,7 @@ class TestCase:
     """
 
     id: str
-    input: str | dict[str, Any]
+    input: str | dict[str, Any] | list[Any] | Any
     expected: str | dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
     checks: list[CheckTypes] | None = None  # Per-test-case checks (convenience pattern)
