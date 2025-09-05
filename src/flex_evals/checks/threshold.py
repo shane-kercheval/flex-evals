@@ -70,6 +70,11 @@ class ThresholdCheck(BaseCheck):
         if self.min_value is None and self.max_value is None:
             raise ValueError("Threshold check requires at least one of 'min_value' or 'max_value'")
 
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure for threshold checks on error."""
+        return {'passed': False}
+
     def __call__(self) -> dict[str, Any]:  # noqa: PLR0912
         """
         Execute threshold check using resolved Pydantic fields.

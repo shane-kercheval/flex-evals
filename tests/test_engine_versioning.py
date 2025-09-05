@@ -38,12 +38,26 @@ class TestEngineVersioning:
         class VersionTest_v1(BaseCheck):  # noqa: N801
             placeholder: str = Field(default="test")
 
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
+
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "1.0.0"}
 
         @register("version_test", version="2.0.0")
         class VersionTest_v2(BaseCheck):  # noqa: N801
             placeholder: str = Field(default="test")
+
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
 
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "2.0.0"}
@@ -77,6 +91,13 @@ class TestEngineVersioning:
         class LatestTest_v1(BaseCheck):  # noqa: N801
             placeholder: str = Field(default="test")
 
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
+
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "1.0.0"}
 
@@ -84,12 +105,26 @@ class TestEngineVersioning:
         class LatestTest_v2_1(BaseCheck):  # noqa: N801
             placeholder: str = Field(default="test")
 
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
+
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "2.1.0"}
 
         @register("latest_test", version="2.0.0")
         class LatestTest_v2_0(BaseCheck):  # noqa: N801
             placeholder: str = Field(default="test")
+
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
 
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "2.0.0"}
@@ -114,12 +149,26 @@ class TestEngineVersioning:
         class AsyncVersionTest_v1(BaseAsyncCheck):  # noqa: N801
             placeholder: str = Field(default="test")
 
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
+
             async def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "1.0.0"}
 
         @register("async_version_test", version="2.0.0")
         class AsyncVersionTest_v2(BaseAsyncCheck):  # noqa: N801
             placeholder: str = Field(default="test")
+
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
 
             async def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "2.0.0"}
@@ -151,11 +200,21 @@ class TestEngineVersioning:
 
         @register("mixed_test", version="1.0.0")
         class MixedTest_v1_sync(BaseCheck):  # noqa: N801
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "type": "sync", "version": "1.0.0"}
 
         @register("mixed_test", version="2.0.0")
         class MixedTest_v2_async(BaseAsyncCheck):  # noqa: N801
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             async def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "type": "async", "version": "2.0.0"}
 
@@ -198,6 +257,13 @@ class TestEngineVersioning:
         class ErrorTest_v1(BaseCheck):  # noqa: N801
             placeholder: str = Field(default="test")
 
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
+
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "1.0.0"}
 
@@ -218,6 +284,13 @@ class TestEngineVersioning:
         @register("metadata_test", version="1.5.0")
         class MetadataTest(BaseCheck):
             placeholder: str = Field(default="test")
+
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
 
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True}
@@ -242,12 +315,26 @@ class TestEngineVersioning:
         class LatestCheck_v1(BaseCheck):  # noqa: N801
             placeholder: str = Field(default="test")
 
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
+
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "1.0.0"}
 
         @register("latest_check", version="2.1.0")
         class LatestCheck_v2_1(BaseCheck):  # noqa: N801
             placeholder: str = Field(default="test")
+
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
 
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "version": "2.1.0"}
@@ -297,6 +384,13 @@ class TestEngineVersioning:
         class MixedCheck_v1(BaseCheck):  # noqa: N801
             placeholder: str = Field(default="test")
 
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
+
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True, "custom_field": "v1_result"}
 
@@ -341,6 +435,11 @@ class TestEngineVersioning:
                 if isinstance(v, str) and v.startswith('$.'):
                     return JSONPath(expression=v)
                 return v
+
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
 
             def __call__(self) -> dict[str, Any]:
                 # Validate that all fields are resolved (no JSONPath objects remain)

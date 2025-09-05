@@ -26,6 +26,11 @@ class TestExampleCheck(BaseCheck):
             return JSONPath(expression=v)
         return v
 
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure for test check on error."""
+        return {'passed': False, 'actual_value': None}
+
     def __call__(self) -> dict[str, Any]:
         """Execute check using resolved Pydantic fields."""
         # Validate that all fields are resolved (no JSONPath objects remain)
@@ -55,6 +60,11 @@ class TestExampleAsyncCheck(BaseAsyncCheck):
         if isinstance(v, str) and v.startswith('$.'):
             return JSONPath(expression=v)
         return v
+
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure for async test check on error."""
+        return {'passed': False, 'actual_value': None}
 
     async def __call__(self) -> dict[str, Any]:
         """Execute async check using resolved Pydantic fields."""
@@ -194,6 +204,11 @@ class TestBaseCheck:
             # Add required Pydantic field
             value: str = Field(default="test")
 
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure for failing check on error."""
+                return {}
+
             def __call__(self) -> dict[str, Any]:
                 raise RuntimeError("Unexpected error")
 
@@ -303,6 +318,11 @@ class TestBaseAsyncCheck:
             # Add required Pydantic field
             value: str = Field(default="test")
 
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure for failing async check on error."""
+                return {}
+
             async def __call__(self) -> dict[str, Any]:
                 raise RuntimeError("Async error")
 
@@ -316,3 +336,59 @@ class TestBaseAsyncCheck:
         assert result.error is not None
         assert result.error.type == 'unknown_error'
         assert "Unexpected error during async check execution" in result.error.message
+
+    def test_default_results_for_custom_check(self):
+        """Test custom checks implement default_results correctly on errors."""
+        class CustomTestCheck(BaseCheck):
+            # Add required Pydantic field
+            value: str = Field(default="test")
+
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure for custom check on error."""
+                return {'custom_field': 'default_value', 'status': 'failed'}
+
+            def __call__(self) -> dict[str, Any]:
+                raise ValueError("Intentional error for testing")
+
+        # Register the custom check
+        register("custom_test_check", version="1.0.0")(CustomTestCheck)
+
+        check = CustomTestCheck()
+        result = check.execute(self.context)
+
+        # Verify the check failed and returned error results with the custom schema
+        assert result.status == 'error'
+        assert result.error is not None
+        assert result.error.type == 'unknown_error'
+
+        # Most importantly: verify that the results contain the custom error schema
+        assert result.results == {'custom_field': 'default_value', 'status': 'failed'}
+
+    async def test_default_results_for_custom_async_check(self):
+        """Test custom async checks implement default_results correctly on errors."""
+        class CustomTestAsyncCheck(BaseAsyncCheck):
+            # Add required Pydantic field
+            value: str = Field(default="test")
+
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure for custom async check on error."""
+                return {'async_custom_field': 'async_default', 'error_handled': True}
+
+            async def __call__(self) -> dict[str, Any]:
+                raise ValueError("Intentional async error for testing")
+
+        # Register the custom async check
+        register("custom_test_async_check", version="1.0.0")(CustomTestAsyncCheck)
+
+        check = CustomTestAsyncCheck()
+        result = await check.execute(self.context)
+
+        # Verify the check failed and returned error results with the custom schema
+        assert result.status == 'error'
+        assert result.error is not None
+        assert result.error.type == 'unknown_error'
+
+        # Most importantly: verify that the results contain the custom error schema
+        assert result.results == {'async_custom_field': 'async_default', 'error_handled': True}

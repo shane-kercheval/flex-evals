@@ -248,6 +248,24 @@ class BaseCheck(BaseModel, ABC):
         from ..registry import get_version_for_class  # noqa: PLC0415
         return get_version_for_class(self.__class__)
 
+    @property
+    @abstractmethod
+    def default_results(self) -> dict[str, Any]:
+        """
+        Return the default results structure for this check type.
+
+        This ensures a consistent API where consumers can always access expected
+        fields (like 'passed', 'score') even when checks fail.
+
+        Returns:
+            Dict with default values for all result fields this check type produces
+
+        Example:
+            For exact_match: {'passed': False}
+            For semantic_similarity: {'score': None, 'passed': False}
+        """
+        pass
+
     @abstractmethod
     def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
         """
@@ -414,13 +432,13 @@ class BaseCheck(BaseModel, ABC):
         check_metadata: dict[str, Any] | None = None,
         recoverable: bool = False,
     ) -> CheckResult:
-        """Create a CheckResult for error cases."""
-        # Create metadata that includes check_version
+        """Create a CheckResult for error cases with default results."""
+        # Get default results from this check instance to maintain consistent API
         return CheckResult(
             check_type=check_type,
             check_version=check_version,
             status='error',
-            results={},
+            results=self.default_results,
             resolved_arguments=resolved_arguments,
             evaluated_at=evaluated_at,
             metadata=check_metadata,
@@ -481,6 +499,24 @@ class BaseAsyncCheck(BaseModel, ABC):
         # Import here to avoid circular import
         from ..registry import get_version_for_class  # noqa: PLC0415
         return get_version_for_class(self.__class__)
+
+    @property
+    @abstractmethod
+    def default_results(self) -> dict[str, Any]:
+        """
+        Return the default results structure for this check type.
+
+        This ensures a consistent API where consumers can always access expected
+        fields (like 'passed', 'score') even when checks fail.
+
+        Returns:
+            Dict with default values for all result fields this check type produces
+
+        Example:
+            For exact_match: {'passed': False}
+            For semantic_similarity: {'score': None, 'passed': False}
+        """
+        pass
 
     @abstractmethod
     async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
@@ -647,13 +683,12 @@ class BaseAsyncCheck(BaseModel, ABC):
         check_metadata: dict[str, Any] | None = None,
         recoverable: bool = False,
     ) -> CheckResult:
-        """Create a CheckResult for error cases."""
-        # Create metadata that includes check_version
+        """Create a CheckResult for error cases with default results."""
         return CheckResult(
             check_type=check_type,
             check_version=check_version,
             status='error',
-            results={},
+            results=self.default_results,
             resolved_arguments=resolved_arguments,
             evaluated_at=evaluated_at,
             metadata=check_metadata,

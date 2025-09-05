@@ -27,16 +27,14 @@ class TestTestCaseSummary:
     def test_valid_summary(self):
         """Test creating valid TestCaseSummary."""
         summary = TestCaseSummary(
-            total_checks=5,
+            total_checks=4,
             completed_checks=3,
             error_checks=1,
-            skipped_checks=1,
         )
 
-        assert summary.total_checks == 5
+        assert summary.total_checks == 4
         assert summary.completed_checks == 3
         assert summary.error_checks == 1
-        assert summary.skipped_checks == 1
 
     def test_zero_checks(self):
         """Test summary with zero checks."""
@@ -44,7 +42,6 @@ class TestTestCaseSummary:
             total_checks=0,
             completed_checks=0,
             error_checks=0,
-            skipped_checks=0,
         )
 
         assert summary.total_checks == 0
@@ -55,7 +52,6 @@ class TestTestCaseSummary:
             total_checks=3,
             completed_checks=3,
             error_checks=0,
-            skipped_checks=0,
         )
 
         assert summary.total_checks == 3
@@ -68,7 +64,6 @@ class TestTestCaseSummary:
                 total_checks=-1,
                 completed_checks=0,
                 error_checks=0,
-                skipped_checks=0,
             )
 
     def test_counts_dont_sum_to_total(self):
@@ -77,8 +72,7 @@ class TestTestCaseSummary:
             TestCaseSummary(
                 total_checks=5,
                 completed_checks=2,
-                error_checks=1,
-                skipped_checks=1,  # Should be 2 to sum to 5
+                error_checks=1,  # Should be 3 to sum to 5
             )
 
     def test_counts_exceed_total(self):
@@ -87,8 +81,7 @@ class TestTestCaseSummary:
             TestCaseSummary(
                 total_checks=3,
                 completed_checks=2,
-                error_checks=2,
-                skipped_checks=2,  # 2+2+2=6 > 3
+                error_checks=2,  # 2+2=4 > 3
             )
 
 
@@ -133,7 +126,6 @@ class TestTestCaseResult:
             total_checks=2,
             completed_checks=2,
             error_checks=0,
-            skipped_checks=0,
         )
 
         result = TestCaseResult(
@@ -152,7 +144,7 @@ class TestTestCaseResult:
     def test_with_metadata(self):
         """Test TestCaseResult with metadata."""
         check_results = [self.create_check_result('completed')]
-        summary = TestCaseSummary(total_checks=1, completed_checks=1, error_checks=0, skipped_checks=0)  # noqa: E501
+        summary = TestCaseSummary(total_checks=1, completed_checks=1, error_checks=0)
 
         result = TestCaseResult(
             status='completed',
@@ -181,7 +173,7 @@ class TestTestCaseResult:
                 status='completed',
                 execution_context=self.create_execution_context("test-1"),
                 check_results=check_results,
-                summary=TestCaseSummary(2, 2, 0, 0),  # Wrong total
+                summary=TestCaseSummary(2, 2, 0),  # Wrong total
             )
 
     def test_summary_mismatch_completed(self):
@@ -206,7 +198,7 @@ class TestTestCaseResult:
                 status='error',
                 execution_context=self.create_execution_context("test-1"),
                 check_results=check_results,
-                summary=TestCaseSummary(2, 2, 0, 0),  # Wrong completed count
+                summary=TestCaseSummary(2, 2, 0),  # Wrong completed count
             )
 
     def test_status_mismatch_should_be_error(self):
@@ -225,7 +217,7 @@ class TestTestCaseResult:
             self.create_check_result('completed'),
             error_check,
         ]
-        summary = TestCaseSummary(2, 1, 1, 0)
+        summary = TestCaseSummary(2, 1, 1)
 
         with pytest.raises(ValueError, match="status should be 'error'"):
             TestCaseResult(
@@ -235,48 +227,7 @@ class TestTestCaseResult:
                 summary=summary,
             )
 
-    def test_status_mismatch_should_be_skip(self):
-        """Test that incorrect status raises ValueError when should be skip."""
-        check_results = [
-            self.create_check_result('completed'),
-            self.create_check_result('skip'),
-        ]
-        summary = TestCaseSummary(2, 1, 0, 1)
 
-        with pytest.raises(ValueError, match="status should be 'skip'"):
-            TestCaseResult(
-                status='completed',  # Wrong - should be skip
-                execution_context=self.create_execution_context("test-1"),
-                check_results=check_results,
-                summary=summary,
-            )
-
-    def test_status_priority_error_over_skip(self):
-        """Test that error status takes priority over skip."""
-        error_check = CheckResult(
-            check_type="test_check",
-            check_version='1.0.0',
-            status='error',
-            results={},
-            resolved_arguments={},
-            evaluated_at=datetime.now(UTC),
-            metadata={"check_version": "1.0.0"},
-            error=CheckError("test_error", "Test error", True),
-        )
-        check_results = [
-            error_check,
-            self.create_check_result('skip'),
-        ]
-        summary = TestCaseSummary(2, 0, 1, 1)
-
-        result = TestCaseResult(
-            status='error',
-            execution_context=self.create_execution_context("test-1"),
-            check_results=check_results,
-            summary=summary,
-        )
-
-        assert result.status == 'error'
 
     def test_empty_check_results(self):
         """Test TestCaseResult with empty check results."""
@@ -284,7 +235,7 @@ class TestTestCaseResult:
             status='completed',
             execution_context=self.create_execution_context("test-1"),
             check_results=[],
-            summary=TestCaseSummary(0, 0, 0, 0),
+            summary=TestCaseSummary(0, 0, 0),
         )
 
         assert len(result.check_results) == 0
@@ -301,7 +252,7 @@ class TestTestCaseResult:
             status='completed',
             execution_context=execution_context,
             check_results=[],
-            summary=TestCaseSummary(0, 0, 0, 0),
+            summary=TestCaseSummary(0, 0, 0),
         )
 
         # Verify both IDs are accessible
@@ -315,16 +266,14 @@ class TestEvaluationSummary:
     def test_valid_summary(self):
         """Test creating valid EvaluationSummary."""
         summary = EvaluationSummary(
-            total_test_cases=10,
+            total_test_cases=9,
             completed_test_cases=7,
             error_test_cases=2,
-            skipped_test_cases=1,
         )
 
-        assert summary.total_test_cases == 10
+        assert summary.total_test_cases == 9
         assert summary.completed_test_cases == 7
         assert summary.error_test_cases == 2
-        assert summary.skipped_test_cases == 1
 
     def test_zero_test_cases(self):
         """Test summary with zero test cases."""
@@ -332,7 +281,6 @@ class TestEvaluationSummary:
             total_test_cases=0,
             completed_test_cases=0,
             error_test_cases=0,
-            skipped_test_cases=0,
         )
 
         assert summary.total_test_cases == 0
@@ -344,7 +292,6 @@ class TestEvaluationSummary:
                 total_test_cases=-1,
                 completed_test_cases=0,
                 error_test_cases=0,
-                skipped_test_cases=0,
             )
 
     def test_counts_dont_sum_to_total(self):
@@ -353,8 +300,7 @@ class TestEvaluationSummary:
             EvaluationSummary(
                 total_test_cases=5,
                 completed_test_cases=2,
-                error_test_cases=1,
-                skipped_test_cases=1,  # Should be 2 to sum to 5
+                error_test_cases=1,  # Should be 3 to sum to 5
             )
 
 
@@ -390,7 +336,7 @@ class TestEvaluationRunResult:
                     metadata={"check_version": "1.0.0"},
                 ),
             ]
-            summary = TestCaseSummary(1, 1, 0, 0)
+            summary = TestCaseSummary(1, 1, 0)
         elif status == 'error':
             check_results = [
                 CheckResult(
@@ -404,20 +350,9 @@ class TestEvaluationRunResult:
                     error=CheckError('validation_error', "Test error", True),
                 ),
             ]
-            summary = TestCaseSummary(1, 0, 1, 0)
-        else:  # skip
-            check_results = [
-                CheckResult(
-                    check_type="test_check",
-                    check_version='1.0.0',
-                    status='skip',
-                    results={},
-                    resolved_arguments={},
-                    evaluated_at=datetime.now(UTC),
-                    metadata={"check_version": "1.0.0"},
-                ),
-            ]
-            summary = TestCaseSummary(1, 0, 0, 1)
+            summary = TestCaseSummary(1, 0, 1)
+        else:
+            raise ValueError(f"Invalid status: {status}")
 
         return TestCaseResult(
             status=status,
@@ -440,7 +375,6 @@ class TestEvaluationRunResult:
             total_test_cases=2,
             completed_test_cases=2,
             error_test_cases=0,
-            skipped_test_cases=0,
         )
 
         evaluation = EvaluationRunResult(
@@ -473,7 +407,7 @@ class TestEvaluationRunResult:
             started_at=started_at,
             completed_at=completed_at,
             status='completed',
-            summary=EvaluationSummary(0, 0, 0, 0),
+            summary=EvaluationSummary(0, 0, 0),
             results=[],
             experiment=experiment,
             metadata={"custom": "value"},
@@ -491,7 +425,7 @@ class TestEvaluationRunResult:
                 started_at=datetime.now(UTC),
                 completed_at=datetime.now(UTC),
                 status='completed',
-                summary=EvaluationSummary(0, 0, 0, 0),
+                summary=EvaluationSummary(0, 0, 0),
                 results=[],
             )
 
@@ -506,7 +440,7 @@ class TestEvaluationRunResult:
                 started_at=started_at,
                 completed_at=completed_at,
                 status='completed',
-                summary=EvaluationSummary(0, 0, 0, 0),
+                summary=EvaluationSummary(0, 0, 0),
                 results=[],
             )
 
@@ -523,7 +457,7 @@ class TestEvaluationRunResult:
                 started_at=started_at,
                 completed_at=completed_at,
                 status='completed',
-                summary=EvaluationSummary(2, 2, 0, 0),  # Wrong total
+                summary=EvaluationSummary(2, 2, 0),  # Wrong total
                 results=results,
             )
 
@@ -536,7 +470,7 @@ class TestEvaluationRunResult:
             self.create_test_case_result('completed'),
             self.create_test_case_result('error'),
         ]
-        summary = EvaluationSummary(2, 1, 1, 0)
+        summary = EvaluationSummary(2, 1, 1)
 
         with pytest.raises(ValueError, match="status should be 'error'"):
             EvaluationRunResult(
@@ -548,27 +482,6 @@ class TestEvaluationRunResult:
                 results=results,
             )
 
-    def test_status_priority_error_over_skip(self):
-        """Test that error status takes priority over skip."""
-        started_at = datetime.now(UTC)
-        completed_at = datetime.now(UTC)
-
-        results = [
-            self.create_test_case_result('error'),
-            self.create_test_case_result('skip'),
-        ]
-        summary = EvaluationSummary(2, 0, 1, 1)
-
-        evaluation = EvaluationRunResult(
-            evaluation_id="eval-123",
-            started_at=started_at,
-            completed_at=completed_at,
-            status='error',
-            summary=summary,
-            results=results,
-        )
-
-        assert evaluation.status == 'error'
 
     def test_empty_results(self):
         """Test EvaluationRunResult with empty results."""
@@ -580,7 +493,7 @@ class TestEvaluationRunResult:
             started_at=started_at,
             completed_at=completed_at,
             status='completed',
-            summary=EvaluationSummary(0, 0, 0, 0),
+            summary=EvaluationSummary(0, 0, 0),
             results=[],
         )
 
@@ -591,7 +504,6 @@ class TestEvaluationRunResult:
         """Test Status enum values."""
         assert Status.COMPLETED == 'completed'
         assert Status.ERROR == 'error'
-        assert Status.SKIP == 'skip'
 
     def test_check_result_accepts_status_enum(self):
         """Test CheckResult accepts Status enum."""
@@ -613,7 +525,6 @@ class TestEvaluationRunResult:
             total_checks=1,
             completed_checks=1,
             error_checks=0,
-            skipped_checks=0,
         )
         metadata = {"check_version": "1.0.0"}
         check_result = CheckResult(
@@ -640,13 +551,11 @@ class TestEvaluationRunResult:
             total_test_cases=1,
             completed_test_cases=1,
             error_test_cases=0,
-            skipped_test_cases=0,
         )
         test_case_summary = TestCaseSummary(
             total_checks=1,
             completed_checks=1,
             error_checks=0,
-            skipped_checks=0,
         )
         metadata = {"check_version": "1.0.0"}
         check_result = CheckResult(
@@ -684,7 +593,7 @@ class TestEvaluationRunResult:
             started_at=now,
             completed_at=now,
             status='completed',
-            summary=EvaluationSummary(0, 0, 0, 0),
+            summary=EvaluationSummary(0, 0, 0),
             results=[],
         )
 
@@ -724,7 +633,7 @@ class TestEvaluationRunResult:
             status='completed',
             execution_context=ExecutionContext(test_case=test_case, output=output),
             check_results=[check_result],
-            summary=TestCaseSummary(1, 1, 0, 0),
+            summary=TestCaseSummary(1, 1, 0),
             metadata={"test_duration": "100ms"},
         )
 
@@ -742,7 +651,7 @@ class TestEvaluationRunResult:
             started_at=now,
             completed_at=now,
             status='completed',
-            summary=EvaluationSummary(1, 1, 0, 0),
+            summary=EvaluationSummary(1, 1, 0),
             results=[test_case_result],
             experiment=experiment,
             metadata={"evaluation_type": "test"},
@@ -770,7 +679,6 @@ class TestEvaluationRunResult:
         assert row['total_checks'] == 1
         assert row['completed_checks'] == 1
         assert row['error_checks'] == 0
-        assert row['skipped_checks'] == 0
 
         # Verify check-specific data
         assert row['check_type'] == "exact_match"
@@ -842,7 +750,7 @@ class TestEvaluationRunResult:
             status='error',
             execution_context=ExecutionContext(test_case=test_case, output=output),
             check_results=[success_check, error_check],
-            summary=TestCaseSummary(2, 1, 1, 0),
+            summary=TestCaseSummary(2, 1, 1),
         )
 
         evaluation = EvaluationRunResult(
@@ -850,7 +758,7 @@ class TestEvaluationRunResult:
             started_at=now,
             completed_at=now,
             status='error',
-            summary=EvaluationSummary(1, 0, 1, 0),
+            summary=EvaluationSummary(1, 0, 1),
             results=[test_case_result],
         )
 
@@ -901,7 +809,7 @@ class TestEvaluationRunResult:
             status='completed',
             execution_context=ExecutionContext(test_case1, output1),
             check_results=[check1],
-            summary=TestCaseSummary(1, 1, 0, 0),
+            summary=TestCaseSummary(1, 1, 0),
         )
 
         # Test case 2
@@ -910,24 +818,25 @@ class TestEvaluationRunResult:
         check2 = CheckResult(
             check_type="contains",
             check_version='1.0.0',
-            status='skip',
+            status='error',
             results={},
             resolved_arguments={"actual": "output2", "expected": "expected2"},
             evaluated_at=now,
+            error=CheckError('validation_error', "Test error", True),
         )
         tc_result2 = TestCaseResult(
-            status='skip',
+            status='error',
             execution_context=ExecutionContext(test_case2, output2),
             check_results=[check2],
-            summary=TestCaseSummary(1, 0, 0, 1),
+            summary=TestCaseSummary(1, 0, 1),
         )
 
         evaluation = EvaluationRunResult(
             evaluation_id="eval-multi",
             started_at=now,
             completed_at=now,
-            status='skip',
-            summary=EvaluationSummary(2, 1, 0, 1),
+            status='error',
+            summary=EvaluationSummary(2, 1, 1),
             results=[tc_result1, tc_result2],
         )
 
@@ -944,13 +853,13 @@ class TestEvaluationRunResult:
         row2 = dict_list[1]
         assert row2['test_case_id'] == "test-002"
         assert row2['check_type'] == "contains"
-        assert row2['check_status'] == 'skip'
+        assert row2['check_status'] == 'error'
         assert row2['check_results_passed'] is None
 
         # Both should have same evaluation context
         for row in dict_list:
             assert row['evaluation_id'] == "eval-multi"
-            assert row['evaluation_status'] == 'skip'
+            assert row['evaluation_status'] == 'error'
         assert pd.DataFrame(dict_list).shape[0] == 2
         pd.DataFrame(dict_list).iloc[0].transpose()
 
@@ -973,7 +882,7 @@ class TestEvaluationRunResult:
             status='completed',
             execution_context=ExecutionContext(test_case, output),
             check_results=[check_result],
-            summary=TestCaseSummary(1, 1, 0, 0),
+            summary=TestCaseSummary(1, 1, 0),
         )
 
         evaluation = EvaluationRunResult(
@@ -981,7 +890,7 @@ class TestEvaluationRunResult:
             started_at=now,
             completed_at=now,
             status='completed',
-            summary=EvaluationSummary(1, 1, 0, 0),
+            summary=EvaluationSummary(1, 1, 0),
             results=[test_case_result],
         )
 
@@ -998,7 +907,7 @@ class TestEvaluationRunResult:
             'evaluation_id', 'started_at', 'completed_at', 'evaluation_status',
             'test_case_id', 'test_case_status', 'input_data', 'expected_output',
             'actual_output', 'total_checks', 'completed_checks', 'error_checks',
-            'skipped_checks', 'check_type', 'check_status', 'check_results',
+            'check_type', 'check_status', 'check_results',
             'check_results_passed', 'resolved_arguments', 'evaluated_at',
         }
         assert expected_keys.issubset(dict_list[0].keys())
@@ -1050,7 +959,7 @@ class TestEvaluationRunResult:
             status='completed',
             execution_context=ExecutionContext(test_case, output),
             check_results=[check_result],
-            summary=TestCaseSummary(1, 1, 0, 0),
+            summary=TestCaseSummary(1, 1, 0),
         )
 
         evaluation = EvaluationRunResult(
@@ -1058,7 +967,7 @@ class TestEvaluationRunResult:
             started_at=now,
             completed_at=now,
             status='completed',
-            summary=EvaluationSummary(1, 1, 0, 0),
+            summary=EvaluationSummary(1, 1, 0),
             results=[test_case_result],
         )
 

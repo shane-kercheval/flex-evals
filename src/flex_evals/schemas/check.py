@@ -84,7 +84,7 @@ class CheckResult:
 
     check_type: str
     check_version: str
-    status: Status | Literal['completed', 'error', 'skip']
+    status: Status | Literal['completed', 'error']
     results: dict[str, Any]
     resolved_arguments: dict[str, Any]
     evaluated_at: datetime

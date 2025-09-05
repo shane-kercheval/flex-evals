@@ -26,12 +26,22 @@ from tests.conftest import restore_standard_checks
 class SampleSyncCheck(BaseCheck):
     """Sample sync check for testing."""
 
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure on error."""
+        return {'passed': False}
+
     def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:  # noqa: ARG002
         return {"passed": True}
 
 
 class SampleAsyncCheck(BaseAsyncCheck):
     """Sample async check for testing."""
+
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure on error."""
+        return {'passed': False}
 
     async def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:  # noqa: ARG002, E501
         return {"passed": True}
@@ -173,10 +183,20 @@ class TestCheckRegistry:
     def test_version_specific_retrieval(self):
         """Test retrieving specific versions."""
         class CheckV1(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:  # noqa: ARG002, E501
                 return {"passed": True, "version": "1.0.0"}
 
         class CheckV2(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, arguments: dict[str, Any], context: EvaluationContext) -> dict[str, Any]:  # noqa: ARG002, E501
                 return {"passed": True, "version": "2.0.0"}
 
@@ -233,6 +253,11 @@ class TestRegistryDecorator:
         """Test basic check registration with decorator."""
         @register("decorated_check", version="1.0.0")
         class DecoratedCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 return {"passed": True}
 
@@ -248,6 +273,11 @@ class TestRegistryDecorator:
         """Test registering async check with decorator."""
         @register("decorated_async", version="2.0.0")
         class DecoratedAsyncCheck(BaseAsyncCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             async def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 return {"passed": True}
 
@@ -261,6 +291,11 @@ class TestRegistryDecorator:
         """Test registering user-defined checks."""
         @register("custom_business_logic", version="1.2.3")
         class CustomBusinessCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure for custom business check on error."""
+                return {'passed': False}
+
             def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 # Custom business logic
                 business_value = arguments.get("business_value", 0)
@@ -291,6 +326,11 @@ class TestRegistryDecorator:
         """Test global registry access functions."""
         @register("func_test_check")
         class FuncTestCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 return {"passed": True}
 
@@ -310,12 +350,22 @@ class TestRegistryDecorator:
         """Test version conflict handling with decorator."""
         @register("conflict_test", version="1.0.0")
         class FirstCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 return {"passed": True}
 
         # Registering different version should now be allowed
         @register("conflict_test", version="2.0.0")
         class SecondCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 return {"passed": False}
 
@@ -332,6 +382,11 @@ class TestRegistryDecorator:
         """Test decorator returns the original class unchanged."""
         @register("preserve_test")
         class PreserveTest(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure for preserve test check on error."""
+                return {'passed': False}
+
             def __call__(self, arguments, context):  # noqa: ANN001, ARG002
                 return {"test": "value"}
 
@@ -349,6 +404,11 @@ class TestRegistryDecorator:
         """Test registering check with CheckType enum."""
         @register(CheckType.EXACT_MATCH, version="1.0.0")
         class TestCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -360,18 +420,33 @@ class TestRegistryDecorator:
         """Test that enum and string registrations are compatible."""
         @register(CheckType.EXACT_MATCH, version="1.0.0")
         class TestCheck1(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
         # This should work (same version, equivalent types)
         @register('exact_match', version="1.0.0")
         class TestCheck2(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": False}
 
         # Different version should now be allowed
         @register(CheckType.EXACT_MATCH, version="2.0.0")
         class TestCheck3(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -387,6 +462,11 @@ class TestRegistryDecorator:
         """Test registering async check with enum."""
         @register(CheckType.SEMANTIC_SIMILARITY, version="1.0.0")
         class TestAsyncCheck(BaseAsyncCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"score": 0.9}
 
@@ -398,16 +478,31 @@ class TestRegistryDecorator:
         """Test module-level version management functions."""
         @register("version_func_test", version="1.0.0")
         class TestCheck_v1(BaseCheck):  # noqa: N801
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True, "version": "1.0.0"}
 
         @register("version_func_test", version="1.5.0")
         class TestCheck_v1_5(BaseCheck):  # noqa: N801
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True, "version": "1.5.0"}
 
         @register("version_func_test", version="2.0.0")
         class TestCheck_v2(BaseCheck):  # noqa: N801
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True, "version": "2.0.0"}
 
@@ -467,11 +562,21 @@ class TestRegistryStateSerialization:
         """Test getting state with registered checks."""
         @register("test_sync", version="1.0.0")
         class TestSyncCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
         @register("test_async", version="2.0.0")
         class TestAsyncCheck(BaseAsyncCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             async def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -504,6 +609,11 @@ class TestRegistryStateSerialization:
         # Register some checks first
         @register("temp_check")
         class TempCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -522,10 +632,20 @@ class TestRegistryStateSerialization:
         """Test restoring registry state with checks."""
         # Create test check classes
         class RestoredSyncCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
                 return {"passed": True, "type": "sync"}
 
         class RestoredAsyncCheck(BaseAsyncCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             async def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
                 return {"passed": True, "type": "async"}
 
@@ -576,11 +696,21 @@ class TestRegistryStateSerialization:
         # Register original checks
         @register("original_sync", version="1.0.0")
         class OriginalSyncCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure for original sync check on error."""
+                return {'passed': False}
+
             def __call__(self, test_value: str = "default", **kwargs) -> dict[str, Any]:  # noqa
                 return {"passed": True, "test_value": test_value}
 
         @register("original_async", version="2.0.0")
         class OriginalAsyncCheck(BaseAsyncCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure for original async check on error."""
+                return {'passed': False}
+
             async def __call__(self, delay: float = 0.01, **kwargs) -> dict[str, Any]:  # noqa
                 await asyncio.sleep(delay)
                 return {"passed": True, "delay": delay}
@@ -626,6 +756,11 @@ class TestRegistryStateSerialization:
         # Register initial checks
         @register("initial_check")
         class InitialCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -634,6 +769,11 @@ class TestRegistryStateSerialization:
 
         # Create new state with different checks (nested structure)
         class NewCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
                 return {"passed": False}
 
@@ -666,6 +806,11 @@ class TestRegistryStateSerialization:
         """Test that registry state contains proper types for serialization."""
         @register("type_test", version="1.2.3")
         class TypeTestCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -685,6 +830,11 @@ class TestRegistryStateSerialization:
     def test_restore_registry_state_with_enum_types(self):
         """Test restoring state with CheckType enum compatibility."""
         class EnumTestCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -722,6 +872,11 @@ class TestRegistryReverseMapping:
         """Test getting version for registered class."""
         @register("version_lookup_test", version="2.1.0")
         class VersionLookupTest(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -737,6 +892,11 @@ class TestRegistryReverseMapping:
         """Test getting check type for registered class."""
         @register("type_lookup_test", version="1.0.0")
         class TypeLookupTest(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -751,10 +911,20 @@ class TestRegistryReverseMapping:
     def test_reverse_mapping_with_multiple_versions(self):
         """Test reverse mapping works correctly with multiple versions of same type."""
         class CheckV1(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"version": "1.0.0"}
 
         class CheckV2(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"version": "2.0.0"}
 
@@ -773,6 +943,11 @@ class TestRegistryReverseMapping:
         """Test reverse mapping works with async checks."""
         @register("async_reverse_test", version="1.5.0")
         class AsyncReverseTest(BaseAsyncCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -783,6 +958,11 @@ class TestRegistryReverseMapping:
         """Test reverse mapping works with CheckType enums."""
         @register(CheckType.EXACT_MATCH, version="3.0.0")
         class EnumReverseTest(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -793,6 +973,11 @@ class TestRegistryReverseMapping:
     def test_reverse_mapping_error_cases(self):
         """Test error cases for reverse mapping."""
         class UnregisteredCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -813,6 +998,11 @@ class TestRegistryReverseMapping:
     def test_reverse_mapping_with_re_registration(self):
         """Test reverse mapping updates correctly with re-registration."""
         class ReRegisteredCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -833,6 +1023,11 @@ class TestRegistryReverseMapping:
         """Test reverse mapping is cleared when registry is cleared."""
         @register("clear_test", version="1.0.0")
         class ClearTest(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -849,6 +1044,11 @@ class TestRegistryReverseMapping:
         """Test that forward and reverse mappings are consistent."""
         @register("consistency_test", version="1.2.3")
         class ConsistencyTest(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"passed": True}
 
@@ -869,11 +1069,21 @@ class TestRegistryReverseMapping:
         """Test reverse mapping works correctly with different check types."""
         @register("type_a", version="1.0.0")
         class CheckTypeA(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"type": "A"}
 
         @register("type_b", version="1.0.0")
         class CheckTypeB(BaseAsyncCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"type": "B"}
 
@@ -888,11 +1098,21 @@ class TestRegistryReverseMapping:
         """Test reverse mapping integrates properly with all existing registry features."""
         @register("integration_test", version="1.0.0")
         class IntegrationTestV1(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"version": "1.0.0"}
 
         @register("integration_test", version="2.0.0")
         class IntegrationTestV2(BaseAsyncCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
             async def __call__(self, **kwargs: Any) -> dict[str, Any]:  # noqa
                 return {"version": "2.0.0"}
 

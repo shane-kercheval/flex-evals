@@ -239,7 +239,6 @@ class TestThresholdEngineIntegration:
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.summary.error_test_cases == 0
-        assert results.summary.skipped_test_cases == 0
         assert results.results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": expected_passed}

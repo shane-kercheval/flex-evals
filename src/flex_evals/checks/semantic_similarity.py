@@ -65,6 +65,11 @@ class SemanticSimilarityCheck(BaseAsyncCheck):
             raise ValueError("embedding_function must be callable")
         return v
 
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure for semantic similarity checks on error."""
+        return {'score': None, 'passed': False}
+
     async def __call__(self) -> dict[str, Any]:  # noqa: PLR0912
         """
         Execute semantic similarity check using resolved Pydantic fields.

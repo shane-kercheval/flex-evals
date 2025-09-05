@@ -48,6 +48,11 @@ class LLMJudgeCheck(BaseAsyncCheck):
         """Convert JSONPath-like strings to JSONPath objects."""
         return _convert_to_jsonpath(value)
 
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure for llm_judge checks on error."""
+        return {'judge_metadata': {}}
+
     async def execute(
         self,
         context: EvaluationContext,

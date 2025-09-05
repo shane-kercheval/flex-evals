@@ -50,6 +50,11 @@ class RegexCheck(BaseCheck):
         """Convert JSONPath-like strings to JSONPath objects."""
         return _convert_to_jsonpath(value)
 
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure for regex checks on error."""
+        return {'passed': False}
+
     def __call__(self) -> dict[str, Any]:
         """
         Execute regex check using resolved Pydantic fields.

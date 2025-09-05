@@ -161,6 +161,11 @@ class TestCheckValidation:
         # Register a custom check without proper Pydantic fields
         @register("custom_no_schema", version="1.0.0")
         class CustomCheck(BaseCheck):
+            @property
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure for custom check on error."""
+                return {'passed': False}
+
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True}
 

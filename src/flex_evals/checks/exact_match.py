@@ -37,6 +37,11 @@ class ExactMatchCheck(BaseCheck):
         """Convert JSONPath-like strings to JSONPath objects."""
         return _convert_to_jsonpath(value)
 
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure for exact match checks on error."""
+        return {'passed': False}
+
     def __call__(self) -> dict[str, Any]:
         """
         Execute exact match check using resolved Pydantic fields.

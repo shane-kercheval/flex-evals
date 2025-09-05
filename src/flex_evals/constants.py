@@ -38,7 +38,6 @@ class Status(str, Enum):
 
     COMPLETED = 'completed'
     ERROR = 'error'
-    SKIP = 'skip'
 
     def __str__(self) -> str:
         """Return the enum value as string."""

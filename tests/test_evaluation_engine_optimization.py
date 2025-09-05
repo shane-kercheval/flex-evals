@@ -34,6 +34,13 @@ class AsyncSleepCheck(BaseAsyncCheck):
     # Pydantic fields with validation
     sleep_duration: float = 0.1
 
+    @property
+
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure on error."""
+        return {'passed': False}
+
+
     async def __call__(self) -> dict[str, Any]:
         """Sleep for the specified duration and return timing info."""
         start_time = time.time()

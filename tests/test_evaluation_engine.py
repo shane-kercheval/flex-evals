@@ -46,6 +46,11 @@ class TestExampleCheck(BaseCheck):
             return JSONPath(expression=v)
         return v
 
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure for test check on error."""
+        return {'passed': False}
+
     def __call__(self) -> dict[str, Any]:
         """Execute test check using resolved Pydantic fields."""
         # Validate that all fields are resolved (no JSONPath objects remain)
@@ -73,6 +78,11 @@ class TestExampleAsyncCheck(BaseAsyncCheck):
             return JSONPath(expression=v)
         return v
 
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure for async test check on error."""
+        return {'passed': False}
+
     async def __call__(self) -> dict[str, Any]:
         """Execute async test check using resolved Pydantic fields."""
         # Validate that all fields are resolved (no JSONPath objects remain)
@@ -88,6 +98,11 @@ class TestExampleAsyncCheck(BaseAsyncCheck):
 class TestFailingCheck(BaseCheck):
     """Test check that always fails for error testing."""
 
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure for failing test check on error."""
+        return {'passed': False}
+
     def __call__(self) -> dict[str, Any]:
         raise RuntimeError("This check always fails")
 
@@ -97,6 +112,11 @@ class SlowAsyncCheck(BaseAsyncCheck):
 
     # Pydantic fields with validation
     delay: float = 0.1
+
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure for slow async check on error."""
+        return {'passed': False}
 
     async def __call__(self) -> dict[str, Any]:
         await asyncio.sleep(self.delay)
@@ -108,6 +128,11 @@ class CustomUserCheck(BaseCheck):
 
     # Pydantic fields with validation
     test_value: str = "expected"
+
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure for custom user check on error."""
+        return {'passed': False}
 
     def __call__(self) -> dict[str, Any]:
         # Return a unique identifier to prove this exact check was executed
@@ -446,7 +471,6 @@ class TestEvaluationEngine:
         assert result.summary.total_test_cases == 2
         assert result.summary.error_test_cases == 2  # Both have failing checks
         assert result.summary.completed_test_cases == 0
-        assert result.summary.skipped_test_cases == 0
 
     def test_evaluate_status_computation(self):
         """Test overall status computation from test case results."""

@@ -219,6 +219,13 @@ class TestFieldSchemaExtraction:
             regular_str: str = Field("default", description="Regular string field")
             regular_int: int = Field(42, description="Regular integer field")
 
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
+
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True}
 
@@ -306,6 +313,13 @@ class TestFieldSchemaExtraction:
         class RequiredJSONPathCheck(BaseCheck):
             # Field that ONLY accepts JSONPath (like path in AttributeExistsCheck)
             path_only: JSONPath = Field(..., description="Must be a JSONPath expression")
+
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
 
             def __call__(self) -> dict[str, Any]:
                 return {"passed": True}
@@ -491,6 +505,13 @@ class TestClassDescriptionExtraction:
 
             test_field: str = Field("test", description="Test field")
 
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
+
             def __call__(self) -> dict[str, Any]:
                 return {'passed': True}
 
@@ -525,6 +546,13 @@ class TestClassDescriptionExtraction:
 
             test_field: str = Field("test", description="Test field")
 
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
+
             def __call__(self) -> dict[str, Any]:
                 return {'passed': True}
 
@@ -535,6 +563,13 @@ class TestClassDescriptionExtraction:
         """Test extracting description from class without docstring."""
         class TestSchema(BaseCheck):
             test_field: str = Field("test", description="Test field")
+
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
 
             def __call__(self) -> dict[str, Any]:
                 return {'passed': True}
@@ -622,6 +657,13 @@ class TestDescriptionIntegrationWithMockClasses:
             field1: str = Field("test", description="First test field")
             field2: int = Field(42, description="Second test field with complex validation")
 
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
+
             def __call__(self) -> dict[str, Any]:
                 return {'passed': True}
 
@@ -630,11 +672,25 @@ class TestDescriptionIntegrationWithMockClasses:
 
             simple_field: bool = Field(True, description="Simple field")
 
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
+
             def __call__(self) -> dict[str, Any]:
                 return {'passed': True}
 
         class NoDocstringSchema(BaseCheck):
             basic_field: str = Field("default", description="Basic field")
+
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
 
             def __call__(self) -> dict[str, Any]:
                 return {'passed': True}
@@ -687,6 +743,13 @@ class TestDescriptionIntegrationWithMockClasses:
 
             test_field: str = Field("test", description="Test field")
 
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
+
             def __call__(self) -> dict[str, Any]:
                 return {'passed': True}
 
@@ -719,6 +782,13 @@ class TestDescriptionIntegrationWithMockClasses:
             """
 
             test_field: str = Field("test", description="Test field")
+
+            @property
+
+            def default_results(self) -> dict[str, Any]:
+                """Return default results structure on error."""
+                return {'passed': False}
+
 
             def __call__(self) -> dict[str, Any]:
                 return {'passed': True}

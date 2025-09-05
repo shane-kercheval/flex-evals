@@ -34,14 +34,13 @@ class TestCaseSummary:
     total_checks: int
     completed_checks: int
     error_checks: int
-    skipped_checks: int
 
     def __post_init__(self):
         """Validate summary statistics."""
         if self.total_checks < 0:
             raise ValueError("TestCaseSummary.total_checks must be non-negative")
 
-        if (self.completed_checks + self.error_checks + self.skipped_checks) != self.total_checks:
+        if (self.completed_checks + self.error_checks) != self.total_checks:
             raise ValueError("TestCaseSummary check counts must sum to total_checks")
 
 
@@ -64,10 +63,9 @@ class TestCaseResult:
     Status Logic:
     - 'completed': All checks have status 'completed'
     - 'error': At least one check has status 'error'
-    - 'skip': No errors, but at least one check has status 'skip'
     """
 
-    status: Status | Literal['completed', 'error', 'skip']
+    status: Status | Literal['completed', 'error']
     execution_context: ExecutionContext
     check_results: list[CheckResult]
     summary: TestCaseSummary
@@ -84,12 +82,10 @@ class TestCaseResult:
         actual_total = len(self.check_results)
         actual_completed = sum(1 for r in self.check_results if r.status == 'completed')
         actual_error = sum(1 for r in self.check_results if r.status == 'error')
-        actual_skipped = sum(1 for r in self.check_results if r.status == 'skip')
 
         if (self.summary.total_checks != actual_total or
             self.summary.completed_checks != actual_completed or
-            self.summary.error_checks != actual_error or
-            self.summary.skipped_checks != actual_skipped):
+            self.summary.error_checks != actual_error):
             raise ValueError("TestCaseResult.summary does not match check_results")
 
         # Validate status matches check results
@@ -97,12 +93,12 @@ class TestCaseResult:
         if self.status != expected_status:
             raise ValueError(f"TestCaseResult.status should be '{expected_status}' based on check results")  # noqa: E501
 
-    def _compute_status(self, check_results: list[CheckResult]) -> Status | Literal['completed', 'error', 'skip']:  # noqa: E501
+    def _compute_status(
+        self, check_results: list[CheckResult],
+    ) -> Status | Literal['completed', 'error']:
         """Compute status based on check result statuses."""
         if any(r.status == 'error' for r in check_results):
             return 'error'
-        if any(r.status == 'skip' for r in check_results):
-            return 'skip'
         return 'completed'
 
 
@@ -113,14 +109,13 @@ class EvaluationSummary:
     total_test_cases: int
     completed_test_cases: int
     error_test_cases: int
-    skipped_test_cases: int
 
     def __post_init__(self):
         """Validate summary statistics."""
         if self.total_test_cases < 0:
             raise ValueError("EvaluationSummary.total_test_cases must be non-negative")
 
-        if (self.completed_test_cases + self.error_test_cases + self.skipped_test_cases) != self.total_test_cases:  # noqa: E501
+        if (self.completed_test_cases + self.error_test_cases) != self.total_test_cases:
             raise ValueError("EvaluationSummary test case counts must sum to total_test_cases")
 
 
@@ -147,7 +142,7 @@ class EvaluationRunResult:
     evaluation_id: str
     started_at: datetime
     completed_at: datetime
-    status: Status | Literal['completed', 'error', 'skip']
+    status: Status | Literal['completed', 'error']
     summary: EvaluationSummary
     results: list[TestCaseResult]
     experiment: ExperimentMetadata | None = None
@@ -165,12 +160,10 @@ class EvaluationRunResult:
         actual_total = len(self.results)
         actual_completed = sum(1 for r in self.results if r.status == 'completed')
         actual_error = sum(1 for r in self.results if r.status == 'error')
-        actual_skipped = sum(1 for r in self.results if r.status == 'skip')
 
         if (self.summary.total_test_cases != actual_total or
             self.summary.completed_test_cases != actual_completed or
-            self.summary.error_test_cases != actual_error or
-            self.summary.skipped_test_cases != actual_skipped):
+            self.summary.error_test_cases != actual_error):
             raise ValueError("EvaluationRunResult.summary does not match results")
 
         # Validate status matches results
@@ -178,12 +171,12 @@ class EvaluationRunResult:
         if self.status != expected_status:
             raise ValueError(f"EvaluationRunResult.status should be '{expected_status}' based on test case results")  # noqa: E501
 
-    def _compute_status(self, results: list[TestCaseResult]) -> Status | Literal['completed', 'error', 'skip']:  # noqa: E501
+    def _compute_status(
+        self, results: list[TestCaseResult],
+    ) -> Status | Literal['completed', 'error']:
         """Compute status based on test case result statuses."""
         if any(r.status == 'error' for r in results):
             return 'error'
-        if any(r.status == 'skip' for r in results):
-            return 'skip'
         return 'completed'
 
     def to_dict_list(self) -> list[dict[str, Any]]:  # noqa: PLR0912
@@ -224,7 +217,6 @@ class EvaluationRunResult:
                 'total_checks': test_case_result.summary.total_checks,
                 'completed_checks': test_case_result.summary.completed_checks,
                 'error_checks': test_case_result.summary.error_checks,
-                'skipped_checks': test_case_result.summary.skipped_checks,
             }
 
             # Add test case metadata if present

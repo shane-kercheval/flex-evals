@@ -28,6 +28,13 @@ class TestCheck(BaseCheck):
             return JSONPath(expression=v)
         return v
 
+    @property
+
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure on error."""
+        return {'passed': False}
+
+
     def __call__(self) -> dict[str, Any]:
         """Execute test check comparison using resolved Pydantic fields."""
         # Validate that all fields are resolved (no JSONPath objects remain)
@@ -60,6 +67,13 @@ class TestAsyncCheck(BaseAsyncCheck):
             return JSONPath(expression=v)
         return v
 
+    @property
+
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure on error."""
+        return {'passed': False}
+
+
     async def __call__(self) -> dict[str, Any]:
         """Execute async test check comparison using resolved Pydantic fields."""
         # Validate that all fields are resolved (no JSONPath objects remain)
@@ -76,6 +90,13 @@ class TestFailingCheck(BaseCheck):
     """Combined test utility check that always fails."""
 
     # No fields - this check takes no parameters and always fails
+
+    @property
+
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure on error."""
+        return {'passed': False}
+
 
     def __call__(self) -> dict[str, Any]:
         """Execute test check that always fails."""

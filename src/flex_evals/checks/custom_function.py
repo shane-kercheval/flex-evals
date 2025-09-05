@@ -32,6 +32,11 @@ class CustomFunctionCheck(BaseAsyncCheck):
         description="Arguments to pass to validation_function (JSONPath expressions supported)",
     )
 
+    @property
+    def default_results(self) -> dict[str, Any]:
+        """Return default results structure for custom_function checks on error."""
+        return {}
+
     async def execute(
         self,
         check_type: str,
