@@ -55,7 +55,6 @@ class CheckError:
 
     type: ErrorType | Literal['jsonpath_error', 'validation_error', 'timeout_error', 'unknown_error']  # noqa: E501
     message: str
-    recoverable: bool = False
 
 
 

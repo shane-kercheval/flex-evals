@@ -63,7 +63,6 @@ class CustomFunctionCheck(BaseAsyncCheck):
                 evaluated_at=datetime.now(UTC),
                 check_version=check_version,
                 check_metadata=check_metadata,
-                recoverable=False,
             )
 
         if not isinstance(arguments["function_args"], dict):
@@ -75,7 +74,6 @@ class CustomFunctionCheck(BaseAsyncCheck):
                 evaluated_at=datetime.now(UTC),
                 check_version=check_version,
                 check_metadata=check_metadata,
-                recoverable=False,
             )
 
         # Process function_args JSONPath expressions
@@ -108,7 +106,6 @@ class CustomFunctionCheck(BaseAsyncCheck):
                 evaluated_at=datetime.now(UTC),
                 check_version=check_version,
                 check_metadata=check_metadata,
-                recoverable=False,
             )
 
         # Delegate to parent class for standard execution

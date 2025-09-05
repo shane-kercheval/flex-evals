@@ -275,7 +275,6 @@ class EvaluationRunResult:
                 if check_result.error:
                     row['error_type'] = check_result.error.type
                     row['error_message'] = check_result.error.message
-                    row['error_recoverable'] = check_result.error.recoverable
 
                 flattened_rows.append(row)
 

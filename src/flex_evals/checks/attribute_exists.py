@@ -138,7 +138,6 @@ class AttributeExistsCheck(BaseCheck):
                 evaluated_at=evaluated_at,
                 check_version=check_version,
                 check_metadata=check_metadata,
-                recoverable=False,
             )
 
         except Exception as e:
@@ -150,5 +149,4 @@ class AttributeExistsCheck(BaseCheck):
                 evaluated_at=evaluated_at,
                 check_version=check_version,
                 check_metadata=check_metadata,
-                recoverable=False,
             )

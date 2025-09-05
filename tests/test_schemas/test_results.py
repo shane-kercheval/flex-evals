@@ -186,7 +186,7 @@ class TestTestCaseResult:
             resolved_arguments={},
             evaluated_at=datetime.now(UTC),
             metadata={"check_version": "1.0.0"},
-            error=CheckError("test_error", "Test error", True),
+            error=CheckError("test_error", "Test error"),
         )
         check_results = [
             self.create_check_result('completed'),
@@ -211,7 +211,7 @@ class TestTestCaseResult:
             resolved_arguments={},
             evaluated_at=datetime.now(UTC),
             metadata={"check_version": "1.0.0"},
-            error=CheckError("test_error", "Test error", True),
+            error=CheckError("test_error", "Test error"),
         )
         check_results = [
             self.create_check_result('completed'),
@@ -347,7 +347,7 @@ class TestEvaluationRunResult:
                     resolved_arguments={},
                     evaluated_at=datetime.now(UTC),
                     metadata={"check_version": "1.0.0"},
-                    error=CheckError('validation_error', "Test error", True),
+                    error=CheckError('validation_error', "Test error"),
                 ),
             ]
             summary = TestCaseSummary(1, 0, 1)
@@ -742,7 +742,6 @@ class TestEvaluationRunResult:
             error=CheckError(
                 type='timeout_error',
                 message="Check timed out",
-                recoverable=True,
             ),
         )
 
@@ -781,7 +780,6 @@ class TestEvaluationRunResult:
         assert row2['check_results_passed'] is None
         assert row2['error_type'] == 'timeout_error'
         assert row2['error_message'] == "Check timed out"
-        assert row2['error_recoverable'] is True
 
         # Both rows should have same test case context
         for row in dict_list:
@@ -822,7 +820,7 @@ class TestEvaluationRunResult:
             results={},
             resolved_arguments={"actual": "output2", "expected": "expected2"},
             evaluated_at=now,
-            error=CheckError('validation_error', "Test error", True),
+            error=CheckError('validation_error', "Test error"),
         )
         tc_result2 = TestCaseResult(
             status='error',

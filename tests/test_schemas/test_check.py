@@ -260,11 +260,7 @@ class TestCheckResult:
         error = CheckError(type='validation_error', message="Invalid input")
         assert error.type == 'validation_error'
         assert error.message == "Invalid input"
-        assert error.recoverable is False  # Default value
 
-        # Test with recoverable=True
-        error2 = CheckError(type="timeout_error", message="Request timed out", recoverable=True)
-        assert error2.recoverable is True
 
     def test_check_result_serialization(self):
         """Test full CheckResult JSON serialization."""
@@ -347,7 +343,6 @@ class TestCheckResult:
         error = CheckError(
             type=ErrorType.VALIDATION_ERROR,
             message="Test validation error",
-            recoverable=False,
         )
         # Should work with enum
         assert error.type in [ErrorType.VALIDATION_ERROR, 'validation_error']
@@ -357,7 +352,6 @@ class TestCheckResult:
         error = CheckError(
             type='validation_error',
             message="Test validation error",
-            recoverable=False,
         )
         assert error.type == 'validation_error'
 
@@ -390,13 +384,11 @@ class TestCheckResult:
         error_with_string = CheckError(
             type='validation_error',
             message="Test error",
-            recoverable=False,
         )
 
         error_with_enum = CheckError(
             type=ErrorType.UNKNOWN_ERROR,
             message="Test error",
-            recoverable=False,
         )
 
         assert error_with_string.type == 'validation_error'

@@ -382,7 +382,6 @@ class BaseCheck(BaseModel, ABC):
                 evaluated_at=evaluated_at,
                 check_version=check_version,
                 check_metadata=check_metadata,
-                recoverable=False,
             )
 
         except ValidationError as e:
@@ -394,7 +393,6 @@ class BaseCheck(BaseModel, ABC):
                 evaluated_at=evaluated_at,
                 check_version=check_version,
                 check_metadata=check_metadata,
-                recoverable=False,
             )
 
         except CheckExecutionError as e:
@@ -406,7 +404,6 @@ class BaseCheck(BaseModel, ABC):
                 evaluated_at=evaluated_at,
                 check_version=check_version,
                 check_metadata=check_metadata,
-                recoverable=False,
             )
 
         except Exception as e:
@@ -418,7 +415,6 @@ class BaseCheck(BaseModel, ABC):
                 evaluated_at=evaluated_at,
                 check_version=check_version,
                 check_metadata=check_metadata,
-                recoverable=False,
             )
 
     def _create_error_result(
@@ -430,7 +426,6 @@ class BaseCheck(BaseModel, ABC):
         evaluated_at: datetime,
         check_version: str,
         check_metadata: dict[str, Any] | None = None,
-        recoverable: bool = False,
     ) -> CheckResult:
         """Create a CheckResult for error cases with default results."""
         # Get default results from this check instance to maintain consistent API
@@ -445,7 +440,6 @@ class BaseCheck(BaseModel, ABC):
             error=CheckError(
                 type=error_type,
                 message=error_message,
-                recoverable=recoverable,
             ),
         )
 
@@ -634,7 +628,6 @@ class BaseAsyncCheck(BaseModel, ABC):
                 evaluated_at=evaluated_at,
                 check_version=check_version,
                 check_metadata=check_metadata,
-                recoverable=False,
             )
 
         except ValidationError as e:
@@ -646,7 +639,6 @@ class BaseAsyncCheck(BaseModel, ABC):
                 evaluated_at=evaluated_at,
                 check_version=check_version,
                 check_metadata=check_metadata,
-                recoverable=False,
             )
 
         except CheckExecutionError as e:
@@ -658,7 +650,6 @@ class BaseAsyncCheck(BaseModel, ABC):
                 evaluated_at=evaluated_at,
                 check_version=check_version,
                 check_metadata=check_metadata,
-                recoverable=False,
             )
 
         except Exception as e:
@@ -669,7 +660,6 @@ class BaseAsyncCheck(BaseModel, ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 check_version=check_version,
-                recoverable=False,
             )
 
     def _create_error_result(
@@ -681,7 +671,6 @@ class BaseAsyncCheck(BaseModel, ABC):
         evaluated_at: datetime,
         check_version: str,
         check_metadata: dict[str, Any] | None = None,
-        recoverable: bool = False,
     ) -> CheckResult:
         """Create a CheckResult for error cases with default results."""
         return CheckResult(
@@ -695,7 +684,6 @@ class BaseAsyncCheck(BaseModel, ABC):
             error=CheckError(
                 type=error_type,
                 message=error_message,
-                recoverable=recoverable,
             ),
         )
 

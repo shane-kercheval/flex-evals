@@ -196,7 +196,6 @@ class TestBaseCheck:
         assert result.error is not None
         assert result.error.type == 'jsonpath_error'
         assert "did not match any data" in result.error.message
-        assert result.error.recoverable is False
 
     def test_check_execution_error(self):
         """Test check execution with unexpected error."""

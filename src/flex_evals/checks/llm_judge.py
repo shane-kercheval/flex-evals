@@ -88,7 +88,6 @@ class LLMJudgeCheck(BaseAsyncCheck):
                         evaluated_at=evaluated_at,
                         check_version=check_version,
                         check_metadata=check_metadata,
-                        recoverable=False,
                     )
             elif isinstance(self.prompt, JSONPath):
                 # Resolve JSONPath prompt field
@@ -107,7 +106,6 @@ class LLMJudgeCheck(BaseAsyncCheck):
                         evaluated_at=evaluated_at,
                         check_version=check_version,
                         check_metadata=check_metadata,
-                        recoverable=False,
                     )
 
             # Create a copy of self with the processed prompt
@@ -152,7 +150,6 @@ class LLMJudgeCheck(BaseAsyncCheck):
                 evaluated_at=evaluated_at,
                 check_version=check_version,
                 check_metadata=check_metadata,
-                recoverable=False,
             )
 
     async def __call__(self) -> dict[str, Any]:

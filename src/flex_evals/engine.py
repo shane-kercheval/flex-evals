@@ -486,7 +486,6 @@ def _create_error_check_result_for_base_check(
         error=CheckError(
             type='unknown_error',
             message=f"Unhandled error during check execution: {error_message}",
-            recoverable=False,
         ),
     )
 
