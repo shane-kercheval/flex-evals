@@ -1,8 +1,4 @@
-"""
-Combined AttributeExistsCheck implementation for FEP.
-
-Combines schema validation with execution logic in a single class.
-"""
+"""Attribute Exists Check - checks if an attribute/field exists in the data using JSONPath."""
 
 from typing import Any
 from datetime import datetime, UTC

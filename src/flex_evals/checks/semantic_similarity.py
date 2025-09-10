@@ -1,8 +1,4 @@
-"""
-Combined SemanticSimilarityCheck implementation for FEP.
-
-Combines schema validation with execution logic in a single class.
-"""
+"""Semantic Similarity Check - computes semantic similarity between two texts using embeddings."""
 
 import asyncio
 from typing import Any

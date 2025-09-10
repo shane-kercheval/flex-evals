@@ -1,8 +1,4 @@
-"""
-Combined ThresholdCheck implementation for FEP.
-
-Combines schema validation with execution logic in a single class.
-"""
+"""Threshold Check - checks if a numeric value meets minimum/maximum thresholds."""
 
 from typing import Any
 from pydantic import field_validator, Field
