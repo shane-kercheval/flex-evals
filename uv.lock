@@ -392,6 +392,7 @@ version = "0.3.3"
 source = { editable = "." }
 dependencies = [
     { name = "jsonpath-ng" },
+    { name = "jsonschema" },
     { name = "packaging" },
     { name = "pydantic" },
     { name = "python-dotenv" },
@@ -420,6 +421,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "jsonpath-ng", specifier = ">=1.6.0" },
+    { name = "jsonschema", specifier = ">=4.24.0" },
     { name = "packaging", specifier = ">=25.0" },
     { name = "pydantic", specifier = ">=2.11.6" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
