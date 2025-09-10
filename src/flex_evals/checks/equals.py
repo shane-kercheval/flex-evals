@@ -1,8 +1,4 @@
-"""
-Combined EqualsCheck implementation for FEP.
-
-Combines schema validation with execution logic in a single class.
-"""
+"""Equals Check - checks if two values are equal using Python's == operator."""
 
 from typing import Any
 from pydantic import field_validator, Field

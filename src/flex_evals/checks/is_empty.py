@@ -1,7 +1,6 @@
 """
-Combined IsEmptyCheck implementation for FEP.
-
-Combines schema validation with execution logic in a single class.
+Is Empty Check - checks if a value is empty (None, empty string, whitespace-only, or empty
+collection).
 """
 
 from typing import Any

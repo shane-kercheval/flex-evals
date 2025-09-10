@@ -1,7 +1,5 @@
 """
-Combined LLMJudgeCheck implementation for FEP.
-
-This module implements the `llm_judge` check type, which uses Large Language Models (LLMs)
+Implements the `llm_judge` check type, which uses Large Language Models (LLMs)
 to evaluate system outputs against complex, nuanced criteria that cannot be easily
 expressed with traditional programmatic checks.
 """

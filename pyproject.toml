@@ -1,11 +1,12 @@
 [project]
 name = "flex-evals"
-version = "0.3.3"
+version = "0.3.4"
 description = "A flexible evaluation framework for testing and validating AI systems, LLMs, and APIs with structured checks and async support"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "jsonpath-ng>=1.6.0",
+    "jsonschema>=4.24.0",
     "packaging>=25.0",
     "pydantic>=2.11.6",
     "python-dotenv>=1.1.0",

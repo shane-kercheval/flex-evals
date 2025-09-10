@@ -54,8 +54,8 @@ from dataclasses import asdict
 from jsonpath_ng import parse as jsonpath_parse
 from jsonpath_ng.exceptions import JSONPathError as JSONPathNGError
 
-from .schemas import TestCase, Output
-from .exceptions import JSONPathError
+from ..schemas import TestCase, Output
+from ..exceptions import JSONPathError
 
 
 class JSONPathResolver:

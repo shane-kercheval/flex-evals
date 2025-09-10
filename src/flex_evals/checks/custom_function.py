@@ -1,8 +1,4 @@
-"""
-Combined CustomFunctionCheck implementation for FEP.
-
-Combines schema validation with execution logic in a single class.
-"""
+"""Custom Function Check - executes user-provided python functions with JSONPath support."""
 
 import asyncio
 from datetime import datetime, UTC

@@ -1,8 +1,4 @@
-"""
-Combined ContainsCheck implementation for FEP.
-
-Combines schema validation with execution logic in a single class.
-"""
+"""Contains Check - checks if a string contains a string or specified phrases."""
 
 from typing import Any
 from pydantic import field_validator, Field

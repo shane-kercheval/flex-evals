@@ -8,6 +8,7 @@ from flex_evals import (
     IsEmptyCheck,
     LLMJudgeCheck,
     RegexCheck,
+    SchemaCheck,
     SemanticSimilarityCheck,
     ThresholdCheck,
     CheckType,
@@ -32,5 +33,6 @@ def restore_standard_checks():
     register(CheckType.IS_EMPTY, version="1.0.0")(IsEmptyCheck)
     register(CheckType.LLM_JUDGE, version="1.0.0")(LLMJudgeCheck)
     register(CheckType.REGEX, version="1.0.0")(RegexCheck)
+    register(CheckType.SCHEMA, version="1.0.0")(SchemaCheck)
     register(CheckType.SEMANTIC_SIMILARITY, version="1.0.0")(SemanticSimilarityCheck)
     register(CheckType.THRESHOLD, version="1.0.0")(ThresholdCheck)

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 from ..constants import CheckType
 from ..exceptions import CheckExecutionError, JSONPathError, ValidationError
-from ..jsonpath_resolver import get_shared_resolver
+from ..utils.jsonpath_resolver import get_shared_resolver
 from ..schemas import CheckResult, CheckError, Output, TestCase
 
 

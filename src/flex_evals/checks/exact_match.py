@@ -1,8 +1,4 @@
-"""
-Combined ExactMatch check implementation for FEP.
-
-Combines schema validation with execution logic in a single class.
-"""
+"""Exact Match Check - checks if two text values match exactly."""
 
 from typing import Any
 from pydantic import field_validator

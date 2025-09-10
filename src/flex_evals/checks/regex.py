@@ -1,8 +1,4 @@
-"""
-Combined RegexCheck implementation for FEP.
-
-Combines schema validation with execution logic in a single class.
-"""
+"""Regex Check - checks if a text value matches a specified regular expression pattern."""
 
 import re
 from typing import Any

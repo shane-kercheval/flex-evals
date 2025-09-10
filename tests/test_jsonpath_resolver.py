@@ -1,7 +1,7 @@
 """Tests for JSONPath resolver implementation."""
 
 import pytest
-from flex_evals.jsonpath_resolver import JSONPathResolver
+from flex_evals.utils.jsonpath_resolver import JSONPathResolver
 from flex_evals import TestCase, Output, JSONPathError
 
 
