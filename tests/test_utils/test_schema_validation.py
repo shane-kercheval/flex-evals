@@ -11,7 +11,7 @@ Tests cover validation success/failure cases, error handling, and edge cases.
 import json
 from typing import Any
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from flex_evals.utils.schema_validation import validate_json_schema, _coerce
 
@@ -421,6 +421,73 @@ class TestValidateJsonSchemaAdvanced:
         assert is_valid is False
         assert errors is not None
         assert any("additional properties" in error.lower() for error in errors)
+
+    def test_nested_objects_pydantic_class_schema(self) -> None:
+        """Test validation using Pydantic model CLASS as schema (not instance)."""
+
+        # Define nested Pydantic models
+        class UserPreferences(BaseModel):
+            theme: str = Field(..., pattern="^(light|dark)$")
+            notifications: bool
+
+        class UserProfile(BaseModel):
+            name: str
+            preferences: UserPreferences
+
+        class UserContainer(BaseModel):
+            model_config = ConfigDict(extra='forbid')  # No additional properties allowed
+
+            user: UserProfile
+
+        # Valid data
+        valid_data = {
+            "user": {
+                "name": "Alice",
+                "preferences": {"theme": "dark", "notifications": True},
+            },
+        }
+
+        # Test passing the Pydantic CLASS as schema (not an instance)
+        is_valid, errors = validate_json_schema(valid_data, UserContainer)
+        assert is_valid is True
+        assert errors is None
+
+        # Invalid data - missing required field
+        invalid_data_missing = {
+            "user": {
+                "name": "Bob",
+                "preferences": {"notifications": True},  # Missing required 'theme'
+            },
+        }
+        is_valid, errors = validate_json_schema(invalid_data_missing, UserContainer)
+        assert is_valid is False
+        assert errors is not None
+        assert any("theme" in error for error in errors)
+
+        # Invalid data - pattern violation
+        invalid_data_pattern = {
+            "user": {
+                "name": "Charlie",
+                "preferences": {"theme": "purple", "notifications": True},  # Invalid theme
+            },
+        }
+        is_valid, errors = validate_json_schema(invalid_data_pattern, UserContainer)
+        assert is_valid is False
+        assert errors is not None
+        assert any("pattern" in error.lower() or "does not match" in error.lower() for error in errors)  # noqa: E501
+
+    def test_pydantic_class_as_data_raises_error(self) -> None:
+        """Test that using a Pydantic model class as data (not schema) raises TypeError."""
+
+        class TestModel(BaseModel):
+            name: str
+            age: int
+
+        schema = {"type": "object", "properties": {"name": {"type": "string"}}}
+
+        # Should raise TypeError when trying to use model class as data
+        with pytest.raises(TypeError, match="Pydantic model class can only be used as schema"):
+            validate_json_schema(TestModel, schema)
 
     def test_nested_objects(self) -> None:
         """Test validation with nested object structures."""

@@ -9,16 +9,17 @@ from pydantic import BaseModel
 
 
 JSONLike = str | dict[str, Any] | BaseModel
-SchemaLike = str | dict[str, Any] | type[BaseModel]
+SchemaLike = JSONLike | type[BaseModel]
 
 
 def _coerce(
-        value: JSONLike, *, as_schema: bool,
+        value: SchemaLike, *, as_schema: bool,
     ) -> dict[str, Any] | list[Any] | str | int | float | bool | None:
     """
     Coerce input to a Python object suitable for validation.
 
-    - If BaseModel: dump to schema (for schema) or to data (for data).
+    - If BaseModel instance: dump to schema (for schema) or to data (for data).
+    - If BaseModel class: extract JSON schema (only valid for schema).
     - If str: json.loads.
     - Otherwise: pass through.
     Additionally, if as_schema=True, ensure result is a mapping.
@@ -34,7 +35,13 @@ def _coerce(
         TypeError: When schema is not a JSON object after coercion
         json.JSONDecodeError: When string cannot be parsed as JSON
     """
-    if isinstance(value, BaseModel):
+    if isinstance(value, type) and issubclass(value, BaseModel):
+        # Pydantic model class - extract schema
+        if not as_schema:
+            raise TypeError("Pydantic model class can only be used as schema, not as data")
+        value = value.model_json_schema()
+    elif isinstance(value, BaseModel):
+        # Pydantic model instance
         value = value.__class__.model_json_schema() if as_schema else value.model_dump()
     elif isinstance(value, str):
         value = json.loads(value)
