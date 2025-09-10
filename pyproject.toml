@@ -1,6 +1,6 @@
 [project]
 name = "flex-evals"
-version = "0.3.3"
+version = "0.3.4"
 description = "A flexible evaluation framework for testing and validating AI systems, LLMs, and APIs with structured checks and async support"
 readme = "README.md"
 requires-python = ">=3.11"
