@@ -335,6 +335,93 @@ class TestValidateJsonSchemaAdvanced:
         assert errors is not None
         assert any("email" in error.lower() for error in errors)
 
+    def test_nested_objects_pydantic_schema(self) -> None:
+        """Test validation with nested objects using Pydantic model as schema."""
+        # Define nested Pydantic models that mirror the dict schema structure
+        class UserPreferences(BaseModel):
+            """User preferences nested model."""
+
+            model_config = {"extra": "forbid"}
+
+            theme: str = Field(..., pattern="^(light|dark)$")  # Enum constraint via pattern
+            notifications: bool
+
+        class UserProfile(BaseModel):
+            """User profile nested model."""
+
+            model_config = {"extra": "forbid"}
+
+            name: str
+            preferences: UserPreferences
+
+        class UserContainer(BaseModel):
+            """Top-level user container."""
+
+            model_config = {"extra": "forbid"}
+
+            user: UserProfile
+
+        # Create an instance to extract schema from
+        schema_model = UserContainer(
+            user=UserProfile(
+                name="schema_template",
+                preferences=UserPreferences(theme="dark", notifications=True),
+            ),
+        )
+
+        # Valid nested data - should match the Pydantic schema structure
+        valid_data = {
+            "user": {
+                "name": "Alice",
+                "preferences": {"theme": "dark", "notifications": True},
+            },
+        }
+        is_valid, errors = validate_json_schema(valid_data, schema_model)
+        assert is_valid is True
+        assert errors is None
+
+        # Missing nested required field - should fail
+        invalid_data_missing = {
+            "user": {
+                "name": "Bob",
+                "preferences": {},  # Missing required fields
+            },
+        }
+        is_valid, errors = validate_json_schema(invalid_data_missing, schema_model)
+        assert is_valid is False
+        assert errors is not None
+        # Should have errors for missing theme and notifications
+        assert any("theme" in error or "notifications" in error for error in errors)
+
+        # Invalid enum-like value (pattern violation)
+        invalid_data_enum = {
+            "user": {
+                "name": "Charlie",
+                "preferences": {"theme": "purple", "notifications": True},  # Invalid theme
+            },
+        }
+        is_valid, errors = validate_json_schema(invalid_data_enum, schema_model)
+        assert is_valid is False
+        assert errors is not None
+        # Should have error about theme pattern
+        assert any("pattern" in error.lower() or "does not match" in error.lower() for error in errors)  # noqa: E501
+
+        # Extra properties not allowed
+        invalid_data_extra = {
+            "user": {
+                "name": "David",
+                "preferences": {
+                    "theme": "light",
+                    "notifications": False,
+                    "extra_setting": "not_allowed",  # Extra property
+                },
+            },
+        }
+        is_valid, errors = validate_json_schema(invalid_data_extra, schema_model)
+        assert is_valid is False
+        assert errors is not None
+        assert any("additional properties" in error.lower() for error in errors)
+
     def test_nested_objects(self) -> None:
         """Test validation with nested object structures."""
         schema = {
