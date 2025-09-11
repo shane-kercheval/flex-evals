@@ -12,19 +12,7 @@ from ..utils.schema_validation import validate_json_schema, JSONLike
 
 @register(CheckType.SCHEMA, version='1.0.0')
 class SchemaCheck(BaseCheck):
-    """
-    Validates data against a JSON schema.
-
-    The schema can be provided as:
-    - A Pydantic model instance (schema extracted from model)
-    - A dictionary containing JSON schema
-    - A JSON string containing schema
-
-    The data to validate can be provided as:
-    - A Pydantic model instance (data extracted from model)
-    - A dictionary
-    - A JSON string
-    """
+    """Validates data against a JSON schema."""
 
     json_schema: JSONLike | JSONPath = Field(
         ...,
