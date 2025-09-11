@@ -26,10 +26,10 @@ class SchemaCheck(BaseCheck):
     - A JSON string
     """
 
-    reference_schema: JSONLike | JSONPath = Field(
+    json_schema: JSONLike | JSONPath = Field(
         ...,
         description="JSON schema for validation (dict, JSON string, or Pydantic model instance)",
-        alias="schema",  # Allow 'schema' in arguments but store as 'reference_schema'
+        alias="schema",  # Allow 'schema' in arguments but store as 'json_schema'
     )
     data: JSONLike | JSONPath = Field(
         ...,
@@ -39,7 +39,7 @@ class SchemaCheck(BaseCheck):
         ),
     )
 
-    @field_validator('reference_schema', 'data', mode='before')
+    @field_validator('json_schema', 'data', mode='before')
     @classmethod
     def convert_jsonpath(cls, value: object) -> object | JSONPath:
         """Convert JSONPath-like strings to JSONPath objects."""
@@ -66,16 +66,16 @@ class SchemaCheck(BaseCheck):
             ValidationError: If schema or data cannot be processed
         """
         # Validate that all fields are resolved (no JSONPath objects remain)
-        if isinstance(self.reference_schema, JSONPath):
+        if isinstance(self.json_schema, JSONPath):
             raise RuntimeError(
-                f"JSONPath not resolved for 'reference_schema' field: {self.reference_schema}",
+                f"JSONPath not resolved for 'json_schema' field: {self.json_schema}",
             )
         if isinstance(self.data, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'data' field: {self.data}")
 
         try:
             # Use the utility function to validate data against schema
-            is_valid, validation_errors = validate_json_schema(self.data, self.reference_schema)
+            is_valid, validation_errors = validate_json_schema(self.data, self.json_schema)
 
             return {
                 'passed': is_valid,

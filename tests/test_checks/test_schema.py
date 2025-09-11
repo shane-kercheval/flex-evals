@@ -81,7 +81,7 @@ class TestSchemaCheckValidation:
             data=VALID_DATA_DICT,
         )
 
-        assert check.reference_schema == VALID_SCHEMA_DICT
+        assert check.json_schema == VALID_SCHEMA_DICT
         assert check.data == VALID_DATA_DICT
 
     def test_schema_check_with_jsonpath(self) -> None:
@@ -91,8 +91,8 @@ class TestSchemaCheckValidation:
             data="$.output.value",
         )
 
-        assert isinstance(check.reference_schema, JSONPath)
-        assert check.reference_schema.expression == "$.test_case.expected.schema"
+        assert isinstance(check.json_schema, JSONPath)
+        assert check.json_schema.expression == "$.test_case.expected.schema"
         assert isinstance(check.data, JSONPath)
         assert check.data.expression == "$.output.value"
 
@@ -103,7 +103,7 @@ class TestSchemaCheckValidation:
             data=VALID_DATA_JSON,
         )
 
-        assert check.reference_schema == VALID_SCHEMA_JSON
+        assert check.json_schema == VALID_SCHEMA_JSON
         assert check.data == VALID_DATA_JSON
 
     def test_schema_check_with_pydantic_models(self) -> None:
@@ -113,7 +113,7 @@ class TestSchemaCheckValidation:
             data=VALID_DATA_MODEL,
         )
 
-        assert check.reference_schema == VALID_SCHEMA_MODEL
+        assert check.json_schema == VALID_SCHEMA_MODEL
         assert check.data == VALID_DATA_MODEL
 
     def test_schema_check_comprehensive_jsonpath(self) -> None:
@@ -125,8 +125,8 @@ class TestSchemaCheckValidation:
         )
 
         # Verify conversion happened
-        assert isinstance(check.reference_schema, JSONPath)
-        assert check.reference_schema.expression == "$.test_case.expected.validation_schema"
+        assert isinstance(check.json_schema, JSONPath)
+        assert check.json_schema.expression == "$.test_case.expected.validation_schema"
         assert isinstance(check.data, JSONPath)
         assert check.data.expression == "$.output.value.user_data"
 
@@ -145,7 +145,7 @@ class TestSchemaCheckValidation:
         assert result.status == Status.COMPLETED
         assert result.results["passed"] is True
         assert result.results["validation_errors"] is None
-        assert result.resolved_arguments["reference_schema"]["value"] == VALID_SCHEMA_DICT
+        assert result.resolved_arguments["json_schema"]["value"] == VALID_SCHEMA_DICT
         assert result.resolved_arguments["data"]["value"] == VALID_DATA_DICT
 
     def test_schema_check_required_fields(self) -> None:
@@ -515,7 +515,7 @@ class TestSchemaCheckErrorHandling:
         )
 
         # Call directly without resolution should raise RuntimeError
-        with pytest.raises(RuntimeError, match="JSONPath not resolved for 'reference_schema' field"):  # noqa: E501
+        with pytest.raises(RuntimeError, match="JSONPath not resolved for 'json_schema' field"):
             check()
 
         check = SchemaCheck(

@@ -218,7 +218,11 @@ def _get_version_schemas_for_check_type(check_type: str) -> dict[str, dict[str, 
             # Skip metadata field as it's handled specially
             if field_name == "metadata":
                 continue
-            fields_schema[field_name] = _extract_field_schema(field_name, field_info, check_class)
+            # Use alias if available, otherwise use field name (for API consumers)
+            api_field_name = field_info.alias if field_info.alias else field_name
+            fields_schema[api_field_name] = _extract_field_schema(
+                field_name, field_info, check_class,
+            )
 
         version_schemas[version] = {
             "version": version,

@@ -820,7 +820,7 @@ class TestEndToEndIntegration:
         # Should have entries for all check types we expect
         expected_check_types = [
             "contains", "exact_match", "attribute_exists", "is_empty",
-            "threshold", "regex",
+            "threshold", "regex", "schema",
         ]
 
         for check_type in expected_check_types:
@@ -851,4 +851,30 @@ class TestEndToEndIntegration:
         # Should maintain structure
         assert isinstance(deserialized, dict)
         assert "contains" in deserialized
-        assert "exact_match" in deserialized
+
+    def test_schema_generator_handles_field_aliases(self):
+        """Test that schema generator uses field aliases for API field names."""
+        # Test with SchemaCheck which has an alias: json_schema -> schema
+        schema = generate_check_schema("schema", "1.0.0")
+
+        assert schema is not None
+        fields = schema["fields"]
+
+        # Should use alias name "schema" instead of internal name "json_schema"
+        assert "schema" in fields
+        assert "json_schema" not in fields
+        # Should also have the data field (no alias)
+        assert "data" in fields
+
+        # Schema field should have correct type and properties
+        schema_field = fields["schema"]
+        assert isinstance(schema_field, dict)
+        assert "type" in schema_field
+        assert "description" in schema_field
+        assert 'string|object<string,Any>|BaseModel' in schema_field["type"]
+
+        # Data field should also be present and correct
+        data_field = fields["data"]
+        assert isinstance(data_field, dict)
+        assert "type" in data_field
+        assert "description" in data_field
