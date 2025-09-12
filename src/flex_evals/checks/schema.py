@@ -10,8 +10,8 @@ from ..constants import CheckType
 from ..utils.schema_validation import validate_json_schema, JSONLike
 
 
-@register(CheckType.SCHEMA, version='1.0.0')
-class SchemaCheck(BaseCheck):
+@register(CheckType.SCHEMA_VALIDATION, version='1.0.0')
+class SchemaValidationCheck(BaseCheck):
     """Validates data against a JSON schema."""
 
     json_schema: JSONLike | JSONPath = Field(

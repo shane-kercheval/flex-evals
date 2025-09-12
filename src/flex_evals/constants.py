@@ -27,7 +27,7 @@ class CheckType(str, Enum):
     SEMANTIC_SIMILARITY = 'semantic_similarity'
     LLM_JUDGE = 'llm_judge'
     CUSTOM_FUNCTION = 'custom_function'
-    SCHEMA = 'schema'
+    SCHEMA_VALIDATION = 'schema_validation'
 
     def __str__(self) -> str:
         """Return the enum value as string."""

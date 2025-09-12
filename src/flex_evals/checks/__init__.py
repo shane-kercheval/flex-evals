@@ -21,7 +21,7 @@ from .exact_match import ExactMatchCheck
 from .is_empty import IsEmptyCheck
 from .llm_judge import LLMJudgeCheck
 from .regex import RegexCheck, RegexFlags
-from .schema import SchemaCheck
+from .schema import SchemaValidationCheck
 from .semantic_similarity import SemanticSimilarityCheck
 from .threshold import ThresholdCheck
 
@@ -39,7 +39,7 @@ __all__ = [
     "LLMJudgeCheck",
     "RegexCheck",
     "RegexFlags",
-    "SchemaCheck",
+    "SchemaValidationCheck",
     "SemanticSimilarityCheck",
     "ThresholdCheck",
     # Registry functions
