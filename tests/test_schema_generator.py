@@ -820,7 +820,7 @@ class TestEndToEndIntegration:
         # Should have entries for all check types we expect
         expected_check_types = [
             "contains", "exact_match", "attribute_exists", "is_empty",
-            "threshold", "regex", "schema",
+            "threshold", "regex", "schema_validation",
         ]
 
         for check_type in expected_check_types:
@@ -855,7 +855,7 @@ class TestEndToEndIntegration:
     def test_schema_generator_handles_field_aliases(self):
         """Test that schema generator uses field aliases for API field names."""
         # Test with SchemaCheck which has an alias: json_schema -> schema
-        schema = generate_check_schema("schema", "1.0.0")
+        schema = generate_check_schema("schema_validation", "1.0.0")
 
         assert schema is not None
         fields = schema["fields"]

@@ -17,7 +17,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from flex_evals import (
-    SchemaCheck,
+    SchemaValidationCheck,
     JSONPath,
     EvaluationContext,
     CheckType,
@@ -76,7 +76,7 @@ class TestSchemaCheckValidation:
 
     def test_schema_check_creation(self) -> None:
         """Test basic SchemaCheck creation."""
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema=VALID_SCHEMA_DICT,
             data=VALID_DATA_DICT,
         )
@@ -86,7 +86,7 @@ class TestSchemaCheckValidation:
 
     def test_schema_check_with_jsonpath(self) -> None:
         """Test SchemaCheck creation with JSONPath expressions."""
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema="$.test_case.expected.schema",
             data="$.output.value",
         )
@@ -98,7 +98,7 @@ class TestSchemaCheckValidation:
 
     def test_schema_check_with_json_strings(self) -> None:
         """Test SchemaCheck with JSON string inputs."""
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema=VALID_SCHEMA_JSON,
             data=VALID_DATA_JSON,
         )
@@ -108,7 +108,7 @@ class TestSchemaCheckValidation:
 
     def test_schema_check_with_pydantic_models(self) -> None:
         """Test SchemaCheck with Pydantic model inputs."""
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema=VALID_SCHEMA_MODEL,
             data=VALID_DATA_MODEL,
         )
@@ -119,7 +119,7 @@ class TestSchemaCheckValidation:
     def test_schema_check_comprehensive_jsonpath(self) -> None:
         """Comprehensive JSONPath string conversion and execution test."""
         # Create check with JSONPath fields as strings
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema="$.test_case.expected.validation_schema",
             data="$.output.value.user_data",
         )
@@ -151,26 +151,26 @@ class TestSchemaCheckValidation:
     def test_schema_check_required_fields(self) -> None:
         """Test that required fields are enforced."""
         with pytest.raises(PydanticValidationError):
-            SchemaCheck()  # type: ignore
+            SchemaValidationCheck()  # type: ignore
 
         with pytest.raises(PydanticValidationError):
-            SchemaCheck(schema=VALID_SCHEMA_DICT)  # type: ignore
+            SchemaValidationCheck(schema=VALID_SCHEMA_DICT)  # type: ignore
 
         with pytest.raises(PydanticValidationError):
-            SchemaCheck(data=VALID_DATA_DICT)  # type: ignore
+            SchemaValidationCheck(data=VALID_DATA_DICT)  # type: ignore
 
     def test_schema_check_type_property(self) -> None:
         """Test SchemaCheck check_type property returns correct type."""
-        check = SchemaCheck(schema=VALID_SCHEMA_DICT, data=VALID_DATA_DICT)
-        assert check.check_type == CheckType.SCHEMA
+        check = SchemaValidationCheck(schema=VALID_SCHEMA_DICT, data=VALID_DATA_DICT)
+        assert check.check_type == CheckType.SCHEMA_VALIDATION
 
     def test_schema_check_invalid_jsonpath(self) -> None:
         """Test that invalid JSONPath expressions are caught during validation."""
         with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
-            SchemaCheck(schema="$.invalid[", data=VALID_DATA_DICT)
+            SchemaValidationCheck(schema="$.invalid[", data=VALID_DATA_DICT)
 
         with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
-            SchemaCheck(schema=VALID_SCHEMA_DICT, data="$.invalid[")
+            SchemaValidationCheck(schema=VALID_SCHEMA_DICT, data="$.invalid[")
 
 
 class TestSchemaCheckExecution:
@@ -178,7 +178,7 @@ class TestSchemaCheckExecution:
 
     def test_schema_check_valid_validation(self) -> None:
         """Test schema validation with valid data."""
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema=VALID_SCHEMA_DICT,
             data=VALID_DATA_DICT,
         )
@@ -190,7 +190,7 @@ class TestSchemaCheckExecution:
 
     def test_schema_check_invalid_validation(self) -> None:
         """Test schema validation with invalid data."""
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema=VALID_SCHEMA_DICT,
             data=INVALID_DATA_DICT,
         )
@@ -206,7 +206,7 @@ class TestSchemaCheckExecution:
 
     def test_schema_check_missing_required_field(self) -> None:
         """Test schema validation with missing required field."""
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema=VALID_SCHEMA_DICT,
             data=MISSING_REQUIRED_DATA_DICT,
         )
@@ -218,7 +218,7 @@ class TestSchemaCheckExecution:
 
     def test_schema_check_json_string_inputs(self) -> None:
         """Test schema validation with JSON string inputs."""
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema=VALID_SCHEMA_JSON,
             data=VALID_DATA_JSON,
         )
@@ -229,7 +229,7 @@ class TestSchemaCheckExecution:
         }
 
         # Test with invalid JSON data
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema=VALID_SCHEMA_JSON,
             data=INVALID_DATA_JSON,
         )
@@ -239,7 +239,7 @@ class TestSchemaCheckExecution:
 
     def test_schema_check_pydantic_model_inputs(self) -> None:
         """Test schema validation with Pydantic model inputs."""
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema=VALID_SCHEMA_MODEL,  # Schema extracted from model
             data=VALID_DATA_MODEL,     # Data extracted from model
         )
@@ -250,7 +250,7 @@ class TestSchemaCheckExecution:
         }
 
         # Test with invalid data model
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema=VALID_SCHEMA_MODEL,
             data=INVALID_DATA_MODEL,   # Age -1 violates schema constraints
         )
@@ -285,7 +285,7 @@ class TestSchemaCheckExecution:
     ) -> None:
         """Test SchemaCheck with all combinations of input types."""
         # Execute check
-        check = SchemaCheck(schema=schema, data=data)
+        check = SchemaValidationCheck(schema=schema, data=data)
         result = check()
 
         # Assert results based on expected validity
@@ -311,7 +311,7 @@ class TestSchemaCheckEngineIntegration:
                 expected={"schema": VALID_SCHEMA_DICT},
                 checks=[
                     Check(
-                        type=CheckType.SCHEMA,
+                        type=CheckType.SCHEMA_VALIDATION,
                         arguments={
                             "schema": "$.test_case.expected.schema",
                             "data": "$.output.value",
@@ -341,7 +341,7 @@ class TestSchemaCheckEngineIntegration:
                 expected={"schema": VALID_SCHEMA_DICT},
                 checks=[
                     Check(
-                        type=CheckType.SCHEMA,
+                        type=CheckType.SCHEMA_VALIDATION,
                         arguments={
                             "schema": "$.test_case.expected.schema",
                             "data": "$.output.value",
@@ -369,7 +369,7 @@ class TestSchemaCheckEngineIntegration:
                 input="User data",
                 expected={"schema": VALID_SCHEMA_DICT},
                 checks=[
-                    SchemaCheck(
+                    SchemaValidationCheck(
                         schema="$.test_case.expected.schema",
                         data="$.output.value",
                     ),
@@ -397,7 +397,7 @@ class TestSchemaCheckEngineIntegration:
                 },
                 checks=[
                     Check(
-                        type=CheckType.SCHEMA,
+                        type=CheckType.SCHEMA_VALIDATION,
                         arguments={
                             "schema": "$.test_case.expected.schema",
                             "data": "$.test_case.expected.data",
@@ -461,7 +461,7 @@ class TestSchemaCheckEngineIntegration:
                 expected={"schema": nested_schema},
                 checks=[
                     Check(
-                        type=CheckType.SCHEMA,
+                        type=CheckType.SCHEMA_VALIDATION,
                         arguments={
                             "schema": "$.test_case.expected.schema",
                             "data": "$.output.value",
@@ -482,7 +482,7 @@ class TestSchemaCheckErrorHandling:
 
     def test_schema_check_invalid_json_schema_string(self) -> None:
         """Test SchemaCheck with invalid JSON schema string."""
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema='{"type": "object", invalid json}',  # Invalid JSON
             data=VALID_DATA_DICT,
         )
@@ -491,7 +491,7 @@ class TestSchemaCheckErrorHandling:
 
     def test_schema_check_invalid_json_data_string(self) -> None:
         """Test SchemaCheck with invalid JSON data string."""
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema=VALID_SCHEMA_DICT,
             data='{"name": "Alice", invalid json}',  # Invalid JSON
         )
@@ -500,7 +500,7 @@ class TestSchemaCheckErrorHandling:
 
     def test_schema_check_non_object_schema(self) -> None:
         """Test SchemaCheck with non-object schema."""
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema='["not", "an", "object"]',  # Array instead of object
             data=VALID_DATA_DICT,
         )
@@ -509,7 +509,7 @@ class TestSchemaCheckErrorHandling:
 
     def test_schema_check_unresolved_jsonpath_error(self) -> None:
         """Test RuntimeError when JSONPath fields are not resolved."""
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema="$.test_case.schema",  # Will be converted to JSONPath
             data=VALID_DATA_DICT,
         )
@@ -518,7 +518,7 @@ class TestSchemaCheckErrorHandling:
         with pytest.raises(RuntimeError, match="JSONPath not resolved for 'json_schema' field"):
             check()
 
-        check = SchemaCheck(
+        check = SchemaValidationCheck(
             schema=VALID_SCHEMA_DICT,
             data="$.output.data",  # Will be converted to JSONPath
         )
@@ -534,7 +534,7 @@ class TestSchemaCheckErrorHandling:
                 input="test",
                 checks=[
                     Check(
-                        type=CheckType.SCHEMA,
+                        type=CheckType.SCHEMA_VALIDATION,
                         arguments={
                             "schema": "$..[invalid",  # Invalid JSONPath syntax
                             "data": VALID_DATA_DICT,
@@ -552,7 +552,7 @@ class TestSchemaCheckErrorHandling:
 
     def test_schema_check_default_results(self) -> None:
         """Test that default_results property returns correct structure."""
-        check = SchemaCheck(schema=VALID_SCHEMA_DICT, data=VALID_DATA_DICT)
+        check = SchemaValidationCheck(schema=VALID_SCHEMA_DICT, data=VALID_DATA_DICT)
         default = check.default_results
         assert default == {"passed": False, "validation_errors": None}
 
@@ -561,7 +561,7 @@ class TestSchemaCheckErrorHandling:
         empty_schema = {"type": "object"}
         empty_data = {}
 
-        check = SchemaCheck(schema=empty_schema, data=empty_data)
+        check = SchemaValidationCheck(schema=empty_schema, data=empty_data)
         result = check()
         assert result == {"passed": True, "validation_errors": None}
 
@@ -583,7 +583,7 @@ class TestSchemaCheckJSONPathIntegration:
                 },
                 checks=[
                     Check(
-                        type=CheckType.SCHEMA,
+                        type=CheckType.SCHEMA_VALIDATION,
                         arguments={
                             "schema": "$.test_case.expected.validation.schema",
                             "data": "$.test_case.expected.validation.test_data",
@@ -613,7 +613,7 @@ class TestSchemaCheckJSONPathIntegration:
                 },
                 checks=[
                     Check(
-                        type=CheckType.SCHEMA,
+                        type=CheckType.SCHEMA_VALIDATION,
                         arguments={
                             "schema": "$.test_case.expected.schemas[0]",  # First schema
                             "data": "$.test_case.expected.test_data[0]",    # First data

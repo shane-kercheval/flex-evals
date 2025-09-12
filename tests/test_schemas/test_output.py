@@ -57,10 +57,12 @@ class TestOutput:
         assert output2.metadata == metadata
         assert output2.metadata["execution_time_ms"] == 245
 
-    def test_output_validation_error(self):
-        """Test None value raises ValidationError."""
-        with pytest.raises(ValueError, match="Output.value is required and cannot be None"):
-            Output(value=None)
+    def test_output_allows_none_value(self):
+        """Test None value is now allowed."""
+        output = Output(value=None)
+        assert output.value is None
+        assert output.id is None
+        assert output.metadata is None
 
     def test_output_nested_value(self):
         """Test deeply nested object values."""
@@ -99,13 +101,13 @@ class TestOutput:
 
     def test_output_invalid_value_type(self):
         """Test invalid value types raise error."""
-        with pytest.raises(ValueError, match="Output.value must be a string or dictionary"):
+        with pytest.raises(ValueError, match="Output.value must be a string, dictionary, or None"):
             Output(value=123)
 
-        with pytest.raises(ValueError, match="Output.value must be a string or dictionary"):
+        with pytest.raises(ValueError, match="Output.value must be a string, dictionary, or None"):
             Output(value=["list", "not", "allowed"])
 
-        with pytest.raises(ValueError, match="Output.value must be a string or dictionary"):
+        with pytest.raises(ValueError, match="Output.value must be a string, dictionary, or None"):
             Output(value=True)
 
     def test_output_serialization(self):
