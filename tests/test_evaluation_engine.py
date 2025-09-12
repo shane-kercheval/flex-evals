@@ -2001,3 +2001,199 @@ class TestSchemaCheckTypesWithLiteralValues:
         for check_result in test_result.check_results:
             assert check_result.status == 'completed'
             assert check_result.results["passed"] is False
+
+    def test_evaluate_with_none_output_values(self):
+        """Test evaluation engine with None output values (system failure scenarios)."""
+        test_cases = [
+            TestCase(id="test_success", input="What is 2+2?", expected="4"),
+            TestCase(id="test_failure", input="Complex question", expected="complex answer"),
+            TestCase(id="test_timeout", input="Timeout question", expected="timeout answer"),
+        ]
+
+        outputs = [
+            Output(value="4", id="success_output"),       # Successful response
+            Output(value=None, id="failure_output"),      # System failure/None response
+            Output(value=None, id="timeout_output"),      # Timeout/None response
+        ]
+
+        # Mix of checks that handle None appropriately
+        checks = [
+            # This should work: attribute_exists properly handles missing attributes
+            # Should pass for all (None is valid value)
+            AttributeExistsCheck(path="$.output.value"),
+            # This should work: is_empty handles None by treating it as empty
+            # Should pass for None, fail for "4"
+            IsEmptyCheck(value="$.output.value"),
+            # This should work: exact_match converts None to ""
+            # Should fail for None (None→""), pass for "4"
+            ExactMatchCheck(actual="$.output.value", expected="", negate=True),
+        ]
+
+        result = evaluate(test_cases, outputs, checks)
+
+        # Overall evaluation should complete (no errors thrown)
+        assert result.status == 'completed'
+        assert len(result.results) == 3
+
+        # Test case 1: "4" output
+        result1 = result.results[0]
+        assert result1.status == 'completed'
+        assert len(result1.check_results) == 3
+
+        # Check 1: attribute_exists "$.output.value" → should pass (value exists)
+        assert result1.check_results[0].status == 'completed'
+        assert result1.check_results[0].results['passed'] is True
+
+        # Check 2: is_empty "$.output.value" → should fail ("4" is not empty)
+        assert result1.check_results[1].status == 'completed'
+        assert result1.check_results[1].results['passed'] is False
+
+        # Check 3: exact_match with negate → should pass ("4" != "")
+        assert result1.check_results[2].status == 'completed'
+        assert result1.check_results[2].results['passed'] is True
+
+        # Test case 2: None output
+        result2 = result.results[1]
+        assert result2.status == 'completed'
+        assert len(result2.check_results) == 3
+
+        # Check 1: attribute_exists "$.output.value" → should pass (None value exists)
+        assert result2.check_results[0].status == 'completed'
+        assert result2.check_results[0].results['passed'] is True
+
+        # Check 2: is_empty "$.output.value" → should pass (None is empty)
+        assert result2.check_results[1].status == 'completed'
+        assert result2.check_results[1].results['passed'] is True
+
+        # Check 3: exact_match with negate → should fail (None→"", "" == "")
+        assert result2.check_results[2].status == 'completed'
+        assert result2.check_results[2].results['passed'] is False
+
+        # Test case 3: None output (same as case 2)
+        result3 = result.results[2]
+        assert result3.status == 'completed'
+        assert len(result3.check_results) == 3
+
+        # All checks should have same results as test case 2
+        for i in range(3):
+            assert result3.check_results[i].status == 'completed'
+            assert result3.check_results[i].results['passed'] == result2.check_results[i].results['passed']  # noqa: E501
+
+    def test_evaluate_none_output_jsonpath_errors_vs_success(self):
+        """Test distinction between JSONPath errors and successful None resolution."""
+        test_case = TestCase(id="test", input="test", expected="test")
+        none_output = Output(value=None, id="none_output")
+
+        # Test 1: Direct access to None value - should succeed and return None
+        checks_success = [
+            Check(type="exact_match", arguments={"actual": "$.output.value", "expected": ""}),
+        ]
+
+        result_success = evaluate([test_case], [none_output], checks_success)
+
+        assert result_success.status == 'completed'
+        check_result = result_success.results[0].check_results[0]
+        assert check_result.status == 'completed'
+        assert check_result.results['passed'] is True  # str(None) == ""
+
+        # Test 2: Try to access field on None - should error
+        checks_error = [
+            Check(
+                type="exact_match",
+                arguments={"actual": "$.output.value.nonexistent", "expected": "test"},
+            ),
+        ]
+
+        result_error = evaluate([test_case], [none_output], checks_error)
+
+        assert result_error.status == 'error'  # JSONPath resolution fails
+        check_result_error = result_error.results[0].check_results[0]
+        assert check_result_error.status == 'error'
+        assert check_result_error.error is not None
+        assert 'jsonpath' in check_result_error.error.message.lower()
+
+    def test_evaluate_none_output_with_attribute_exists_special_behavior(self):
+        """Test that attribute_exists check has special behavior for missing attributes."""
+        test_cases = [TestCase(id="test", input="test", expected="test")]
+
+        # Test with None output
+        none_output = Output(value=None, id="none_output")
+
+        checks = [
+            # Should pass: $.output.value exists (returns None)
+            AttributeExistsCheck(path="$.output.value"),
+            # Should fail: $.output.value.nonexistent doesn't exist
+            AttributeExistsCheck(path="$.output.value.nonexistent"),
+            # Should pass: $.output.value.nonexistent doesn't exist, but we negate
+            AttributeExistsCheck(path="$.output.value.nonexistent", negate=True),
+        ]
+
+        result = evaluate(test_cases, [none_output], checks)
+
+        # No errors, all checks handle missing attributes gracefully
+        assert result.status == 'completed'
+        test_result = result.results[0]
+        assert test_result.status == 'completed'
+        assert len(test_result.check_results) == 3
+
+        # Check 1: $.output.value exists → passed = True
+        assert test_result.check_results[0].status == 'completed'
+        assert test_result.check_results[0].results['passed'] is True
+
+        # Check 2: $.output.value.nonexistent doesn't exist → passed = False
+        assert test_result.check_results[1].status == 'completed'
+        assert test_result.check_results[1].results['passed'] is False
+
+        # Check 3: $.output.value.nonexistent doesn't exist + negate → passed = True
+        assert test_result.check_results[2].status == 'completed'
+        assert test_result.check_results[2].results['passed'] is True
+
+    def test_evaluate_mixed_none_and_valid_outputs(self):
+        """Test evaluation with mix of None and valid outputs for comprehensive coverage."""
+        test_cases = [
+            TestCase(id="success_case", input="Easy question", expected="easy_answer"),
+            TestCase(id="partial_failure", input="Hard question", expected="hard_answer"),
+            TestCase(id="complete_failure", input="Impossible question", expected="impossible"),
+        ]
+
+        outputs = [
+            Output(value={"answer": "easy_answer", "confidence": 0.9}, id="success"),
+            Output(value={"error": "partial failure"}, id="partial"),  # Partial failure
+            Output(value=None, id="failure"),  # Complete failure
+        ]
+
+        # Checks that demonstrate different behaviors with None
+        checks = [
+            # Check 1: Look for answer field - should pass, fail, fail
+            AttributeExistsCheck(path="$.output.value.answer"),
+            # Check 2: Look for error field - should fail, pass, fail
+            AttributeExistsCheck(path="$.output.value.error"),
+            # Check 3: Check if output is empty - should fail, fail, pass
+            IsEmptyCheck(value="$.output.value", negate=True),
+        ]
+
+        result = evaluate(test_cases, outputs, checks)
+
+        assert result.status == 'completed'
+        assert len(result.results) == 3
+
+        # Success case: has answer field, no error field, not empty
+        success_result = result.results[0]
+        assert success_result.status == 'completed'
+        assert success_result.check_results[0].results['passed'] is True   # has answer
+        assert success_result.check_results[1].results['passed'] is False  # no error
+        assert success_result.check_results[2].results['passed'] is True   # not empty
+
+        # Partial failure: no answer field, has error field, not empty
+        partial_result = result.results[1]
+        assert partial_result.status == 'completed'
+        assert partial_result.check_results[0].results['passed'] is False  # no answer
+        assert partial_result.check_results[1].results['passed'] is True   # has error
+        assert partial_result.check_results[2].results['passed'] is True   # not empty
+
+        # Complete failure: no answer field, no error field, is empty (None)
+        failure_result = result.results[2]
+        assert failure_result.status == 'completed'
+        assert failure_result.check_results[0].results['passed'] is False  # no answer
+        assert failure_result.check_results[1].results['passed'] is False  # no error
+        assert failure_result.check_results[2].results['passed'] is False  # is empty (None)
