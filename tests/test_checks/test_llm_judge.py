@@ -150,6 +150,7 @@ class TestLLMJudgeExecution:
     async def test_call_with_async_callable_class(self):
         """Test LLM judge with callable class that has async __call__ method."""
         class AsyncCallableLLM:
+            async def __call__(self, prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict]:  # noqa: ARG002, E501
                 return JudgeResponse(passed=True, confidence=0.85, reasoning="Async callable class"), {"callable_class": True}  # noqa: E501
 
         check = LLMJudgeCheck(

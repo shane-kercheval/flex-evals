@@ -27,7 +27,7 @@ dev = [
     "pytest-asyncio>=1.0.0",
     "pytest-mock>=3.14.1",
     "pytest-timeout>=2.4.0",
-    "ruff>=0.11.13",
+    "ruff>=0.12.1",
     "seaborn>=0.13.2",
     "sik-llms>=0.3.19",
 ]
