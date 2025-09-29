@@ -388,7 +388,7 @@ wheels = [
 
 [[package]]
 name = "flex-evals"
-version = "0.3.7"
+version = "0.3.8"
 source = { editable = "." }
 dependencies = [
     { name = "jsonpath-ng" },
@@ -442,7 +442,7 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=1.0.0" },
     { name = "pytest-mock", specifier = ">=3.14.1" },
     { name = "pytest-timeout", specifier = ">=2.4.0" },
-    { name = "ruff", specifier = ">=0.11.13" },
+    { name = "ruff", specifier = ">=0.12.1" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "sik-llms", specifier = ">=0.3.19" },
 ]

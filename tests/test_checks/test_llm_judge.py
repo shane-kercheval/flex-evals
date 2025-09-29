@@ -147,6 +147,27 @@ class TestLLMJudgeExecution:
         }
 
     @pytest.mark.asyncio
+    async def test_call_with_async_callable_class(self):
+        """Test LLM judge with callable class that has async __call__ method."""
+        class AsyncCallableLLM:
+            async def __call__(self, prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict]:  # noqa: ARG002, E501
+                return JudgeResponse(passed=True, confidence=0.85, reasoning="Async callable class"), {"callable_class": True}  # noqa: E501
+
+        check = LLMJudgeCheck(
+            prompt="Evaluate this response",
+            response_format=JudgeResponse,
+            llm_function=AsyncCallableLLM(),
+        )
+
+        result = await check()
+        assert result == {
+            "passed": True,
+            "confidence": 0.85,
+            "reasoning": "Async callable class",
+            "judge_metadata": {"callable_class": True},
+        }
+
+    @pytest.mark.asyncio
     async def test_call_with_complex_response_format(self):
         """Test LLM judge with complex response format."""
         def mock_llm_function(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict]:  # noqa: ARG001, E501
