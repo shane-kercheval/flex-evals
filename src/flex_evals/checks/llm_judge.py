@@ -262,8 +262,11 @@ class LLMJudgeCheck(BaseAsyncCheck):
     ) -> tuple[T, dict[str, Any]]:
         """Call the user-provided LLM function with proper error handling."""
         try:
-            # Handle both sync and async LLM functions
-            if asyncio.iscoroutinefunction(llm_function):
+            # Handle both sync and async LLM functions; handle callable instances/classes
+            if asyncio.iscoroutinefunction(llm_function) or (
+                hasattr(llm_function, '__call__') and
+                asyncio.iscoroutinefunction(llm_function.__call__)
+            ):
                 result = await llm_function(prompt, response_format)
             else:
                 result = llm_function(prompt, response_format)

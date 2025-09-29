@@ -48,15 +48,12 @@ class Check:
         return bool(re.match(semver_pattern, version))
 
 
-
 @dataclass
 class CheckError:
     """Error details for failed check execution."""
 
     type: ErrorType | Literal['jsonpath_error', 'validation_error', 'timeout_error', 'unknown_error']  # noqa: E501
     message: str
-
-
 
 
 @dataclass
