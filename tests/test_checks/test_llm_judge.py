@@ -7,12 +7,13 @@ This module consolidates all tests for the LLMJudgeCheck including:
 - Engine integration tests
 - Edge cases and error handling
 - Template processing functionality
+- Computed field support
 
 Tests are organized by functionality rather than implementation details.
 """
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from flex_evals import (
     LLMJudgeCheck,
@@ -45,6 +46,20 @@ class ComplexJudgeResponse(BaseModel):
     reasoning: str
     categories: dict[str, bool]
     score: int
+
+
+class JudgeResponseWithComputedField(BaseModel):
+    """Response format with computed 'passed' field based on score threshold."""
+
+    score: int
+    confidence: float
+    reasoning: str
+
+    @computed_field
+    @property
+    def passed(self) -> bool:
+        """Automatically determine pass/fail based on score threshold."""
+        return self.score >= 80
 
 
 class TestLLMJudgeValidation:
@@ -566,3 +581,104 @@ class TestLLMJudgeTemplateProcessing:
         results = evaluate(test_cases, outputs)
 
         assert results.results[0].check_results[0].results["passed"] is True
+
+
+class TestLLMJudgeComputedFields:
+    """Test computed field functionality with LLMJudgeCheck."""
+
+    @pytest.mark.asyncio
+    async def test_computed_field_in_call_method(self) -> None:
+        """Test that computed fields are included in __call__ results."""
+        def mock_llm_function(
+            prompt: str,  # noqa: ARG001
+            response_format: type[BaseModel],  # noqa: ARG001
+        ) -> tuple[BaseModel, dict]:
+            # LLM only provides score, confidence, and reasoning
+            # The 'passed' field is computed automatically
+            return JudgeResponseWithComputedField(
+                score=85,
+                confidence=0.9,
+                reasoning='Good quality response',
+            ), {'model': 'test'}
+
+        check = LLMJudgeCheck(
+            prompt='Evaluate this response',
+            response_format=JudgeResponseWithComputedField,
+            llm_function=mock_llm_function,
+        )
+
+        result = await check()
+
+        # Verify all fields including computed 'passed' field
+        assert result == {
+            'score': 85,
+            'confidence': 0.9,
+            'reasoning': 'Good quality response',
+            'passed': True,  # Computed: score >= 80
+            'judge_metadata': {'model': 'test'},
+        }
+
+    @pytest.mark.asyncio
+    async def test_computed_field_fail_threshold(self) -> None:
+        """Test that computed field correctly determines failure."""
+        def mock_llm_function(
+            prompt: str,  # noqa: ARG001
+            response_format: type[BaseModel],  # noqa: ARG001
+        ) -> tuple[BaseModel, dict]:
+            return JudgeResponseWithComputedField(
+                score=65,  # Below threshold
+                confidence=0.8,
+                reasoning='Needs improvement',
+            ), {}
+
+        check = LLMJudgeCheck(
+            prompt='Evaluate this response',
+            response_format=JudgeResponseWithComputedField,
+            llm_function=mock_llm_function,
+        )
+
+        result = await check()
+
+        assert result['passed'] is False  # Computed: score < 80
+        assert result['score'] == 65
+
+    def test_computed_field_via_evaluate_engine(self) -> None:
+        """Test computed fields work through the evaluation engine."""
+        def mock_llm_function(
+            prompt: str,  # noqa: ARG001
+            response_format: type[BaseModel],  # noqa: ARG001
+        ) -> tuple[BaseModel, dict]:
+            return JudgeResponseWithComputedField(
+                score=92,
+                confidence=0.95,
+                reasoning='Excellent response',
+            ), {'model': 'gpt-4'}
+
+        test_cases = [
+            TestCase(
+                id='test_001',
+                input='test input',
+                checks=[
+                    Check(
+                        type=CheckType.LLM_JUDGE,
+                        arguments={
+                            'prompt': 'Evaluate: {{$.output.value}}',
+                            'response_format': JudgeResponseWithComputedField,
+                            'llm_function': mock_llm_function,
+                        },
+                    ),
+                ],
+            ),
+        ]
+
+        outputs = [Output(value='High quality response')]
+        results = evaluate(test_cases, outputs)
+
+        assert results.summary.total_test_cases == 1
+        assert results.summary.completed_test_cases == 1
+        assert results.results[0].status == Status.COMPLETED
+
+        check_result = results.results[0].check_results[0]
+        assert check_result.results['score'] == 92
+        assert check_result.results['passed'] is True  # Computed
+        assert check_result.results['confidence'] == 0.95
