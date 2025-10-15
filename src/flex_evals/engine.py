@@ -7,6 +7,7 @@ outputs, and checks to produce evaluation results.
 
 import asyncio
 import uuid
+from copy import deepcopy
 from datetime import datetime, UTC
 from concurrent.futures import ProcessPoolExecutor
 
@@ -220,9 +221,12 @@ def _resolve_checks(
         # Shared checks pattern: same checks for all test cases
         shared_checks = [_convert_check_input(check) for check in checks]  # type: ignore
         # Combine TestCase checks + shared checks for each test case
+        # Use deepcopy to create independent check instances for concurrent execution
+        # See `TestSharedCheckConcurrency` in test_evaluation_engine.py for details
         resolved = []
         for i in range(len(test_cases)):
-            combined_checks = testcase_checks_per_case[i] + shared_checks
+            shared_checks_copy = deepcopy(shared_checks)
+            combined_checks = testcase_checks_per_case[i] + shared_checks_copy
             resolved.append(combined_checks)
         return resolved
 
