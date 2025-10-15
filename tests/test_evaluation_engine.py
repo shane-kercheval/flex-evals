@@ -26,6 +26,8 @@ from flex_evals import (
     register,
     ValidationError,
 )
+from flex_evals.checks.base import EvaluationContext
+from flex_evals.schemas import CheckResult
 from pydantic import field_validator
 from flex_evals.registry import clear_registry
 from tests.conftest import restore_standard_checks
@@ -2197,3 +2199,167 @@ class TestSchemaCheckTypesWithLiteralValues:
         assert failure_result.check_results[0].results['passed'] is False  # no answer
         assert failure_result.check_results[1].results['passed'] is False  # no error
         assert failure_result.check_results[2].results['passed'] is False  # is empty (None)
+
+
+class MutatingAsyncCheck(BaseAsyncCheck):
+    """
+    Test check that simulates instance state mutation during concurrent execution.
+
+    Replicates the mutation pattern in LLMJudgeCheck.execute() (lines 111-140 in llm_judge.py)
+    where self.prompt is temporarily modified during template processing. This pattern causes
+    data corruption when the same check instance is shared across concurrent test cases.
+    """
+
+    test_data: str = "UNSET"
+    iterations: int = 100
+
+    @property
+    def default_results(self) -> dict[str, Any]:
+        return {'corruption_count': 0, 'expected_input': ''}
+
+    async def execute(
+        self,
+        context: EvaluationContext,
+        check_metadata: dict[str, Any] | None = None,
+    ) -> CheckResult:
+        """
+        Execute check following the same mutation pattern as LLMJudgeCheck:
+        1. Extract data from context
+        2. Mutate instance state (self.test_data = extracted value)
+        3. Execute async operation that uses the mutated state
+        4. Restore original state in finally block.
+
+        When shared across concurrent executions, step 2 causes race conditions.
+        """
+        evaluated_at = datetime.now(UTC)
+        check_version = self._get_version()
+        check_type = str(self.check_type)
+
+        test_case_data = context.context_dict.get('test_case', {})
+        expected_input = test_case_data.get('input', 'NO_INPUT')
+        original_data = self.test_data
+
+        try:
+            self.test_data = expected_input
+            results = await self()
+            results['expected_input'] = expected_input
+
+            return CheckResult(
+                check_type=check_type,
+                check_version=check_version,
+                status='completed',
+                results=results,
+                resolved_arguments={},
+                evaluated_at=evaluated_at,
+                metadata=check_metadata,
+            )
+        finally:
+            self.test_data = original_data
+
+    async def __call__(self) -> dict[str, Any]:
+        """
+        Perform repeated read/write cycles on instance state to detect corruption.
+
+        Strategy: Each check writes its unique value to self.test_data, then immediately
+        reads it back. If checks truly share the same instance and run concurrently,
+        other checks will overwrite our value, causing corrupted reads.
+
+        Uses asyncio.sleep(0) to yield control to the event loop after each operation,
+        forcing task interleaving. Without this, tasks would run sequentially and never
+        interfere with each other (0 corruptions). With it, concurrent tasks constantly
+        overwrite the shared state (99% corruption rate with 100 concurrent checks).
+        """
+        expected_value = self.test_data
+        corruption_count = 0
+
+        for _ in range(self.iterations):
+            current_value = self.test_data
+            if current_value != expected_value:
+                corruption_count += 1
+
+            self.test_data = expected_value
+            await asyncio.sleep(0)  # Yield to event loop for task interleaving
+
+        return {
+            'corruption_count': corruption_count,
+            'expected_value': expected_value,
+        }
+
+
+class TestSharedCheckConcurrency:
+    """Test concurrent execution with shared check instances."""
+
+    def setup_method(self) -> None:
+        """Set up test fixtures."""
+        clear_registry()
+        register('mutating_async_check', version='1.0.0')(MutatingAsyncCheck)
+
+    def teardown_method(self) -> None:
+        """Clean up after tests."""
+        restore_standard_checks()
+
+    def test__shared_check_instances_cause_data_corruption_with_concurrency(
+        self,
+    ) -> None:
+        """
+        Reproduce bug: shared check instances cause data corruption in concurrent execution.
+
+        Bug mechanism:
+        - Same check instance is reused for all test cases (shared checks pattern)
+        - Check mutates instance state during execution (e.g., LLMJudgeCheck sets self.prompt)
+        - Concurrent executions overwrite each other's state
+
+        Real-world scenario: With LLMJudgeCheck processing 100 transactions concurrently,
+        test case A (Societe Generale) might execute with test case B's prompt (Staples),
+        causing the LLM to evaluate wrong data.
+
+        Test strategy: 100 checks * 100 read/write operations = 10,000 concurrent operations
+        on shared state. Without the fix, corruption rate is ~99%. With deepcopy fix, it's 0%.
+        """
+        shared_check = MutatingAsyncCheck(test_data="INITIAL_VALUE", iterations=100)
+        test_cases = [
+            TestCase(id=f"tc{i}", input=f"DATA_{chr(65 + (i % 26))}{i}")
+            for i in range(100)
+        ]
+        outputs = [Output(value=f"out{i}") for i in range(100)]
+
+        result = evaluate(
+            test_cases=test_cases,
+            outputs=outputs,
+            checks=[shared_check],  # Shared pattern: same instance reused
+        )
+
+        assert result.status == 'completed'
+        assert len(result.results) == 100
+
+        total_corruption_count = 0
+        test_cases_with_corruption = 0
+        corrupted_cases = []
+
+        for i, test_result in enumerate(result.results):
+            check_result = test_result.check_results[0]
+            case_corruption_count = check_result.results['corruption_count']
+
+            if case_corruption_count > 0:
+                test_cases_with_corruption += 1
+                total_corruption_count += case_corruption_count
+                corrupted_cases.append({
+                    'test_case_id': test_cases[i].id,
+                    'test_case_index': i,
+                    'corruption_count': case_corruption_count,
+                    'expected_value': check_result.results['expected_value'],
+                })
+
+        assert total_corruption_count == 0, (
+            f"Data corruption detected: {total_corruption_count} corrupted reads across "
+            f"{test_cases_with_corruption} test cases (out of {len(test_cases)} total).\n\n"
+            f"Shared check instances are being reused across concurrent executions,\n"
+            f"causing instance state mutations to interfere with each other.\n\n"
+            f"Fix: Use deepcopy() in engine.py _resolve_checks() to create independent instances.\n\n"  # noqa: E501
+            f"First 10 corrupted test cases:\n" +
+            '\n'.join(
+                f"  - Test case {c['test_case_index']} ({c['test_case_id']}): "
+                f"{c['corruption_count']} corrupted reads (expected '{c['expected_value']}')"
+                for c in corrupted_cases[:10]
+            )
+        )
