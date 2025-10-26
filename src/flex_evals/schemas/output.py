@@ -1,5 +1,6 @@
 """Output schema implementation for FEP."""
 
+import dataclasses
 from dataclasses import dataclass
 from typing import Any
 
@@ -20,6 +21,36 @@ class Output:
     - metadata: System-specific information about the output generation
     """
 
-    value: str | dict[str, Any] | object | None
+    value: Any | None
     id: str | None = None
     metadata: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert Output to dictionary, handling Pydantic models and dataclasses.
+
+        Returns:
+            Dictionary representation of the Output instance.
+        """
+        # Handle different serialization patterns
+        if hasattr(self.value, 'model_dump'):
+            # Pydantic v2
+            value_dict = self.value.model_dump()
+        elif hasattr(self.value, 'dict'):
+            # Pydantic v1 or custom .dict() method
+            value_dict = self.value.dict()
+        elif hasattr(self.value, 'to_dict'):
+            # Custom .to_dict() method
+            value_dict = self.value.to_dict()
+        elif dataclasses.is_dataclass(self.value) and not isinstance(self.value, type):
+            # Dataclass instance (not the class itself)
+            value_dict = dataclasses.asdict(self.value)
+        else:
+            # Primitive types, dicts, None, or other objects
+            value_dict = self.value
+
+        return {
+            'value': value_dict,
+            'id': self.id,
+            'metadata': self.metadata,
+        }

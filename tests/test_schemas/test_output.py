@@ -1,6 +1,9 @@
 """Tests for Output schema implementation."""
 
 import dataclasses
+from typing import Any
+
+from pydantic import BaseModel
 from flex_evals import Output
 
 
@@ -111,10 +114,115 @@ class TestOutput:
             },
         )
 
-        # Convert to dict for serialization
+        # Convert to dict for serialization using dataclasses.asdict
         data = dataclasses.asdict(output)
 
         assert data["value"]["answer"] == "Paris"
         assert data["value"]["confidence"] == 0.95
         assert data["metadata"]["execution_time_ms"] == 245
         assert data["metadata"]["model_version"] == "gpt-4-turbo"
+
+        # Also test using to_dict() method
+        data2 = output.to_dict()
+        assert data2["value"]["answer"] == "Paris"
+        assert data2["value"]["confidence"] == 0.95
+        assert data2["metadata"]["execution_time_ms"] == 245
+        assert data2["metadata"]["model_version"] == "gpt-4-turbo"
+
+    def test_output_serialization__pydantic_value(self):
+        """Test Output can be converted to dict for JSON serialization."""
+        class MyPydanticModel(BaseModel):
+            field_a: str
+            field_b: int
+
+        output = Output(
+            value=MyPydanticModel(field_a="test", field_b=123),
+        )
+
+        # Convert to dict for serialization
+        data = dataclasses.asdict(output)
+        # this won't convert to dict, but we still test that asdict works with pydantic models
+        assert isinstance(data["value"], MyPydanticModel)
+
+        # now test that we can convert the pydantic model to dict via to_dict()
+        data = output.to_dict()
+        assert isinstance(data["value"], dict)
+        assert data["value"]["field_a"] == "test"
+        assert data["value"]["field_b"] == 123
+
+    def test_output_serialization__dict_method(self):
+        """Test Output with object that has .dict() method."""
+        class MyClassWithDict:
+            def __init__(self, field_a: str, field_b: int):
+                self.field_a = field_a
+                self.field_b = field_b
+
+            def dict(self) -> dict[str, Any]:
+                return {"field_a": self.field_a, "field_b": self.field_b}
+
+        output = Output(
+            value=MyClassWithDict(field_a="test", field_b=456),
+        )
+
+        # Convert to dict for serialization
+        data = dataclasses.asdict(output)
+        # this won't convert to dict, but we still test that asdict works
+        assert isinstance(data["value"], MyClassWithDict)
+
+        # now test that we can convert the object to dict via to_dict()
+        data = output.to_dict()
+        assert isinstance(data["value"], dict)
+        assert data["value"]["field_a"] == "test"
+        assert data["value"]["field_b"] == 456
+
+    def test_output_serialization__to_dict_method(self):
+        """Test Output with object that has .to_dict() method."""
+        class MyClassWithToDict:
+            def __init__(self, field_a: str, field_b: int):
+                self.field_a = field_a
+                self.field_b = field_b
+
+            def to_dict(self) -> dict[str, Any]:
+                return {"field_a": self.field_a, "field_b": self.field_b}
+
+        output = Output(
+            value=MyClassWithToDict(field_a="test", field_b=789),
+        )
+
+        # Convert to dict for serialization
+        data = dataclasses.asdict(output)
+        # this won't convert to dict, but we still test that asdict works
+        assert isinstance(data["value"], MyClassWithToDict)
+
+        # now test that we can convert the object to dict via to_dict()
+        data = output.to_dict()
+        assert isinstance(data["value"], dict)
+        assert data["value"]["field_a"] == "test"
+        assert data["value"]["field_b"] == 789
+
+    def test_output_serialization__dataclass_value(self):
+        """Test Output with dataclass instance as value."""
+        @dataclasses.dataclass
+        class MyDataclass:
+            field_a: str
+            field_b: int
+            field_c: float = 3.14
+
+        output = Output(
+            value=MyDataclass(field_a="test", field_b=999, field_c=2.71),
+        )
+
+        # Convert to dict for serialization
+        data = dataclasses.asdict(output)
+        # dataclasses.asdict should handle nested dataclasses
+        assert isinstance(data["value"], dict)
+        assert data["value"]["field_a"] == "test"
+        assert data["value"]["field_b"] == 999
+        assert data["value"]["field_c"] == 2.71
+
+        # now test that we can convert the dataclass to dict via to_dict()
+        data = output.to_dict()
+        assert isinstance(data["value"], dict)
+        assert data["value"]["field_a"] == "test"
+        assert data["value"]["field_b"] == 999
+        assert data["value"]["field_c"] == 2.71

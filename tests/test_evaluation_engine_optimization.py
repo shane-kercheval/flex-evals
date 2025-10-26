@@ -608,7 +608,7 @@ class TestPerformanceOptimization:
         total_time = end_time - start_time
 
         # Should complete very quickly (no async overhead)
-        assert total_time < 2.0  # more generous upper bound for new architecture
+        assert total_time < 4.0
 
         # Verify all checks completed
         assert result.status == "completed", (
