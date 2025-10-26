@@ -12,6 +12,7 @@ from ..registry import register
 from ..exceptions import ValidationError, CheckExecutionError
 from ..schemas import CheckResult
 from ..constants import CheckType
+from ..utils.jsonpath_resolver import resolve_argument
 
 
 @register(CheckType.CUSTOM_FUNCTION, version='1.0.0')
@@ -79,10 +80,7 @@ class CustomFunctionCheck(BaseAsyncCheck):
             for key, value in arguments["function_args"].items():
                 if isinstance(value, str) and value.startswith("$."):
                     # This looks like a JSONPath expression
-                    resolved_result = self._resolver.resolve_argument(
-                        value,
-                        context.context_dict,
-                    )
+                    resolved_result = resolve_argument(value, context.context_dict)
                     resolved_function_args[key] = resolved_result["value"]
                 else:
                     # Not a JSONPath expression, use as-is

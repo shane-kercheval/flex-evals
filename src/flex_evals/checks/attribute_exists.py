@@ -9,6 +9,7 @@ from ..registry import register
 from ..constants import CheckType
 from ..exceptions import JSONPathError, ValidationError
 from ..schemas import CheckResult
+from ..utils.jsonpath_resolver import resolve_argument
 
 
 @register(CheckType.ATTRIBUTE_EXISTS, version='1.0.0')
@@ -77,10 +78,7 @@ class AttributeExistsCheck(BaseCheck):
             # Resolve negate field if it's JSONPath (path field stays as JSONPath object)
             if isinstance(self.negate, JSONPath):
                 try:
-                    negate_result = self._resolver.resolve_argument(
-                        self.negate.expression,
-                        context.context_dict,
-                    )
+                    negate_result = resolve_argument(self.negate.expression, context.context_dict)
                     negate = negate_result.get("value")
                 except Exception as e:
                     raise ValidationError(f"Failed to resolve negate JSONPath: {e}") from e
@@ -95,9 +93,7 @@ class AttributeExistsCheck(BaseCheck):
 
             # Try to resolve the JSONPath to determine existence
             try:
-                resolved_arg = self._resolver.resolve_argument(
-                    path_expression, context.context_dict,
-                )
+                resolved_arg = resolve_argument(path_expression, context.context_dict)
                 # If we get here, the path exists
                 attribute_exists = True
                 resolved_arguments = {'path': resolved_arg, 'negate': {'value': negate}}

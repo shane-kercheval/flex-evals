@@ -601,14 +601,19 @@ class TestPerformanceOptimization:
         ]
 
         # This should be fast as no event loop is created
+        # With caching fix, 200 test cases should complete in well under 1 second
         start_time = time.time()
         result = evaluate(test_cases, outputs, checks)
         end_time = time.time()
 
         total_time = end_time - start_time
 
-        # Should complete very quickly (no async overhead)
-        assert total_time < 4.0
+        # Should complete very quickly with JSONPath caching (< 1 second)
+        # Previously was ~4.7s due to re-parsing JSONPath expressions
+        assert total_time < 1.0, (
+            f"Expected sync checks to complete in <1s with caching, "
+            f"but took {total_time:.2f}s"
+        )
 
         # Verify all checks completed
         assert result.status == "completed", (

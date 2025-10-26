@@ -17,6 +17,7 @@ from ..registry import register
 from ..exceptions import ValidationError, CheckExecutionError, JSONPathError
 from ..constants import CheckType
 from ..schemas import CheckResult
+from ..utils.jsonpath_resolver import resolve_argument
 
 # Type variable for the response format model
 T = TypeVar('T', bound=BaseModel)
@@ -90,10 +91,7 @@ class LLMJudgeCheck(BaseAsyncCheck):
             elif isinstance(self.prompt, JSONPath):
                 # Resolve JSONPath prompt field
                 try:
-                    prompt_result = self._resolver.resolve_argument(
-                        self.prompt.expression,
-                        context.context_dict,
-                    )
+                    prompt_result = resolve_argument(self.prompt.expression, context.context_dict)
                     prompt_to_use = prompt_result.get("value")
                 except Exception as e:
                     return self._create_error_result(
@@ -221,11 +219,8 @@ class LLMJudgeCheck(BaseAsyncCheck):
         for placeholder in placeholders:
             jsonpath_expr = f"$.{placeholder}"
             try:
-                # Use the existing JSONPath resolver from base class
-                resolved_result = self._resolver.resolve_argument(
-                    jsonpath_expr,
-                    context.context_dict,
-                )
+                # Use the JSONPath resolver
+                resolved_result = resolve_argument(jsonpath_expr, context.context_dict)
                 resolved_value = resolved_result.get("value")
 
                 # Convert resolved value to string for substitution

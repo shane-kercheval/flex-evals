@@ -6,13 +6,12 @@ with proper evaluation context handling, including JSONPath validation.
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import asdict
 from datetime import datetime, UTC
 from enum import Enum
 from types import UnionType
 from typing import Any, ClassVar, TypeAlias, TYPE_CHECKING
 import typing
-import jsonpath_ng
-from jsonpath_ng.exceptions import JSONPathError as JSONPathNGError
 from pydantic import BaseModel, Field, field_validator
 
 if TYPE_CHECKING:
@@ -20,7 +19,10 @@ if TYPE_CHECKING:
 
 from ..constants import CheckType
 from ..exceptions import CheckExecutionError, JSONPathError, ValidationError
-from ..utils.jsonpath_resolver import get_shared_resolver
+from ..utils.jsonpath_resolver import (
+    validate_jsonpath,
+    resolve_argument,
+)
 from ..schemas import CheckResult, CheckError, Output, TestCase
 
 
@@ -89,69 +91,8 @@ def get_jsonpath_behavior(model_class: type, field_name: str) -> JSONPathBehavio
     return None
 
 
-def validate_jsonpath(expression: str) -> bool:
-    """
-    Validate that a string is a valid JSONPath expression.
-
-    Uses the jsonpath-ng library to parse and validate JSONPath syntax.
-    Only expressions starting with '$' are considered valid JSONPath.
-
-    This function is used during:
-    - JSONPath object creation (JSONPath.__init__)
-    - Schema generation to verify JSONPath field definitions
-
-    Args:
-        expression: String to validate as JSONPath (gracefully handles non-strings)
-
-    Returns:
-        True if expression is a valid JSONPath starting with '$'
-        False for invalid JSONPath, non-strings, or expressions not starting with '$'
-
-    Examples:
-        >>> validate_jsonpath("$.output.value")  # Valid
-        True
-        >>> validate_jsonpath("invalid_path")    # No $ prefix
-        False
-        >>> validate_jsonpath("$[invalid")       # Malformed syntax
-        False
-        >>> validate_jsonpath(None)              # Non-string
-        False
-    """
-    # Handle non-string inputs gracefully
-    if not isinstance(expression, str):
-        return False
-
-    # Must start with $ to be considered a JSONPath expression
-    if not expression.startswith('$'):
-        return False
-
-    try:
-        jsonpath_ng.parse(expression)
-        return True
-    except (JSONPathNGError, Exception):
-        return False
-
-
-def is_jsonpath_expression(value: str) -> bool:
-    r"""
-    Determine if a string appears to be a JSONPath expression.
-
-    Uses the same logic as the existing JSONPathResolver for consistency.
-
-    Rules:
-    - Strings beginning with '$.' are JSONPath expressions
-    - Strings beginning with '\\$.' are escaped literals (not JSONPath)
-    """
-    if not isinstance(value, str):
-        return False
-
-    if value.startswith('\\$.'):
-        return False  # Escaped literal
-
-    return value.startswith('$.')
-
-
 # JSONPath type for clean field definitions
+# validate_jsonpath is now imported from jsonpath_resolver module
 class JSONPath(BaseModel):
     """Represents a JSONPath expression that needs resolution."""
 
@@ -179,6 +120,35 @@ def _convert_to_jsonpath(value: object) -> object | JSONPath:
     return value
 
 
+def _create_evaluation_context(test_case: TestCase, output: Output) -> dict[str, Any]:
+    """
+    Create evaluation context structure from test case and output.
+
+    Args:
+        test_case: The test case being evaluated
+        output: The system output for this test case
+
+    Returns:
+        Dict with evaluation context matching FEP protocol structure:
+        {
+            "test_case": {
+                "id": "string",
+                "input": "string | object",
+                "expected": "string | object | null",
+                "metadata": "object"
+            },
+            "output": {
+                "value": "string | object",
+                "metadata": "object"
+            }
+        }
+    """
+    return {
+        'test_case': asdict(test_case),
+        'output': output.to_dict(),
+    }
+
+
 class EvaluationContext:
     """
     Evaluation context that provides access to test case and output data.
@@ -190,8 +160,7 @@ class EvaluationContext:
     def __init__(self, test_case: TestCase, output: Output):
         self.test_case = test_case
         self.output = output
-        self._resolver = get_shared_resolver()
-        self._context_dict = self._resolver.create_evaluation_context(test_case, output)
+        self._context_dict = _create_evaluation_context(test_case, output)
 
     @property
     def context_dict(self) -> dict[str, Any]:
@@ -215,8 +184,6 @@ class BaseCheck(BaseModel, ABC):
         """Initialize check with field validation."""
         # Initialize Pydantic model first (validates fields)
         BaseModel.__init__(self, **data)
-        # Setup resolver for execution
-        self._resolver = get_shared_resolver()
 
     @property
     def check_type(self) -> CheckType | str:
@@ -292,7 +259,7 @@ class BaseCheck(BaseModel, ABC):
 
             if isinstance(field_value, JSONPath):
                 try:
-                    resolved_result = self._resolver.resolve_argument(
+                    resolved_result = resolve_argument(
                         field_value.expression,
                         context.context_dict,
                     )
@@ -461,8 +428,6 @@ class BaseAsyncCheck(BaseModel, ABC):
         """Initialize async check with field validation."""
         # Initialize Pydantic model first (validates fields)
         BaseModel.__init__(self, **data)
-        # Setup resolver for execution
-        self._resolver = get_shared_resolver()
 
     @property
     def check_type(self) -> CheckType | str:
@@ -538,7 +503,7 @@ class BaseAsyncCheck(BaseModel, ABC):
 
             if isinstance(field_value, JSONPath):
                 try:
-                    resolved_result = self._resolver.resolve_argument(
+                    resolved_result = resolve_argument(
                         field_value.expression,
                         context.context_dict,
                     )

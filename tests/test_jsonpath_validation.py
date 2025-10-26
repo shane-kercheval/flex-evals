@@ -20,9 +20,11 @@ from flex_evals import (
 from flex_evals.checks.base import (
     JSONPathBehavior,
     get_jsonpath_behavior,
-    validate_jsonpath,
-    is_jsonpath_expression,
     _convert_to_jsonpath,
+)
+from flex_evals.utils.jsonpath_resolver import (
+    validate_jsonpath,
+    is_jsonpath,
 )
 
 
@@ -76,7 +78,7 @@ class TestJSONPathValidation:
         assert validate_jsonpath("$[0]")
         assert validate_jsonpath("$.*")
 
-    def test_is_jsonpath_expression_detection(self):
+    def test_is_jsonpath_detection(self):
         """Test detection of JSONPath-like expressions."""
         jsonpath_expressions = [
             "$.output.value",
@@ -94,20 +96,20 @@ class TestJSONPathValidation:
         ]
 
         for expr in jsonpath_expressions:
-            assert is_jsonpath_expression(expr), f"Should detect as JSONPath: {expr}"
+            assert is_jsonpath(expr), f"Should detect as JSONPath: {expr}"
 
         for expr in non_jsonpath_expressions:
-            assert not is_jsonpath_expression(expr), f"Should NOT detect as JSONPath: {expr}"
+            assert not is_jsonpath(expr), f"Should NOT detect as JSONPath: {expr}"
 
-    def test_is_jsonpath_expression_escape_mechanism(self):
+    def test_is_jsonpath_escape_mechanism(self):
         """Test the escape mechanism for literal values that start with $."""
         # The key business value: users can escape literal $ values
-        assert is_jsonpath_expression("$.value") is True      # JSONPath
-        assert is_jsonpath_expression("\\$.literal") is False  # Escaped literal
+        assert is_jsonpath("$.value") is True      # JSONPath
+        assert is_jsonpath("\\$.literal") is False  # Escaped literal
 
         # Non-string inputs should be handled gracefully
-        assert is_jsonpath_expression(None) is False
-        assert is_jsonpath_expression(123) is False
+        assert is_jsonpath(None) is False
+        assert is_jsonpath(123) is False
 
     def test_get_jsonpath_behavior_with_type_annotations(self):
         """Test reading JSONPath behavior from type annotations."""

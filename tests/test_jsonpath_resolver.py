@@ -1,7 +1,12 @@
 """Tests for JSONPath resolver implementation."""
 
 import pytest
-from flex_evals.utils.jsonpath_resolver import JSONPathResolver
+from flex_evals.checks.base import _create_evaluation_context
+from flex_evals.utils.jsonpath_resolver import (
+    is_jsonpath,
+    resolve_argument,
+    parse_jsonpath_cached,
+)
 from flex_evals import TestCase, Output, JSONPathError
 
 
@@ -10,8 +15,6 @@ class TestJSONPathResolver:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.resolver = JSONPathResolver()
-
         # Create test evaluation context
         self.test_case = TestCase(
             id="test_001",
@@ -33,7 +36,7 @@ class TestJSONPathResolver:
             metadata={"execution_time_ms": 245, "model_version": "gpt-4"},
         )
 
-        self.context = self.resolver.create_evaluation_context(self.test_case, self.output)
+        self.context = _create_evaluation_context(self.test_case, self.output)
 
     def test_jsonpath_detection_positive(self):
         """Test JSONPath expressions are detected correctly."""
@@ -46,7 +49,7 @@ class TestJSONPathResolver:
         ]
 
         for expr in jsonpath_expressions:
-            assert self.resolver.is_jsonpath(expr), f"Should detect '{expr}' as JSONPath"
+            assert is_jsonpath(expr), f"Should detect '{expr}' as JSONPath"
 
     def test_jsonpath_detection_negative(self):
         """Test non-JSONPath strings are not detected as JSONPath."""
@@ -62,7 +65,7 @@ class TestJSONPathResolver:
         ]
 
         for value in non_jsonpath_values:
-            assert not self.resolver.is_jsonpath(value), f"Should not detect '{value}' as JSONPath"
+            assert not is_jsonpath(value), f"Should not detect '{value}' as JSONPath"
 
     def test_jsonpath_escape_syntax(self):
         """Test escaped JSONPath strings are treated as literals."""
@@ -73,16 +76,16 @@ class TestJSONPathResolver:
         ]
 
         for value in escaped_values:
-            assert not self.resolver.is_jsonpath(value), f"Should not detect escaped '{value}' as JSONPath"  # noqa: E501
+            assert not is_jsonpath(value), f"Should not detect escaped '{value}' as JSONPath"
 
             # Test resolution returns literal value without escape
-            result = self.resolver.resolve_argument(value, self.context)
+            result = resolve_argument(value, self.context)
             expected_literal = value[1:]  # Remove backslash
             assert result == {"value": expected_literal}
 
     def test_evaluation_context_structure(self):
         """Test evaluation context matches exact protocol schema."""
-        context = self.resolver.create_evaluation_context(self.test_case, self.output)
+        context = _create_evaluation_context(self.test_case, self.output)
 
         # Verify top-level structure
         assert set(context.keys()) == {"test_case", "output"}
@@ -111,7 +114,7 @@ class TestJSONPathResolver:
         ]
 
         for jsonpath, expected_value in test_cases:
-            result = self.resolver.resolve_argument(jsonpath, self.context)
+            result = resolve_argument(jsonpath, self.context)
             assert result["jsonpath"] == jsonpath
             assert result["value"] == expected_value
 
@@ -126,7 +129,7 @@ class TestJSONPathResolver:
         ]
 
         for jsonpath, expected_value in test_cases:
-            result = self.resolver.resolve_argument(jsonpath, self.context)
+            result = resolve_argument(jsonpath, self.context)
             assert result["jsonpath"] == jsonpath
             assert result["value"] == expected_value
 
@@ -138,13 +141,13 @@ class TestJSONPathResolver:
         ]
 
         for jsonpath, expected_value in test_cases:
-            result = self.resolver.resolve_argument(jsonpath, self.context)
+            result = resolve_argument(jsonpath, self.context)
             assert result["jsonpath"] == jsonpath
             assert result["value"] == expected_value
 
     def test_jsonpath_resolution_success(self):
         """Test successful JSONPath resolution returns correct format."""
-        result = self.resolver.resolve_argument("$.output.value.answer", self.context)
+        result = resolve_argument("$.output.value.answer", self.context)
 
         # Verify format matches protocol specification
         assert isinstance(result, dict)
@@ -161,10 +164,10 @@ class TestJSONPathResolver:
 
         for expr in invalid_expressions:
             with pytest.raises(JSONPathError, match="Invalid JSONPath expression"):
-                self.resolver.resolve_argument(expr, self.context)
+                resolve_argument(expr, self.context)
 
         # Test expression that's not detected as JSONPath (literal value)
-        result = self.resolver.resolve_argument("$invalid", self.context)
+        result = resolve_argument("$invalid", self.context)
         assert result == {"value": "$invalid"}
 
     def test_jsonpath_nonexistent_path(self):
@@ -178,27 +181,27 @@ class TestJSONPathResolver:
 
         for path in nonexistent_paths:
             with pytest.raises(JSONPathError, match="did not match any data"):
-                self.resolver.resolve_argument(path, self.context)
+                resolve_argument(path, self.context)
 
     def test_resolved_arguments_format(self):
         """Test returned format matches protocol specification."""
         # Test JSONPath argument
-        jsonpath_result = self.resolver.resolve_argument("$.output.value.answer", self.context)
+        jsonpath_result = resolve_argument("$.output.value.answer", self.context)
         assert jsonpath_result == {
             "jsonpath": "$.output.value.answer",
             "value": "Paris",
         }
 
         # Test literal argument
-        literal_result = self.resolver.resolve_argument("literal_value", self.context)
+        literal_result = resolve_argument("literal_value", self.context)
         assert literal_result == {"value": "literal_value"}
 
         # Test numeric literal
-        numeric_result = self.resolver.resolve_argument(42, self.context)
+        numeric_result = resolve_argument(42, self.context)
         assert numeric_result == {"value": 42}
 
         # Test boolean literal
-        bool_result = self.resolver.resolve_argument(True, self.context)
+        bool_result = resolve_argument(True, self.context)
         assert bool_result == {"value": True}
 
     def test_mixed_literal_jsonpath_args(self):
@@ -211,7 +214,8 @@ class TestJSONPathResolver:
             "literal_string": "some text",
         }
 
-        resolved = self.resolver.resolve_arguments(arguments, self.context)
+        # Resolve each argument individually (no bulk resolve function)
+        resolved = {key: resolve_argument(value, self.context) for key, value in arguments.items()}
 
         # Verify JSONPath arguments
         assert resolved["actual"]["jsonpath"] == "$.output.value.answer"
@@ -227,16 +231,26 @@ class TestJSONPathResolver:
 
     def test_jsonpath_caching(self):
         """Test JSONPath compilation is cached for performance."""
+        # Clear the cache for this test
+        parse_jsonpath_cached.cache_clear()
+
         # First resolution should compile and cache
-        result1 = self.resolver.resolve_argument("$.output.value.answer", self.context)
+        result1 = resolve_argument("$.output.value.answer", self.context)
         assert result1["value"] == "Paris"
 
-        # Verify expression is cached
-        assert "$.output.value.answer" in self.resolver._cache
+        # Check cache was populated
+        cache_info = parse_jsonpath_cached.cache_info()
+        assert cache_info.hits == 0  # First call is a miss
+        assert cache_info.misses == 1  # One parse happened
 
         # Second resolution should use cache
-        result2 = self.resolver.resolve_argument("$.output.value.answer", self.context)
+        result2 = resolve_argument("$.output.value.answer", self.context)
         assert result2["value"] == "Paris"
+
+        # Verify cache was hit
+        cache_info = parse_jsonpath_cached.cache_info()
+        assert cache_info.hits == 1  # Second call hit the cache
+        assert cache_info.misses == 1  # Still only one parse
 
         # Results should be identical
         assert result1 == result2
@@ -254,8 +268,8 @@ class TestJSONPathResolver:
         ]
 
         for value in non_string_values:
-            assert not self.resolver.is_jsonpath(value)
-            result = self.resolver.resolve_argument(value, self.context)
+            assert not is_jsonpath(value)
+            result = resolve_argument(value, self.context)
             assert result == {"value": value}
 
     def test_complex_evaluation_context(self):
@@ -300,7 +314,7 @@ class TestJSONPathResolver:
             },
         )
 
-        complex_context = self.resolver.create_evaluation_context(complex_test_case, complex_output)  # noqa: E501
+        complex_context = _create_evaluation_context(complex_test_case, complex_output)
 
         # Test complex nested access patterns
         test_cases = [
@@ -314,5 +328,5 @@ class TestJSONPathResolver:
         ]
 
         for jsonpath, expected_value in test_cases:
-            result = self.resolver.resolve_argument(jsonpath, complex_context)
+            result = resolve_argument(jsonpath, complex_context)
             assert result["value"] == expected_value, f"Failed for {jsonpath}"
