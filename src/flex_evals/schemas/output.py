@@ -20,14 +20,6 @@ class Output:
     - metadata: System-specific information about the output generation
     """
 
-    value: str | dict[str, Any] | None
+    value: str | dict[str, Any] | object | None
     id: str | None = None
     metadata: dict[str, Any] | None = None
-
-    def __post_init__(self):
-        """Validate required fields and constraints."""
-        if self.value is not None and not isinstance(self.value, str | dict):
-            raise ValueError("Output.value must be a string, dictionary, or None")
-
-        if self.id is not None and (not isinstance(self.id, str) or not self.id.strip()):
-            raise ValueError("Output.id must be a non-empty string if provided")

@@ -1,7 +1,6 @@
 """Tests for Output schema implementation."""
 
 import dataclasses
-import pytest
 from flex_evals import Output
 
 
@@ -98,17 +97,6 @@ class TestOutput:
         assert output.value["result"]["primary"]["details"]["coordinates"]["lat"] == 48.8566
         assert len(output.value["result"]["alternatives"]) == 2
         assert output.value["result"]["metadata"]["confidence_scores"]["paris"] == 0.95
-
-    def test_output_invalid_value_type(self):
-        """Test invalid value types raise error."""
-        with pytest.raises(ValueError, match="Output.value must be a string, dictionary, or None"):
-            Output(value=123)
-
-        with pytest.raises(ValueError, match="Output.value must be a string, dictionary, or None"):
-            Output(value=["list", "not", "allowed"])
-
-        with pytest.raises(ValueError, match="Output.value must be a string, dictionary, or None"):
-            Output(value=True)
 
     def test_output_serialization(self):
         """Test Output can be converted to dict for JSON serialization."""
