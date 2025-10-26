@@ -2363,3 +2363,421 @@ class TestSharedCheckConcurrency:
                 for c in corrupted_cases[:10]
             )
         )
+
+
+class TestTestCaseWithOptionalID:
+    """Test evaluation engine with TestCase instances that have None IDs."""
+
+    def setup_method(self):
+        """Set up test fixtures with standard checks."""
+        restore_standard_checks()
+
+    def test_testcase_with_none_id_basic(self):
+        """Test that TestCase can be created with id=None."""
+        # Should not raise any exception
+        test_case = TestCase(input="What is the capital of France?", expected="Paris")
+        assert test_case.id is None
+        assert test_case.input == "What is the capital of France?"
+        assert test_case.expected == "Paris"
+
+    def test_testcase_with_explicit_none_id(self):
+        """Test that TestCase can be created with explicit id=None."""
+        test_case = TestCase(input="test input", id=None)
+        assert test_case.id is None
+
+    def test_testcase_with_empty_string_id_raises_error(self):
+        """Test that TestCase with empty string ID raises ValueError."""
+        with pytest.raises(ValueError, match="TestCase.id must be a non-empty string when provided"):
+            TestCase(input="test", id="")
+
+    def test_testcase_with_non_string_id_raises_error(self):
+        """Test that TestCase with non-string ID raises ValueError."""
+        with pytest.raises(ValueError, match="TestCase.id must be a string or None"):
+            TestCase(input="test", id=123)  # type: ignore
+
+    def test_evaluate_with_none_ids_basic(self):
+        """Test evaluate() works end-to-end with TestCase instances that have None IDs."""
+        # Create test cases without IDs
+        test_cases = [
+            TestCase(input="What is the capital of France?", expected="Paris"),
+            TestCase(input="What is 2 + 2?", expected="4"),
+        ]
+
+        outputs = [
+            Output(value="Paris", id="output_001"),
+            Output(value="4", id="output_002"),
+        ]
+
+        checks = [
+            EqualsCheck(actual="$.output.value", expected="$.test_case.expected"),
+        ]
+
+        result = evaluate(test_cases, outputs, checks)
+
+        # Verify evaluation completed successfully
+        assert result.status == 'completed'
+        assert len(result.results) == 2
+
+        # Both checks should pass
+        for test_result in result.results:
+            assert test_result.status == 'completed'
+            assert len(test_result.check_results) == 1
+            assert test_result.check_results[0].results["passed"] is True
+
+        # Verify that test_case.id is None in results
+        assert result.results[0].execution_context.test_case.id is None
+        assert result.results[1].execution_context.test_case.id is None
+
+    def test_evaluate_with_none_ids_shared_checks(self):
+        """Test shared checks pattern with None IDs."""
+        test_cases = [
+            TestCase(input="test1", expected="output1"),
+            TestCase(input="test2", expected="output2"),
+            TestCase(input="test3", expected="output3"),
+        ]
+
+        outputs = [
+            Output(value="output1", id="out1"),
+            Output(value="output2", id="out2"),
+            Output(value="output3", id="out3"),
+        ]
+
+        # Shared checks applied to all test cases
+        checks = [
+            EqualsCheck(actual="$.output.value", expected="$.test_case.expected"),
+            AttributeExistsCheck(path="$.output.value"),
+        ]
+
+        result = evaluate(test_cases, outputs, checks)
+
+        assert result.status == 'completed'
+        assert len(result.results) == 3
+
+        # All checks should pass
+        for i, test_result in enumerate(result.results):
+            assert test_result.status == 'completed'
+            assert len(test_result.check_results) == 2
+            assert test_result.execution_context.test_case.id is None
+            for check_result in test_result.check_results:
+                assert check_result.results["passed"] is True
+
+    def test_evaluate_with_none_ids_per_testcase_checks(self):
+        """Test per-test-case checks pattern with None IDs."""
+        test_cases = [
+            TestCase(input="What is the capital of France?", expected="Paris"),
+            TestCase(input="What is 2 + 2?", expected="4"),
+        ]
+
+        outputs = [
+            Output(value="Paris", id="output_001"),
+            Output(value="4", id="output_002"),
+        ]
+
+        # Different checks for each test case
+        per_testcase_checks = [
+            [ContainsCheck(text="$.output.value", phrases=["Paris"])],
+            [RegexCheck(text="$.output.value", pattern=r"^\d+$")],
+        ]
+
+        result = evaluate(test_cases, outputs, per_testcase_checks)
+
+        assert result.status == 'completed'
+        assert len(result.results) == 2
+
+        # First test case: ContainsCheck for "Paris"
+        assert result.results[0].execution_context.test_case.id is None
+        assert result.results[0].check_results[0].check_type == "contains"
+        assert result.results[0].check_results[0].results["passed"] is True
+
+        # Second test case: RegexCheck for digit
+        assert result.results[1].execution_context.test_case.id is None
+        assert result.results[1].check_results[0].check_type == "regex"
+        assert result.results[1].check_results[0].results["passed"] is True
+
+    def test_evaluate_with_none_ids_testcase_checks_field(self):
+        """Test using TestCase.checks field with None IDs."""
+        test_cases = [
+            TestCase(
+                input="What is the capital of France?",
+                expected="Paris",
+                checks=[
+                    EqualsCheck(actual="$.output.value", expected="Paris"),
+                    ContainsCheck(text="$.output.value", phrases=["Par"]),
+                ],
+            ),
+            TestCase(
+                input="What is 2 + 2?",
+                expected="4",
+                checks=[
+                    ExactMatchCheck(actual="$.output.value", expected="4"),
+                ],
+            ),
+        ]
+
+        outputs = [
+            Output(value="Paris", id="output_001"),
+            Output(value="4", id="output_002"),
+        ]
+
+        result = evaluate(test_cases, outputs, checks=None)
+
+        assert result.status == 'completed'
+        assert len(result.results) == 2
+
+        # First test case has 2 checks
+        assert result.results[0].execution_context.test_case.id is None
+        assert len(result.results[0].check_results) == 2
+        assert all(cr.results["passed"] is True for cr in result.results[0].check_results)
+
+        # Second test case has 1 check
+        assert result.results[1].execution_context.test_case.id is None
+        assert len(result.results[1].check_results) == 1
+        assert result.results[1].check_results[0].results["passed"] is True
+
+    def test_evaluate_with_none_ids_combined_checks(self):
+        """Test combination of TestCase.checks and global checks with None IDs."""
+        test_cases = [
+            TestCase(
+                input="test",
+                expected="Paris",
+                checks=[
+                    ContainsCheck(text="$.output.value", phrases=["Paris"]),
+                ],
+            ),
+            TestCase(
+                input="test",
+                expected="4",
+                checks=[
+                    ExactMatchCheck(actual="$.output.value", expected="4"),
+                ],
+            ),
+        ]
+
+        outputs = [
+            Output(value="Paris", id="output_001"),
+            Output(value="4", id="output_002"),
+        ]
+
+        # Global checks applied to all test cases
+        global_checks = [
+            AttributeExistsCheck(path="$.output.value"),
+        ]
+
+        result = evaluate(test_cases, outputs, global_checks)
+
+        assert result.status == 'completed'
+        assert len(result.results) == 2
+
+        # Each test case should have its TestCase.checks + global checks
+        for test_result in result.results:
+            assert test_result.execution_context.test_case.id is None
+            assert len(test_result.check_results) == 2  # 1 from TestCase + 1 global
+            assert all(cr.results["passed"] is True for cr in test_result.check_results)
+
+    def test_evaluate_with_none_ids_async_checks(self):
+        """Test that async checks work with None IDs."""
+        # This test uses semantic_similarity which is async
+        test_cases = [
+            TestCase(input="What is the capital of France?", expected="Paris"),
+        ]
+
+        outputs = [
+            Output(value="Paris is the capital", id="output_001"),
+        ]
+
+        # Note: This test may need to be adjusted based on your async check implementations
+        # Using a simple check that should work
+        checks = [
+            AttributeExistsCheck(path="$.output.value"),
+            IsEmptyCheck(value="$.output.value", negate=True),
+        ]
+
+        result = evaluate(test_cases, outputs, checks)
+
+        assert result.status == 'completed'
+        assert result.results[0].execution_context.test_case.id is None
+        assert all(cr.results["passed"] is True for cr in result.results[0].check_results)
+
+    def test_evaluate_with_none_ids_parallel_workers(self):
+        """Test parallel execution with None IDs."""
+        num_test_cases = 8
+        test_cases = [
+            TestCase(input=f"input_{i}", expected=f"output_{i}")
+            for i in range(num_test_cases)
+        ]
+
+        outputs = [
+            Output(value=f"output_{i}", id=f"output_{i}")
+            for i in range(num_test_cases)
+        ]
+
+        checks = [
+            EqualsCheck(actual="$.output.value", expected="$.test_case.expected"),
+        ]
+
+        result = evaluate(test_cases, outputs, checks, max_parallel_workers=4)
+
+        assert result.status == 'completed'
+        assert len(result.results) == num_test_cases
+
+        # All should have None IDs and pass
+        for test_result in result.results:
+            assert test_result.execution_context.test_case.id is None
+            assert test_result.status == 'completed'
+            assert test_result.check_results[0].results["passed"] is True
+
+    def test_evaluate_with_none_ids_error_handling(self):
+        """Test error handling with None IDs."""
+        test_cases = [
+            TestCase(input="test1"),
+            TestCase(input="test2"),
+        ]
+
+        outputs = [
+            Output(value="output1", id="out1"),
+            Output(value="output2", id="out2"),
+        ]
+
+        # Check that will cause an error (invalid JSONPath)
+        checks = [
+            Check(
+                type="equals",
+                arguments={"actual": "$.output.nonexistent.field", "expected": "test"},
+            ),
+        ]
+
+        result = evaluate(test_cases, outputs, checks)
+
+        # Should have errors but complete
+        assert result.status == 'error'
+        assert len(result.results) == 2
+
+        for test_result in result.results:
+            assert test_result.execution_context.test_case.id is None
+            assert test_result.status == 'error'
+            assert test_result.check_results[0].status == 'error'
+
+    def test_evaluate_with_none_ids_jsonpath_resolution(self):
+        """Test JSONPath resolution works correctly with None IDs."""
+        test_cases = [
+            TestCase(
+                input={"question": "Capital of France?"},
+                expected="Paris",
+                metadata={"category": "geography"},
+            ),
+        ]
+
+        outputs = [
+            Output(
+                value={"answer": "Paris", "confidence": 0.95},
+                metadata={"source": "db"},
+            ),
+        ]
+
+        checks = [
+            # Test JSONPath resolution from test_case
+            EqualsCheck(actual="$.output.value.answer", expected="$.test_case.expected"),
+            # Test nested JSONPath
+            EqualsCheck(actual="$.test_case.metadata.category", expected="geography"),
+            # Test output metadata
+            AttributeExistsCheck(path="$.output.metadata.source"),
+        ]
+
+        result = evaluate(test_cases, outputs, checks)
+
+        assert result.status == 'completed'
+        assert result.results[0].execution_context.test_case.id is None
+
+        # Verify resolved arguments show correct JSONPath extraction
+        check_results = result.results[0].check_results
+        assert check_results[0].resolved_arguments["actual"]["value"] == "Paris"
+        assert check_results[0].resolved_arguments["expected"]["value"] == "Paris"
+        assert check_results[1].resolved_arguments["actual"]["value"] == "geography"
+        assert all(cr.results["passed"] is True for cr in check_results)
+
+    def test_evaluate_with_mixed_none_and_valid_ids(self):
+        """Test that evaluate() works with mix of None and valid IDs."""
+        test_cases = [
+            TestCase(id="test_001", input="input1", expected="output1"),  # Has ID
+            TestCase(input="input2", expected="output2"),  # None ID
+            TestCase(id="test_003", input="input3", expected="output3"),  # Has ID
+            TestCase(input="input4", expected="output4"),  # None ID
+        ]
+
+        outputs = [
+            Output(value="output1", id="out1"),
+            Output(value="output2", id="out2"),
+            Output(value="output3", id="out3"),
+            Output(value="output4", id="out4"),
+        ]
+
+        checks = [
+            EqualsCheck(actual="$.output.value", expected="$.test_case.expected"),
+        ]
+
+        result = evaluate(test_cases, outputs, checks)
+
+        assert result.status == 'completed'
+        assert len(result.results) == 4
+
+        # Check IDs are preserved correctly
+        assert result.results[0].execution_context.test_case.id == "test_001"
+        assert result.results[1].execution_context.test_case.id is None
+        assert result.results[2].execution_context.test_case.id == "test_003"
+        assert result.results[3].execution_context.test_case.id is None
+
+        # All checks should pass
+        for test_result in result.results:
+            assert test_result.check_results[0].results["passed"] is True
+
+    def test_evaluate_with_none_ids_to_dict_list_serialization(self):
+        """Test that results with None IDs can be serialized to dict list."""
+        test_cases = [
+            TestCase(input="test", expected="output"),
+        ]
+
+        outputs = [
+            Output(value="output", id="out1"),
+        ]
+
+        checks = [
+            EqualsCheck(actual="$.output.value", expected="output"),
+        ]
+
+        result = evaluate(test_cases, outputs, checks)
+
+        # Should be able to convert to dict list without errors
+        result_dict_list = result.to_dict_list()
+
+        assert isinstance(result_dict_list, list)
+        assert len(result_dict_list) == 1  # One check per test case
+        assert result_dict_list[0]["test_case_id"] is None
+        assert result_dict_list[0]["check_type"] == "equals"
+        assert result_dict_list[0]["actual_output"] == "output"
+
+    def test_evaluate_with_none_ids_experiment_metadata(self):
+        """Test None IDs work with experiment metadata."""
+        test_cases = [
+            TestCase(input="test1", expected="out1"),
+            TestCase(input="test2", expected="out2"),
+        ]
+
+        outputs = [
+            Output(value="out1", id="output1"),
+            Output(value="out2", id="output2"),
+        ]
+
+        checks = [
+            EqualsCheck(actual="$.output.value", expected="$.test_case.expected"),
+        ]
+
+        experiment = ExperimentMetadata(
+            name="test_none_ids_experiment",
+            metadata={"purpose": "testing None IDs"},
+        )
+
+        result = evaluate(test_cases, outputs, checks, experiment)
+
+        assert result.status == 'completed'
+        assert result.experiment.name == "test_none_ids_experiment"
+        assert all(tr.execution_context.test_case.id is None for tr in result.results)

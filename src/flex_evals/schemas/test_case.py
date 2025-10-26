@@ -26,16 +26,19 @@ class TestCase:
     - checks: Convenience extension of protocol for per-test-case pattern of checks
     """
 
-    id: str
     input: str | dict[str, Any] | list[Any] | Any
+    id: str | None = None
     expected: str | dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
     checks: list[CheckTypes] | None = None  # Per-test-case checks (convenience pattern)
 
     def __post_init__(self):
         """Validate required fields and constraints."""
-        if not self.id or not isinstance(self.id, str):
-            raise ValueError("TestCase.id must be a non-empty string")
+        if self.id is not None:
+            if not isinstance(self.id, str):
+                raise ValueError("TestCase.id must be a string or None")
+            if not self.id:
+                raise ValueError("TestCase.id must be a non-empty string when provided")
 
         if self.input is None:
             raise ValueError("TestCase.input is required and cannot be None")
