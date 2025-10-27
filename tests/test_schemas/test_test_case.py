@@ -111,12 +111,14 @@ class TestTestCase:
 
     def test_test_case_validation_errors(self):
         """Test missing required fields raise ValidationError."""
-        # Missing id
-        with pytest.raises(ValueError, match="TestCase.id must be a non-empty string"):
+        # Empty string id (not allowed)
+        with pytest.raises(ValueError, match="TestCase.id must be a non-empty string when provided"):  # noqa: E501
             TestCase(id="", input="test input")
 
-        with pytest.raises(ValueError, match="TestCase.id must be a non-empty string"):
-            TestCase(id=None, input="test input")
+        # None id is allowed
+        test_case = TestCase(id=None, input="test input")
+        assert test_case.id is None
+        assert test_case.input == "test input"
 
         # Missing input
         with pytest.raises(ValueError, match="TestCase.input is required and cannot be None"):
@@ -124,7 +126,9 @@ class TestTestCase:
 
     def test_test_case_empty_id_error(self):
         """Test empty string id raises error."""
-        with pytest.raises(ValueError, match="TestCase.id must be a non-empty string"):
+        with pytest.raises(
+            ValueError, match="TestCase.id must be a non-empty string when provided",
+        ):
             TestCase(id="", input="test input")
 
     def test_test_case_invalid_input_type(self):
