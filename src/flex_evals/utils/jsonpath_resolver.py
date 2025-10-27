@@ -148,11 +148,9 @@ def validate_jsonpath(expression: str) -> bool:
     # Handle non-string inputs gracefully
     if not isinstance(expression, str):
         return False
-
     # Must start with $ to be considered a JSONPath expression
     if not expression.startswith('$'):
         return False
-
     try:
         parse_jsonpath_cached(expression)
         return True

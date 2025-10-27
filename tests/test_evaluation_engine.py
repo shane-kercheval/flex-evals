@@ -2387,7 +2387,7 @@ class TestTestCaseWithOptionalID:
 
     def test_testcase_with_empty_string_id_raises_error(self):
         """Test that TestCase with empty string ID raises ValueError."""
-        with pytest.raises(ValueError, match="TestCase.id must be a non-empty string when provided"):
+        with pytest.raises(ValueError, match="TestCase.id must be a non-empty string when provided"):  # noqa: E501
             TestCase(input="test", id="")
 
     def test_testcase_with_non_string_id_raises_error(self):
