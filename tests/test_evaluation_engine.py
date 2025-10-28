@@ -12,7 +12,6 @@ from flex_evals import (
     Output,
     Check,
     EvaluationRunResult,
-    ExperimentMetadata,
     AttributeExistsCheck,
     ContainsCheck,
     EqualsCheck,
@@ -366,18 +365,15 @@ class TestEvaluationEngine:
             assert "test_check" in check_types
             assert "test_async_check" in check_types
 
-    def test_evaluate_experiment_metadata(self):
-        """Test experiment metadata included in result."""
-        experiment = ExperimentMetadata(
-            name="test_experiment",
-            metadata={"version": "1.0", "purpose": "testing"},
-        )
-
-        result = evaluate(self.test_cases, self.outputs, self.shared_checks, experiment)
-
-        assert result.experiment == experiment
-        assert result.experiment.name == "test_experiment"
-        assert result.experiment.metadata["version"] == "1.0"
+    def test_evaluate_with_metadata(self):
+        """Test metadata parameter included in result."""
+        metadata = {
+            "experiment_name": "test_experiment",
+            "version": "1.0",
+            "purpose": "testing",
+        }
+        result = evaluate(self.test_cases, self.outputs, self.shared_checks, metadata=metadata)
+        assert result.metadata == metadata
 
     def test_evaluate_unique_evaluation_id(self):
         """Test each evaluation gets unique ID."""
@@ -2755,8 +2751,8 @@ class TestTestCaseWithOptionalID:
         assert result_dict_list[0]["check_type"] == "equals"
         assert result_dict_list[0]["actual_output"] == "output"
 
-    def test_evaluate_with_none_ids_experiment_metadata(self):
-        """Test None IDs work with experiment metadata."""
+    def test_evaluate_with_none_ids_and_metadata(self):
+        """Test None IDs work with metadata parameter."""
         test_cases = [
             TestCase(input="test1", expected="out1"),
             TestCase(input="test2", expected="out2"),
@@ -2771,13 +2767,13 @@ class TestTestCaseWithOptionalID:
             EqualsCheck(actual="$.output.value", expected="$.test_case.expected"),
         ]
 
-        experiment = ExperimentMetadata(
-            name="test_none_ids_experiment",
-            metadata={"purpose": "testing None IDs"},
-        )
+        metadata = {
+            "experiment_name": "test_none_ids_experiment",
+            "purpose": "testing None IDs",
+        }
 
-        result = evaluate(test_cases, outputs, checks, experiment)
+        result = evaluate(test_cases, outputs, checks, metadata=metadata)
 
         assert result.status == 'completed'
-        assert result.experiment.name == "test_none_ids_experiment"
+        assert result.metadata == metadata
         assert all(tr.execution_context.test_case.id is None for tr in result.results)

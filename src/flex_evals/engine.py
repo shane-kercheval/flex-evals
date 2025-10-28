@@ -10,10 +10,11 @@ import uuid
 from copy import deepcopy
 from datetime import datetime, UTC
 from concurrent.futures import ProcessPoolExecutor
+from typing import Any
 
 from .schemas import (
     TestCase, Output, Check, CheckResult, TestCaseResult, TestCaseSummary,
-    EvaluationRunResult, EvaluationSummary, ExperimentMetadata,
+    EvaluationRunResult, EvaluationSummary,
 )
 from .schemas.results import ExecutionContext
 from .schemas.check import CheckError
@@ -32,7 +33,7 @@ def evaluate(
         test_cases: list[TestCase],
         outputs: list[Output],
         checks: list[CheckTypes] | list[list[CheckTypes]] | None = None,
-        experiment_metadata: ExperimentMetadata | None = None,
+        metadata: dict[str, Any] | None = None,
         max_async_concurrent: int | None = None,
         max_parallel_workers: int = 1,
     ) -> EvaluationRunResult:
@@ -55,7 +56,7 @@ def evaluate(
             - List[List[CheckTypes]]: checks[i] applies to test_cases[i] (per-test-case pattern)
             - None: Extract checks from TestCase.checks field (convenience pattern)
             Can be Check objects or BaseCheck/BaseAsyncCheck instances
-        experiment_metadata: Optional experiment context information
+        metadata: Optional metadata for the evaluation run (e.g., experiment name, configuration)
         max_async_concurrent: Maximum number of concurrent async "check" executions (default: no limit)
         max_parallel_workers: Number of parallel worker processes (default: 1, no parallelization)
 
@@ -101,7 +102,7 @@ def evaluate(
         status=status,
         summary=summary,
         results=test_case_results,
-        experiment=experiment_metadata,
+        metadata=metadata,
     )
 
 

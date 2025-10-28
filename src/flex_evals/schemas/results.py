@@ -5,7 +5,6 @@ from datetime import datetime
 from typing import Any, Literal
 
 from flex_evals.schemas.check import CheckResult
-from flex_evals.schemas.experiments import ExperimentMetadata
 from flex_evals.schemas.test_case import TestCase
 from flex_evals.schemas.output import Output
 
@@ -124,7 +123,7 @@ class EvaluationRunResult:
     """
     Provides comprehensive results for an entire evaluation run.
 
-    Includes experiment context, summary statistics, and all individual test case results.
+    Includes summary statistics and all individual test case results.
 
     Required Fields:
     - evaluation_id: Unique identifier for this evaluation run
@@ -135,7 +134,6 @@ class EvaluationRunResult:
     - results: Individual test case results
 
     Optional Fields:
-    - experiment: Experiment metadata
     - metadata: Implementation-specific metadata
     """
 
@@ -145,7 +143,6 @@ class EvaluationRunResult:
     status: Status | Literal['completed', 'error']
     summary: EvaluationSummary
     results: list[TestCaseResult]
-    experiment: ExperimentMetadata | None = None
     metadata: dict[str, Any] | None = None
 
     def __post_init__(self):
@@ -179,7 +176,7 @@ class EvaluationRunResult:
             return 'error'
         return 'completed'
 
-    def to_dict_list(self) -> list[dict[str, Any]]:  # noqa: PLR0912
+    def to_dict_list(self) -> list[dict[str, Any]]:
         """
         Flatten evaluation results into a list of dictionaries for tabular analysis.
 
@@ -234,13 +231,6 @@ class EvaluationRunResult:
             # Add test case result metadata if present
             if test_case_result.metadata:
                 test_case_data['test_case_result_metadata'] = test_case_result.metadata
-
-            # Add experiment metadata if present at evaluation level
-            if self.experiment:
-                if self.experiment.name:
-                    test_case_data['experiment_name'] = self.experiment.name
-                if self.experiment.metadata:
-                    test_case_data['experiment_metadata'] = self.experiment.metadata
 
             # Add evaluation metadata if present
             if self.metadata:

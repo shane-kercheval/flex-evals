@@ -16,7 +16,6 @@ from flex_evals import (
     CheckError,
     Check,
     evaluate,
-    ExperimentMetadata,
 )
 from flex_evals.schemas.results import ExecutionContext
 
@@ -389,19 +388,17 @@ class TestEvaluationRunResult:
         assert evaluation.evaluation_id == "eval-123"
         assert evaluation.status == 'completed'
         assert len(evaluation.results) == 2
-        assert evaluation.experiment is None
         assert evaluation.metadata is None
 
-    def test_with_experiment_metadata(self):
-        """Test EvaluationRunResult with experiment metadata."""
+    def test_with_metadata(self):
+        """Test EvaluationRunResult with metadata."""
         started_at = datetime.now(UTC)
         completed_at = datetime.now(UTC)
-
-        experiment = ExperimentMetadata(
-            name="test-experiment",
-            metadata={"version": "1.0.0"},
-        )
-
+        metadata = {
+            "experiment_name": "test-experiment",
+            "version": "1.0.0",
+            "custom": "value",
+        }
         evaluation = EvaluationRunResult(
             evaluation_id="eval-123",
             started_at=started_at,
@@ -409,13 +406,9 @@ class TestEvaluationRunResult:
             status='completed',
             summary=EvaluationSummary(0, 0, 0),
             results=[],
-            experiment=experiment,
-            metadata={"custom": "value"},
+            metadata=metadata,
         )
-
-        assert evaluation.experiment.name == "test-experiment"
-        assert evaluation.experiment.metadata["version"] == "1.0.0"
-        assert evaluation.metadata == {"custom": "value"}
+        assert evaluation.metadata == metadata
 
     def test_empty_evaluation_id(self):
         """Test that empty evaluation_id raises ValueError."""
@@ -637,14 +630,13 @@ class TestEvaluationRunResult:
             metadata={"test_duration": "100ms"},
         )
 
-        experiment = ExperimentMetadata(
-            name="test-experiment",
-            metadata={
+        metadata = {
+                "experiment_name": "test-experiment",
                 "version": "1.0.0",
                 "description": "Test experiment",
                 "experiment_type": "evaluation",
-            },
-        )
+                "evaluation_type": "test",
+            }
 
         evaluation = EvaluationRunResult(
             evaluation_id="eval-001",
@@ -653,8 +645,7 @@ class TestEvaluationRunResult:
             status='completed',
             summary=EvaluationSummary(1, 1, 0),
             results=[test_case_result],
-            experiment=experiment,
-            metadata={"evaluation_type": "test"},
+            metadata=metadata,
         )
 
         dict_list = evaluation.to_dict_list()
@@ -696,13 +687,7 @@ class TestEvaluationRunResult:
         assert row['output_metadata'] == {"model": "test-model"}
         assert row['test_case_result_metadata'] == {"test_duration": "100ms"}
         assert row['check_metadata'] == {"check_version": "1.0.0", "execution_time_ms": 50}
-        assert row['experiment_name'] == "test-experiment"
-        assert row['experiment_metadata'] == {
-            "version": "1.0.0",
-            "description": "Test experiment",
-            "experiment_type": "evaluation",
-        }
-        assert row['evaluation_metadata'] == {"evaluation_type": "test"}
+        assert row['evaluation_metadata'] == metadata
 
         # Verify no error fields are present for successful check
         assert 'error_type' not in row
