@@ -299,6 +299,12 @@ class EvaluationRunResult:
                 if isinstance(obj, datetime):
                     return obj.isoformat()
 
+                # Handle classes/types FIRST (before checking for methods)
+                # Classes have methods like model_dump as unbound methods, which would
+                # pass hasattr/callable checks but fail when called without an instance
+                if isinstance(obj, type):
+                    return f"<class {obj.__name__}>"
+
                 # Handle Pydantic models (v2 has model_dump, v1 has dict)
                 if hasattr(obj, 'model_dump') and callable(getattr(obj, 'model_dump')):
                     return obj.model_dump()
@@ -311,10 +317,6 @@ class EvaluationRunResult:
                     return obj.to_dict()
                 if hasattr(obj, 'todict') and callable(getattr(obj, 'todict')):
                     return obj.todict()
-
-                # Handle classes/types (must check before callable since classes are callable)
-                if isinstance(obj, type):
-                    return f"<class {obj.__name__}>"
 
                 # Handle functions/lambdas/callables
                 if callable(obj):

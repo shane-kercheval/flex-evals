@@ -1312,6 +1312,8 @@ class TestEvaluationRunResult:
                 'function': custom_function,
                 'class': CustomClass,
                 'lambda': lambda x: x * 2,
+                # Pydantic CLASS (not instance) - source of a fixed bug
+                'pydantic_class': CustomPydanticModel,
                 'pydantic_model': pydantic_instance,
                 'custom_to_dict': CustomObjectWithToDict(),
                 'custom_todict': CustomObjectWithToDictNoUnderscore(),
@@ -1366,6 +1368,10 @@ class TestEvaluationRunResult:
         # Verify lambda is converted to string
         assert isinstance(metadata['lambda'], str)
         assert '<function' in metadata['lambda']
+
+        # Verify Pydantic class (not instance) is converted to string
+        assert isinstance(metadata['pydantic_class'], str)
+        assert metadata['pydantic_class'] == '<class CustomPydanticModel>'
 
         # Verify Pydantic model is converted to dict (preserves data!)
         assert isinstance(metadata['pydantic_model'], dict)
