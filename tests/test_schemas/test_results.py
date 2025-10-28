@@ -1,9 +1,10 @@
 """Tests for result schema implementations."""
 
 import pandas as pd
+import json
 import pytest
+from pydantic import BaseModel
 from datetime import datetime, UTC
-
 from flex_evals import (
     TestCaseSummary,
     TestCaseResult,
@@ -474,7 +475,6 @@ class TestEvaluationRunResult:
                 summary=summary,
                 results=results,
             )
-
 
     def test_empty_results(self):
         """Test EvaluationRunResult with empty results."""
@@ -1060,3 +1060,335 @@ class TestEvaluationRunResult:
             assert 'check_version' in row  # Should be inside check_metadata
             assert 'check_metadata' in row
             assert isinstance(row['check_metadata'], dict)
+
+    def test_serialize_method_basic(self):
+        """Test serialize method converts dataclass to JSON-compatible dict."""
+        test_case = TestCase(id='tc-1', input='test', expected='expected')
+        output = Output(value='result')
+        check_result = CheckResult(
+            check_type='exact_match',
+            check_version='1.0.0',
+            status='completed',
+            results={'passed': True},
+            resolved_arguments={},
+            evaluated_at=datetime.now(UTC),
+            metadata=None,
+            error=None,
+        )
+        execution_context = ExecutionContext(test_case=test_case, output=output)
+        test_case_result = TestCaseResult(
+            status='completed',
+            execution_context=execution_context,
+            check_results=[check_result],
+            summary=TestCaseSummary(total_checks=1, completed_checks=1, error_checks=0),
+            metadata=None,
+        )
+        result = EvaluationRunResult(
+            evaluation_id='eval-123',
+            started_at=datetime(2024, 1, 15, 10, 30, 45, tzinfo=UTC),
+            completed_at=datetime(2024, 1, 15, 10, 35, 20, tzinfo=UTC),
+            status='completed',
+            summary=EvaluationSummary(
+                total_test_cases=1,
+                completed_test_cases=1,
+                error_test_cases=0,
+            ),
+            results=[test_case_result],
+            metadata={'source': 'test'},
+        )
+
+        serialized = result.serialize()
+
+        # Verify it's a dictionary
+        assert isinstance(serialized, dict)
+
+        # Verify datetimes are converted to ISO strings
+        assert isinstance(serialized['started_at'], str)
+        assert serialized['started_at'] == '2024-01-15T10:30:45+00:00'
+        assert isinstance(serialized['completed_at'], str)
+        assert serialized['completed_at'] == '2024-01-15T10:35:20+00:00'
+
+        # Verify evaluated_at in check results is also converted
+        check_evaluated_at = serialized['results'][0]['check_results'][0]['evaluated_at']
+        assert isinstance(check_evaluated_at, str)
+        assert 'T' in check_evaluated_at  # ISO 8601 format
+
+        # Verify other data is preserved
+        assert serialized['evaluation_id'] == 'eval-123'
+        assert serialized['status'] == 'completed'
+        assert serialized['metadata'] == {'source': 'test'}
+
+    def test_serialize_method_json_compatibility(self):
+        """Test that serialized result can be JSON serialized."""
+        test_case = TestCase(id='tc-1', input='test')
+        output = Output(value='result')
+        check_result = CheckResult(
+            check_type='exact_match',
+            check_version='1.0.0',
+            status='completed',
+            results={'passed': True},
+            resolved_arguments={},
+            evaluated_at=datetime.now(UTC),
+            metadata=None,
+            error=None,
+        )
+        execution_context = ExecutionContext(test_case=test_case, output=output)
+        test_case_result = TestCaseResult(
+            status='completed',
+            execution_context=execution_context,
+            check_results=[check_result],
+            summary=TestCaseSummary(total_checks=1, completed_checks=1, error_checks=0),
+        )
+        result = EvaluationRunResult(
+            evaluation_id='eval-123',
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            status='completed',
+            summary=EvaluationSummary(
+                total_test_cases=1,
+                completed_test_cases=1,
+                error_test_cases=0,
+            ),
+            results=[test_case_result],
+        )
+
+        serialized = result.serialize()
+
+        # Should not raise an error
+        json_str = json.dumps(serialized)
+        assert len(json_str) > 0
+
+        # Should be able to load it back
+        loaded = json.loads(json_str)
+        assert loaded['evaluation_id'] == 'eval-123'
+        assert loaded['status'] == 'completed'
+
+    def test_serialize_method_with_null_values(self):
+        """Test serialize handles None/null values correctly."""
+        test_case = TestCase(id='tc-1', input='test')
+        output = Output(value='result', metadata=None)
+        check_result = CheckResult(
+            check_type='exact_match',
+            check_version='1.0.0',
+            status='completed',
+            results={'passed': True},
+            resolved_arguments={},
+            evaluated_at=datetime.now(UTC),
+            metadata=None,  # Explicitly None
+            error=None,
+        )
+        execution_context = ExecutionContext(test_case=test_case, output=output)
+        test_case_result = TestCaseResult(
+            status='completed',
+            execution_context=execution_context,
+            check_results=[check_result],
+            summary=TestCaseSummary(total_checks=1, completed_checks=1, error_checks=0),
+            metadata=None,  # Explicitly None
+        )
+        result = EvaluationRunResult(
+            evaluation_id='eval-123',
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            status='completed',
+            summary=EvaluationSummary(
+                total_test_cases=1,
+                completed_test_cases=1,
+                error_test_cases=0,
+            ),
+            results=[test_case_result],
+            metadata=None,  # Explicitly None
+        )
+
+        serialized = result.serialize()
+
+        # Verify None values are preserved
+        assert serialized['metadata'] is None
+        assert serialized['results'][0]['metadata'] is None
+        assert serialized['results'][0]['check_results'][0]['metadata'] is None
+
+    def test_serialize_method_with_nested_structures(self):
+        """Test serialize handles nested complex structures."""
+        test_case = TestCase(
+            id='tc-1',
+            input={'nested': {'data': 'value'}},
+            expected={'result': [1, 2, 3]},
+            metadata={'key': 'value', 'nested': {'meta': 'data'}},
+        )
+        output = Output(
+            value={'output': {'nested': 'result'}},
+            metadata={'tokens': 100, 'cost': 0.01},
+        )
+        check_result = CheckResult(
+            check_type='exact_match',
+            check_version='1.0.0',
+            status='completed',
+            results={'passed': True, 'details': {'match': 'exact'}},
+            resolved_arguments={'actual': '$.output', 'expected': 'test'},
+            evaluated_at=datetime.now(UTC),
+            metadata={'custom': 'metadata'},
+            error=None,
+        )
+        execution_context = ExecutionContext(test_case=test_case, output=output)
+        test_case_result = TestCaseResult(
+            status='completed',
+            execution_context=execution_context,
+            check_results=[check_result],
+            summary=TestCaseSummary(total_checks=1, completed_checks=1, error_checks=0),
+            metadata={'test_meta': 'value'},
+        )
+        result = EvaluationRunResult(
+            evaluation_id='eval-123',
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            status='completed',
+            summary=EvaluationSummary(
+                total_test_cases=1,
+                completed_test_cases=1,
+                error_test_cases=0,
+            ),
+            results=[test_case_result],
+            metadata={'run_meta': {'nested': 'value'}},
+        )
+
+        serialized = result.serialize()
+
+        # Verify nested structures are preserved
+        assert serialized['results'][0]['execution_context']['test_case']['input'] == {
+            'nested': {'data': 'value'},
+        }
+        assert serialized['results'][0]['execution_context']['test_case']['metadata'] == {
+            'key': 'value',
+            'nested': {'meta': 'data'},
+        }
+        assert serialized['results'][0]['execution_context']['output']['value'] == {
+            'output': {'nested': 'result'},
+        }
+        assert serialized['metadata'] == {'run_meta': {'nested': 'value'}}
+
+    def test_serialize_method_with_non_serializable_objects(self):
+        """Test serialize handles all non-serializable objects in metadata."""
+        # Define test objects
+        def custom_function() -> str:
+            return "test"
+
+        class CustomClass:
+            pass
+
+        class CustomPydanticModel(BaseModel):
+            name: str
+            value: int
+            nested: dict[str, str]
+
+        class CustomObjectWithToDict:
+            """Custom class with to_dict method (common pattern)."""
+
+            def __init__(self) -> None:
+                self.name = 'custom_obj'
+                self.value = 123
+
+            def to_dict(self) -> dict[str, str | int]:
+                return {'name': self.name, 'value': self.value}
+
+        class CustomObjectWithToDictNoUnderscore:
+            """Custom class with todict method (less common but exists)."""
+
+            def __init__(self) -> None:
+                self.field = 'test_field'
+
+            def todict(self) -> dict[str, str]:
+                return {'field': self.field}
+
+        pydantic_instance = CustomPydanticModel(
+            name='test_model',
+            value=42,
+            nested={'key': 'value'},
+        )
+
+        # Create test case with all edge cases in metadata
+        test_case = TestCase(
+            id='tc-1',
+            input='test',
+            metadata={
+                'function': custom_function,
+                'class': CustomClass,
+                'lambda': lambda x: x * 2,
+                'pydantic_model': pydantic_instance,
+                'custom_to_dict': CustomObjectWithToDict(),
+                'custom_todict': CustomObjectWithToDictNoUnderscore(),
+                'datetime': datetime(2024, 1, 15, 10, 30, 45, tzinfo=UTC),
+                'normal_data': {'key': 'value'},
+            },
+        )
+        output = Output(value='result')
+        check_result = CheckResult(
+            check_type='exact_match',
+            check_version='1.0.0',
+            status='completed',
+            results={'passed': True},
+            resolved_arguments={},
+            evaluated_at=datetime.now(UTC),
+            metadata=None,
+            error=None,
+        )
+        execution_context = ExecutionContext(test_case=test_case, output=output)
+        test_case_result = TestCaseResult(
+            status='completed',
+            execution_context=execution_context,
+            check_results=[check_result],
+            summary=TestCaseSummary(total_checks=1, completed_checks=1, error_checks=0),
+        )
+        result = EvaluationRunResult(
+            evaluation_id='eval-123',
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            status='completed',
+            summary=EvaluationSummary(
+                total_test_cases=1,
+                completed_test_cases=1,
+                error_test_cases=0,
+            ),
+            results=[test_case_result],
+        )
+
+        serialized = result.serialize()
+
+        # Get metadata for assertions
+        metadata = serialized['results'][0]['execution_context']['test_case']['metadata']
+
+        # Verify function is converted to string
+        assert isinstance(metadata['function'], str)
+        assert metadata['function'] == '<function custom_function>'
+
+        # Verify class is converted to string
+        assert isinstance(metadata['class'], str)
+        assert metadata['class'] == '<class CustomClass>'
+
+        # Verify lambda is converted to string
+        assert isinstance(metadata['lambda'], str)
+        assert '<function' in metadata['lambda']
+
+        # Verify Pydantic model is converted to dict (preserves data!)
+        assert isinstance(metadata['pydantic_model'], dict)
+        assert metadata['pydantic_model']['name'] == 'test_model'
+        assert metadata['pydantic_model']['value'] == 42
+        assert metadata['pydantic_model']['nested'] == {'key': 'value'}
+
+        # Verify custom object with to_dict() method is converted to dict
+        assert isinstance(metadata['custom_to_dict'], dict)
+        assert metadata['custom_to_dict']['name'] == 'custom_obj'
+        assert metadata['custom_to_dict']['value'] == 123
+
+        # Verify custom object with todict() method is converted to dict
+        assert isinstance(metadata['custom_todict'], dict)
+        assert metadata['custom_todict']['field'] == 'test_field'
+
+        # Verify datetime is converted to ISO string
+        assert isinstance(metadata['datetime'], str)
+        assert metadata['datetime'] == '2024-01-15T10:30:45+00:00'
+
+        # Verify normal data is preserved
+        assert metadata['normal_data'] == {'key': 'value'}
+
+        # Verify the entire result can be JSON serialized
+        json_str = json.dumps(serialized)
+        assert len(json_str) > 0

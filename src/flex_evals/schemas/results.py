@@ -1,6 +1,7 @@
 """Result schema implementations for FEP."""
 
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Literal
 
@@ -269,3 +270,63 @@ class EvaluationRunResult:
                 flattened_rows.append(row)
 
         return flattened_rows
+
+    def serialize(self) -> dict[str, Any]:
+        """
+        Serialize EvaluationRunResult to JSON-compatible dictionary.
+
+        Converts datetime objects to ISO 8601 format strings and handles
+        other non-JSON-serializable objects (functions, classes, etc.).
+
+        This method ensures consistent serialization format when transmitting
+        evaluation results over HTTP or storing them in external systems.
+
+        Returns:
+            JSON-compatible dictionary representation suitable for HTTP
+            transmission or JSON serialization.
+
+        Example:
+            >>> result = evaluate(test_cases=test_cases, outputs=outputs)
+            >>> serialized = result.serialize()
+            >>> # Can now safely use json.dumps(serialized) or send via HTTP
+        """
+
+        class CustomEncoder(json.JSONEncoder):
+            """Custom JSON encoder that handles datetime and non-serializable objects."""
+
+            def default(self, obj: Any) -> Any:  # noqa: ANN401, PLR0911
+                """Convert non-serializable objects to JSON-compatible format."""
+                if isinstance(obj, datetime):
+                    return obj.isoformat()
+
+                # Handle Pydantic models (v2 has model_dump, v1 has dict)
+                if hasattr(obj, 'model_dump') and callable(getattr(obj, 'model_dump')):
+                    return obj.model_dump()
+                if hasattr(obj, 'dict') and callable(getattr(obj, 'dict')):
+                    # Pydantic v1 compatibility
+                    return obj.dict()
+
+                # Handle objects with common dict conversion methods
+                if hasattr(obj, 'to_dict') and callable(getattr(obj, 'to_dict')):
+                    return obj.to_dict()
+                if hasattr(obj, 'todict') and callable(getattr(obj, 'todict')):
+                    return obj.todict()
+
+                # Handle classes/types (must check before callable since classes are callable)
+                if isinstance(obj, type):
+                    return f"<class {obj.__name__}>"
+
+                # Handle functions/lambdas/callables
+                if callable(obj):
+                    return f"<function {getattr(obj, '__name__', 'anonymous')}>"
+
+                # Try to convert to string as last resort
+                try:
+                    return str(obj)
+                except Exception:
+                    return "<non-serializable object>"
+
+        # Convert dataclass to dict, then serialize and deserialize to handle special objects
+        result_dict = asdict(self)
+        json_str = json.dumps(result_dict, cls=CustomEncoder)
+        return json.loads(json_str)
