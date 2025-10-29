@@ -35,11 +35,20 @@ def evaluate(  # noqa: PLR0915
     the success rate using existing flex-evals checks. It integrates with
     pytest's testing framework and provides rich failure reporting.
 
+    Note:
+        All checks used with this decorator must return a 'passed' field in their results.
+        Standard checks (exact_match, contains, regex, threshold) include this field by
+        default. Custom checks must include 'passed': bool in their return dictionary.
+
     Args:
         test_cases: List of TestCase objects to cycle through for evaluation
         checks: Optional list of checks to apply to all samples
         samples: Number of times to execute the function (default: 1)
-        success_threshold: Minimum success rate required (0.0 to 1.0, default: 1.0)
+        success_threshold: Minimum proportion of samples that must fully pass (0.0 to 1.0,
+            default: 1.0). A sample passes only if ALL test cases pass, and a test case
+            passes only if ALL its checks pass. For example, with 10 test cases (each with
+            3 checks), samples=5, and success_threshold=0.6, at least 3 out of 5 samples
+            must have all 10 test cases pass (with all 3 checks passing in each)
 
     Returns:
         Decorated function that performs statistical evaluation
