@@ -18,7 +18,6 @@ from .schemas.results import (
     TestCaseSummary,
     EvaluationSummary,
 )
-from .schemas.experiments import ExperimentMetadata
 from .schema_generator import generate_checks_schema, generate_check_schema
 
 # Import individual check classes for direct end-user access
@@ -69,7 +68,6 @@ __all__ = [
     "EvaluationRunResult",
     "EvaluationSummary",
     "ExactMatchCheck",
-    "ExperimentMetadata",
     "FlexEvalsError",
     "IsEmptyCheck",
     "JSONPath",

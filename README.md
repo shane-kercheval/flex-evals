@@ -61,6 +61,22 @@ async def test_python_explanation(test_case: TestCase) -> str:
     return my_llm(test_case.input)
 ```
 
+**Note**: All checks used with `@evaluate` must return a `passed: bool` field in their results. Standard checks (exact_match, contains, regex, threshold) include this by default. For custom checks like `LLMJudgeCheck`, ensure your response format includes a `passed` field or computed field.
+
+#### Understanding `success_threshold`
+
+The `success_threshold` parameter defines the minimum proportion of **samples** that must fully pass for the test to succeed. Success is evaluated at three levels:
+
+1. **Check level**: A check passes if its evaluation criteria are met
+2. **Test case level**: A test case passes only if **ALL** its checks pass
+3. **Sample level**: A sample passes only if **ALL** test cases pass
+
+**Example**: With 10 test cases (each having 3 checks), `samples=5`, and `success_threshold=0.6`:
+- You'll run 5 samples, each executing all 10 test cases
+- Each sample requires all 10 test cases to pass (all 30 checks total per sample)
+- At least 3 out of 5 samples (60%) must fully pass for the test to succeed
+- If only 2 samples have all tests pass, the test fails (2/5 = 0.4 < 0.6)
+
 ### Fixture Limitations
 
 When using pytest fixtures with the `@evaluate` decorator, be aware that **fixture instances are reused across all test executions** within a single decorated function run. This means:
@@ -451,11 +467,17 @@ Use an LLM for qualitative evaluation:
 
 ```python
 from flex_evals import LLMJudgeCheck
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 class HelpfulnessScore(BaseModel):  # Pydantic model defining Judge format.
-    score: int = Field(description="Rate the response on a scale of 1-5h.")
+    score: int = Field(description="Rate the response on a scale of 1-5.")
     reasoning: str = Field(description="Brief explanation of the score.")
+
+    @computed_field
+    @property
+    def passed(self) -> bool:
+        """Response passes if score is 4 or higher."""
+        return self.score >= 4
 
 async def llm_judge(prompt: str, response_format: type[BaseModel]):
     response = ...
@@ -473,6 +495,8 @@ LLMJudgeCheck(
     llm_function=llm_judge,
 )
 ```
+
+**Note**: When using `LLMJudgeCheck` with the `@evaluate` pytest decorator, the `response_format` model **must** include a `passed: bool` field (or computed field). The decorator requires all checks to return a `passed` field to determine test success. In the example above, `passed` is computed from the score, but it could also be a regular field returned directly by the LLM.
 
 ## Async Evaluation
 

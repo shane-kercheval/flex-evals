@@ -1,11 +1,11 @@
 """Result schema implementations for FEP."""
 
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Literal
 
 from flex_evals.schemas.check import CheckResult
-from flex_evals.schemas.experiments import ExperimentMetadata
 from flex_evals.schemas.test_case import TestCase
 from flex_evals.schemas.output import Output
 
@@ -124,7 +124,7 @@ class EvaluationRunResult:
     """
     Provides comprehensive results for an entire evaluation run.
 
-    Includes experiment context, summary statistics, and all individual test case results.
+    Includes summary statistics and all individual test case results.
 
     Required Fields:
     - evaluation_id: Unique identifier for this evaluation run
@@ -135,7 +135,6 @@ class EvaluationRunResult:
     - results: Individual test case results
 
     Optional Fields:
-    - experiment: Experiment metadata
     - metadata: Implementation-specific metadata
     """
 
@@ -145,7 +144,6 @@ class EvaluationRunResult:
     status: Status | Literal['completed', 'error']
     summary: EvaluationSummary
     results: list[TestCaseResult]
-    experiment: ExperimentMetadata | None = None
     metadata: dict[str, Any] | None = None
 
     def __post_init__(self):
@@ -179,7 +177,7 @@ class EvaluationRunResult:
             return 'error'
         return 'completed'
 
-    def to_dict_list(self) -> list[dict[str, Any]]:  # noqa: PLR0912
+    def to_dict_list(self) -> list[dict[str, Any]]:
         """
         Flatten evaluation results into a list of dictionaries for tabular analysis.
 
@@ -235,13 +233,6 @@ class EvaluationRunResult:
             if test_case_result.metadata:
                 test_case_data['test_case_result_metadata'] = test_case_result.metadata
 
-            # Add experiment metadata if present at evaluation level
-            if self.experiment:
-                if self.experiment.name:
-                    test_case_data['experiment_name'] = self.experiment.name
-                if self.experiment.metadata:
-                    test_case_data['experiment_metadata'] = self.experiment.metadata
-
             # Add evaluation metadata if present
             if self.metadata:
                 test_case_data['evaluation_metadata'] = self.metadata
@@ -279,3 +270,65 @@ class EvaluationRunResult:
                 flattened_rows.append(row)
 
         return flattened_rows
+
+    def serialize(self) -> dict[str, Any]:
+        """
+        Serialize EvaluationRunResult to JSON-compatible dictionary.
+
+        Converts datetime objects to ISO 8601 format strings and handles
+        other non-JSON-serializable objects (functions, classes, etc.).
+
+        This method ensures consistent serialization format when transmitting
+        evaluation results over HTTP or storing them in external systems.
+
+        Returns:
+            JSON-compatible dictionary representation suitable for HTTP
+            transmission or JSON serialization.
+
+        Example:
+            >>> result = evaluate(test_cases=test_cases, outputs=outputs)
+            >>> serialized = result.serialize()
+            >>> # Can now safely use json.dumps(serialized) or send via HTTP
+        """
+
+        class CustomEncoder(json.JSONEncoder):
+            """Custom JSON encoder that handles datetime and non-serializable objects."""
+
+            def default(self, obj: Any) -> Any:  # noqa: ANN401, PLR0911
+                """Convert non-serializable objects to JSON-compatible format."""
+                if isinstance(obj, datetime):
+                    return obj.isoformat()
+
+                # Handle classes/types FIRST (before checking for methods)
+                # Classes have methods like model_dump as unbound methods, which would
+                # pass hasattr/callable checks but fail when called without an instance
+                if isinstance(obj, type):
+                    return f"<class {obj.__name__}>"
+
+                # Handle Pydantic models (v2 has model_dump, v1 has dict)
+                if hasattr(obj, 'model_dump') and callable(getattr(obj, 'model_dump')):
+                    return obj.model_dump()
+                if hasattr(obj, 'dict') and callable(getattr(obj, 'dict')):
+                    # Pydantic v1 compatibility
+                    return obj.dict()
+
+                # Handle objects with common dict conversion methods
+                if hasattr(obj, 'to_dict') and callable(getattr(obj, 'to_dict')):
+                    return obj.to_dict()
+                if hasattr(obj, 'todict') and callable(getattr(obj, 'todict')):
+                    return obj.todict()
+
+                # Handle functions/lambdas/callables
+                if callable(obj):
+                    return f"<function {getattr(obj, '__name__', 'anonymous')}>"
+
+                # Try to convert to string as last resort
+                try:
+                    return str(obj)
+                except Exception:
+                    return "<non-serializable object>"
+
+        # Convert dataclass to dict, then serialize and deserialize to handle special objects
+        result_dict = asdict(self)
+        json_str = json.dumps(result_dict, cls=CustomEncoder)
+        return json.loads(json_str)

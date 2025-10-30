@@ -388,7 +388,7 @@ wheels = [
 
 [[package]]
 name = "flex-evals"
-version = "0.3.13"
+version = "0.3.16"
 source = { editable = "." }
 dependencies = [
     { name = "jsonpath-ng" },
