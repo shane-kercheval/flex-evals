@@ -13,7 +13,6 @@ from flex_evals import evaluate, TestCase, Output, ContainsCheck
 
 test_cases = [
     TestCase(
-        id='test_001',
         input="What is the capital of France?",
         checks=[
             ContainsCheck(
@@ -158,7 +157,6 @@ Define the inputs and expected outputs for evaluation:
 
 ```python
 test_case = TestCase(
-    id='unique_identifier',
     input="System input data",
     expected="Expected output",  # Optional
     metadata={'category': 'reasoning'}  # Optional
@@ -196,7 +194,7 @@ check = ExactMatchCheck(
 from flex_evals import evaluate, TestCase, Output, ExactMatchCheck
 
 # Geography quiz evaluation
-test_cases = [TestCase(id='q1', input="Capital of France?", expected='Paris')]
+test_cases = [TestCase(input="Capital of France?", expected='Paris')]
 outputs = [Output(value='Paris')]
 checks = [
     ExactMatchCheck(
@@ -241,7 +239,6 @@ from flex_evals import ExactMatchCheck, RegexCheck
 # Each test case has it's own checks
 test_cases = [
     TestCase(
-        id='math_problem',
         input="What is 2+2?",
         checks=[
             ExactMatchCheck(
@@ -251,7 +248,6 @@ test_cases = [
         ]
     ),
     TestCase(
-        id='creative_writing',
         input="Write a haiku about code",
         checks=[
             RegexCheck(
@@ -279,7 +275,6 @@ Access data anywhere in the "evaluation context" (i.e. test case definition and 
 # Evaluation context structure:
 {
     'test_case': {
-        'id': 'test_001',
         'input': "What is the capital of France?",
         'expected': 'Paris',
         'metadata': {'category': 'geography'}
@@ -309,7 +304,6 @@ Access data anywhere in the "evaluation context" (i.e. test case definition and 
 ```python
 # Evaluate structured outputs
 test_case = TestCase(
-    id='api_test',
     input={'endpoint': '/users', 'method': 'GET'},
     expected={'status': 200, 'count': 5}
 )
@@ -819,7 +813,7 @@ def test_my_check_direct():
 
 def test_my_check_with_jsonpath():
     """Test check with JSONPath expressions via engine."""
-    test_cases = [TestCase(id='test1', input='test input')]
+    test_cases = [TestCase(input='test input')]
     outputs = [Output(value='test response')]
     checks = [
         MyCheck(
