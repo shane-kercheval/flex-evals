@@ -131,14 +131,6 @@ class TestTestCase:
         ):
             TestCase(id="", input="test input")
 
-    def test_test_case_invalid_input_type(self):
-        """Test invalid input types raise error."""
-        with pytest.raises(ValueError, match="TestCase.input must be a string or dictionary"):
-            TestCase(id="test_001", input=123)
-
-        with pytest.raises(ValueError, match="TestCase.input must be a string or dictionary"):
-            TestCase(id="test_001", input=["list", "not", "allowed"])
-
     def test_test_case_serialization(self):
         """Test TestCase can be converted to dict for JSON serialization."""
         test_case = TestCase(

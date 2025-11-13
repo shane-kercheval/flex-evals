@@ -42,6 +42,3 @@ class TestCase:
 
         if self.input is None:
             raise ValueError("TestCase.input is required and cannot be None")
-
-        if not isinstance(self.input, str | dict):
-            raise ValueError("TestCase.input must be a string or dictionary")
