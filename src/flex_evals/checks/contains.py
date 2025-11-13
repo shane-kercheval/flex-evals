@@ -11,7 +11,7 @@ from ..constants import CheckType
 
 @register(CheckType.CONTAINS, version='1.0.0')
 class ContainsCheck(BaseCheck):
-    """Checks if the string value contains all specified phrases."""
+    """Checks if the string value contains specified phrases."""
 
     # Pydantic fields with validation - can be literals or JSONPath objects
     text: str | JSONPath = Field(
@@ -30,8 +30,12 @@ class ContainsCheck(BaseCheck):
         False,
         description="If true, passes when text contains none of the phrases",
     )
+    match_all: bool | JSONPath = Field(
+        True,
+        description="If true, all phrases must be present; if false, at least one phrase must be present",  # noqa: E501
+    )
 
-    @field_validator('text', 'phrases', 'case_sensitive', 'negate', mode='before')
+    @field_validator('text', 'phrases', 'case_sensitive', 'negate', 'match_all', mode='before')
     @classmethod
     def convert_jsonpath(cls, value: object) -> object | JSONPath:
         """Convert JSONPath-like strings to JSONPath objects."""
@@ -40,7 +44,7 @@ class ContainsCheck(BaseCheck):
     @property
     def default_results(self) -> dict[str, Any]:
         """Return default results structure for contains checks on error."""
-        return {'passed': False}
+        return {'passed': False, 'found': []}
 
     def __call__(self) -> dict[str, Any]:  # noqa: PLR0912
         """
@@ -49,7 +53,8 @@ class ContainsCheck(BaseCheck):
         All JSONPath objects should have been resolved by execute() before this is called.
 
         Returns:
-            Dictionary with 'passed' key indicating check result
+            Dictionary with 'passed' (bool) and 'found' (list[str]) keys.
+            'passed' indicates check result, 'found' contains the list of phrases that were found.
 
         Raises:
             RuntimeError: If any field contains unresolved JSONPath objects
@@ -63,6 +68,8 @@ class ContainsCheck(BaseCheck):
             raise RuntimeError(f"JSONPath not resolved for 'case_sensitive' field: {self.case_sensitive}")  # noqa: E501
         if isinstance(self.negate, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'negate' field: {self.negate}")
+        if isinstance(self.match_all, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'match_all' field: {self.match_all}")
 
         # Convert single string to list
         phrases = self.phrases
@@ -79,24 +86,27 @@ class ContainsCheck(BaseCheck):
         # Convert text to string
         text_str = str(self.text) if self.text is not None else ""
 
+        # Convert phrases to strings and store originals
+        original_phrases = [str(phrase) for phrase in phrases]
+
         # Apply case sensitivity
         if not self.case_sensitive:
             text_str = text_str.lower()
-            phrases = [str(phrase).lower() for phrase in phrases]
+            search_phrases = [phrase.lower() for phrase in original_phrases]
         else:
-            phrases = [str(phrase) for phrase in phrases]
+            search_phrases = original_phrases
 
-        # Check phrase presence
-        found_count = 0
-        for phrase in phrases:
+        # Check phrase presence and track found phrases
+        found_phrases: list[str] = []
+        for i, phrase in enumerate(search_phrases):
             if phrase in text_str:
-                found_count += 1
+                found_phrases.append(original_phrases[i])
 
-        if self.negate:  # noqa: SIM108
-            # Pass if NONE of the phrases are found
-            passed = found_count == 0
-        else:
-            # Pass if ALL phrases are found
-            passed = found_count == len(phrases)
+        # Determine pass criteria based on match_all and negate
+        found_count = len(found_phrases)
+        if self.match_all:
+            passed = (found_count == 0) if self.negate else (found_count == len(phrases))
+        else:  # match any
+            passed = (found_count < len(phrases)) if self.negate else (found_count > 0)
 
-        return {'passed': passed}
+        return {'passed': passed, 'found': found_phrases}

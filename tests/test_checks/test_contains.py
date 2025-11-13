@@ -92,6 +92,7 @@ class TestContainsValidation:
         result = check.execute(context)
         assert result.status == "completed"
         assert result.results["passed"] is True  # Contains both "success" and "completed"
+        assert result.results["found"] == ["success", "completed"]
         assert result.resolved_arguments["text"]["value"] == "Task completed successfully!"
         assert result.resolved_arguments["phrases"]["value"] == ["success", "completed"]
         assert result.resolved_arguments["case_sensitive"]["value"] is True
@@ -208,7 +209,7 @@ class TestContainsExecution:
             negate=False,
         )
         result = check()
-        assert result == {"passed": True}
+        assert result == {"passed": True, "found": ["Paris", "France"]}
 
     def test_contains_some_phrases_missing(self):
         """Test negate=false fails when any phrase missing."""
@@ -218,7 +219,7 @@ class TestContainsExecution:
             negate=False,
         )
         result = check()
-        assert result == {"passed": False}
+        assert result == {"passed": False, "found": ["Paris"]}
 
     def test_contains_negate_none_found(self):
         """Test negate=true passes when no phrases found."""
@@ -228,7 +229,7 @@ class TestContainsExecution:
             negate=True,
         )
         result = check()
-        assert result == {"passed": True}
+        assert result == {"passed": True, "found": []}
 
     def test_contains_negate_some_found(self):
         """Test negate=true fails when any phrase found."""
@@ -238,7 +239,7 @@ class TestContainsExecution:
             negate=True,
         )
         result = check()
-        assert result == {"passed": False}
+        assert result == {"passed": False, "found": ["Paris"]}
 
     def test_contains_case_sensitive(self):
         """Test case sensitivity in phrase matching."""
@@ -248,7 +249,7 @@ class TestContainsExecution:
             case_sensitive=True,
         )
         result = check()
-        assert result == {"passed": False}
+        assert result == {"passed": False, "found": []}
 
     def test_contains_case_insensitive(self):
         """Test case insensitive matching."""
@@ -258,7 +259,7 @@ class TestContainsExecution:
             case_sensitive=False,
         )
         result = check()
-        assert result == {"passed": True}
+        assert result == {"passed": True, "found": ["paris"]}
 
     def test_contains_single_phrase(self):
         """Test with single phrase in array."""
@@ -267,7 +268,7 @@ class TestContainsExecution:
             phrases=["capital"],
         )
         result = check()
-        assert result == {"passed": True}
+        assert result == {"passed": True, "found": ["capital"]}
 
     def test_contains_overlapping_phrases(self):
         """Test with overlapping/duplicate phrases."""
@@ -276,7 +277,7 @@ class TestContainsExecution:
             phrases=["Paris", "Paris"],  # Duplicate phrase
         )
         result = check()
-        assert result == {"passed": True}
+        assert result == {"passed": True, "found": ["Paris", "Paris"]}
 
     def test_contains_single_string_phrase_found(self):
         """Test single string phrase that is found."""
@@ -285,7 +286,7 @@ class TestContainsExecution:
             phrases="Paris",  # Single string instead of list
         )
         result = check()
-        assert result == {"passed": True}
+        assert result == {"passed": True, "found": ["Paris"]}
 
     def test_contains_single_string_phrase_not_found(self):
         """Test single string phrase that is not found."""
@@ -294,7 +295,7 @@ class TestContainsExecution:
             phrases="Spain",  # Single string not found
         )
         result = check()
-        assert result == {"passed": False}
+        assert result == {"passed": False, "found": []}
 
     def test_contains_single_string_case_sensitive(self):
         """Test single string phrase with case sensitivity."""
@@ -304,7 +305,7 @@ class TestContainsExecution:
             case_sensitive=True,
         )
         result = check()
-        assert result == {"passed": False}
+        assert result == {"passed": False, "found": []}
 
     def test_contains_single_string_case_insensitive(self):
         """Test single string phrase case insensitive."""
@@ -314,7 +315,7 @@ class TestContainsExecution:
             case_sensitive=False,
         )
         result = check()
-        assert result == {"passed": True}
+        assert result == {"passed": True, "found": ["paris"]}
 
     def test_contains_single_string_with_negate(self):
         """Test single string phrase with negate=True."""
@@ -324,7 +325,66 @@ class TestContainsExecution:
             negate=True,
         )
         result = check()
-        assert result == {"passed": True}
+        assert result == {"passed": True, "found": []}
+
+    @pytest.mark.parametrize(
+        ("case_sensitive", "negate", "match_all", "phrases", "expected_passed", "expected_found"),
+        [
+            # False, False, False - case insensitive, no negate, match any
+            # Pass: finds 2/3 phrases, only need one (any mode)
+            (False, False, False, ["hello", "python", "java"], True, ["hello", "python"]),
+            # False, False, True - case insensitive, no negate, match all
+            # Fail: finds 2/3 phrases, need all 3 (all mode)
+            (False, False, True, ["hello", "python", "java"], False, ["hello", "python"]),
+            # False, True, False - case insensitive, negate, match any
+            # Pass: finds 2/3 phrases, not all present (negate + any)
+            (False, True, False, ["hello", "python", "java"], True, ["hello", "python"]),
+            # False, True, True - case insensitive, negate, match all
+            # Fail: finds 2/2 phrases, should find none (negate + all)
+            (False, True, True, ["hello", "python"], False, ["hello", "python"]),
+            # True, False, False - case sensitive, no negate, match any
+            # Pass: finds 2/3 phrases, only need one (any mode)
+            (True, False, False, ["Hello", "Python", "Java"], True, ["Hello", "Python"]),
+            # True, False, True - case sensitive, no negate, match all
+            # Pass: finds 2/2 phrases, need all (all mode)
+            (True, False, True, ["Hello", "Python"], True, ["Hello", "Python"]),
+            # True, True, False - case sensitive, negate, match any
+            # Pass: finds 2/3 phrases, not all present (negate + any)
+            (True, True, False, ["Hello", "Python", "Java"], True, ["Hello", "Python"]),
+            # True, True, True - case sensitive, negate, match all
+            # Fail: finds 2/2 phrases, should find none (negate + all)
+            (True, True, True, ["Hello", "World"], False, ["Hello", "World"]),
+            # Edge case: NO matches with match_all=False, negate=False
+            # Fail: finds 0 phrases, need at least one (any mode)
+            (True, False, False, ["Java", "Ruby"], False, []),
+            # Edge case: NO matches with match_all=False, negate=True
+            # Pass: finds 0 phrases, not all present (negate + any)
+            (True, True, False, ["Java", "Ruby"], True, []),
+        ],
+    )
+    def test_contains_all_combinations(
+        self,
+        case_sensitive: bool,
+        negate: bool,
+        match_all: bool,
+        phrases: list[str],
+        expected_passed: bool,
+        expected_found: list[str],
+    ) -> None:
+        """
+        Test all combinations of case_sensitive, negate, and match_all parameters.
+
+        Uses text "Hello World from Python" to test various phrase matching scenarios.
+        """
+        check = ContainsCheck(
+            text="Hello World from Python",
+            phrases=phrases,
+            case_sensitive=case_sensitive,
+            negate=negate,
+            match_all=match_all,
+        )
+        result = check()
+        assert result == {"passed": expected_passed, "found": expected_found}
 
 
 class TestContainsEngineIntegration:
@@ -369,7 +429,10 @@ class TestContainsEngineIntegration:
         assert results.summary.error_test_cases == 0
         assert results.results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].status == Status.COMPLETED
-        assert results.results[0].check_results[0].results == {"passed": expected_passed}
+        # Check that 'passed' matches expectation and 'found' is present
+        assert results.results[0].check_results[0].results["passed"] == expected_passed
+        assert "found" in results.results[0].check_results[0].results
+        assert isinstance(results.results[0].check_results[0].results["found"], list)
 
     def test_contains_check_instance_via_evaluate(self):
         """Test direct check instance usage in evaluate function."""
@@ -393,7 +456,8 @@ class TestContainsEngineIntegration:
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
-        assert results.results[0].check_results[0].results == {"passed": True}
+        assert results.results[0].check_results[0].results["passed"] is True
+        assert results.results[0].check_results[0].results["found"] == ["Paris", "France"]
 
     def test_contains_case_insensitive_via_evaluate(self):
         """Test case insensitive matching through engine evaluation."""
@@ -418,7 +482,8 @@ class TestContainsEngineIntegration:
         outputs = [Output(value="The capital of France is Paris.")]
         results = evaluate(test_cases, outputs)
 
-        assert results.results[0].check_results[0].results == {"passed": True}
+        assert results.results[0].check_results[0].results["passed"] is True
+        assert results.results[0].check_results[0].results["found"] == ["paris", "france"]
 
     def test_contains_negate_via_evaluate(self):
         """Test negation through engine evaluation."""
@@ -443,7 +508,8 @@ class TestContainsEngineIntegration:
         outputs = [Output(value="The capital of France is Paris.")]
         results = evaluate(test_cases, outputs)
 
-        assert results.results[0].check_results[0].results == {"passed": True}
+        assert results.results[0].check_results[0].results["passed"] is True
+        assert results.results[0].check_results[0].results["found"] == []
 
 
 class TestContainsErrorHandling:
@@ -535,7 +601,8 @@ class TestContainsJSONPathIntegration:
         ]
 
         results = evaluate(test_cases, outputs)
-        assert results.results[0].check_results[0].results == {"passed": True}
+        assert results.results[0].check_results[0].results["passed"] is True
+        assert results.results[0].check_results[0].results["found"] == ["success", "completed"]
 
     def test_contains_array_access_jsonpath(self):
         """Test contains with JSONPath array access."""
@@ -568,7 +635,8 @@ class TestContainsJSONPathIntegration:
 
         results = evaluate(test_cases, outputs)
         # Should fail because text contains "error" but not "failed" (ContainsCheck requires ALL phrases)  # noqa: E501
-        assert results.results[0].check_results[0].results == {"passed": False}
+        assert results.results[0].check_results[0].results["passed"] is False
+        assert results.results[0].check_results[0].results["found"] == ["error"]
 
     def test_contains_complex_phrases_structure(self):
         """Test contains with complex phrase structures from JSONPath."""
@@ -599,4 +667,9 @@ class TestContainsJSONPathIntegration:
         ]
 
         results = evaluate(test_cases, outputs)
-        assert results.results[0].check_results[0].results == {"passed": True}
+        assert results.results[0].check_results[0].results["passed"] is True
+        assert results.results[0].check_results[0].results["found"] == [
+            "machine learning",
+            "artificial intelligence",
+            "neural networks",
+        ]
