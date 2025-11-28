@@ -29,7 +29,7 @@ from .registry import (
 from .exceptions import ValidationError
 
 
-def evaluate(
+async def evaluate(
         test_cases: list[TestCase],
         outputs: list[Output],
         checks: list[CheckTypes] | list[list[CheckTypes]] | None = None,
@@ -38,10 +38,14 @@ def evaluate(
         max_parallel_workers: int = 1,
     ) -> EvaluationRunResult:
     """
-    Execute checks against test cases and their corresponding outputs.
+    Execute checks against test cases and their corresponding outputs (async).
 
-    This is the main evaluation function that processes test cases, outputs, and checks
-    to produce comprehensive evaluation results according to the FEP protocol.
+    This is the primary evaluation function. Use this in:
+    - Async contexts and async functions
+    - Jupyter notebooks (supports top-level await)
+    - When composing with other async operations
+
+    For synchronous/blocking contexts (simple scripts), use evaluate_sync() instead.
 
     Asynchronous checks are automatically detected and executed concurrently, while synchronous
     checks are executed directly without event loop overhead. The `max_async_concurrent`
@@ -57,7 +61,7 @@ def evaluate(
             - None: Extract checks from TestCase.checks field (convenience pattern)
             Can be Check objects or BaseCheck/BaseAsyncCheck instances
         metadata: Optional metadata for the evaluation run (e.g., experiment name, configuration)
-        max_async_concurrent: Maximum number of concurrent async "check" executions (default: no limit)
+        max_async_concurrent: Maximum number of concurrent async check executions (default: no limit)
         max_parallel_workers: Number of parallel worker processes (default: 1, no parallelization)
 
     Returns:
@@ -70,6 +74,16 @@ def evaluate(
         - test_cases.length == outputs.length
         - test_cases[i] is associated with outputs[i]
         - Automatic async/sync detection based on check types
+
+    Example:
+        >>> # In async function or Jupyter notebook
+        >>> results = await evaluate(test_cases, outputs, checks)
+        >>>
+        >>> # Compose with other async operations
+        >>> results, data = await asyncio.gather(
+        ...     evaluate(test_cases, outputs, checks),
+        ...     fetch_additional_data()
+        ... )
     """  # noqa: E501
     started_at = datetime.now(UTC)
     evaluation_id = str(uuid.uuid4())
@@ -87,7 +101,7 @@ def evaluate(
         )
     else:
         work_items = list(zip(test_cases, outputs, resolved_checks))
-        test_case_results = _evaluate(work_items, max_async_concurrent)
+        test_case_results = await _evaluate_async(work_items, max_async_concurrent)
 
     completed_at = datetime.now(UTC)
 
@@ -103,6 +117,61 @@ def evaluate(
         summary=summary,
         results=test_case_results,
         metadata=metadata,
+    )
+
+
+def evaluate_sync(
+        test_cases: list[TestCase],
+        outputs: list[Output],
+        checks: list[CheckTypes] | list[list[CheckTypes]] | None = None,
+        metadata: dict[str, Any] | None = None,
+        max_async_concurrent: int | None = None,
+        max_parallel_workers: int = 1,
+    ) -> EvaluationRunResult:
+    """
+    Execute checks against test cases and their corresponding outputs (synchronous).
+
+    Convenience wrapper for synchronous contexts. Creates a new event loop internally
+    using asyncio.run().
+
+    Use this ONLY in synchronous scripts where you cannot use async/await.
+    For async contexts or Jupyter notebooks, use evaluate() instead.
+
+    Args:
+        test_cases: List of test cases to evaluate
+        outputs: List of system outputs corresponding to test cases
+        checks: Either:
+            - List[CheckTypes]: Same checks applied to all test cases (shared pattern)
+            - List[List[CheckTypes]]: checks[i] applies to test_cases[i] (per-test-case pattern)
+            - None: Extract checks from TestCase.checks field (convenience pattern)
+        metadata: Optional metadata for the evaluation run
+        max_async_concurrent: Maximum number of concurrent async check executions (default: no limit)
+        max_parallel_workers: Number of parallel worker processes (default: 1, no parallelization)
+
+    Returns:
+        Complete evaluation results with all test case results and summary statistics
+
+    Raises:
+        ValidationError: If inputs don't meet FEP protocol requirements
+        RuntimeError: If called from within an existing event loop
+
+    Example:
+        >>> # In synchronous script
+        >>> results = evaluate_sync(test_cases, outputs, checks)
+
+    Note:
+        This function will fail if called from within an existing event loop.
+        In async contexts, use the async evaluate() function instead.
+    """  # noqa: E501
+    return asyncio.run(
+        evaluate(
+            test_cases=test_cases,
+            outputs=outputs,
+            checks=checks,
+            metadata=metadata,
+            max_async_concurrent=max_async_concurrent,
+            max_parallel_workers=max_parallel_workers,
+        ),
     )
 
 
@@ -329,12 +398,14 @@ def _unflatten_check_results(
     return results
 
 
-def _evaluate(
+async def _evaluate_async(
         work_items: list[tuple[TestCase, Output, list[BaseCheck | BaseAsyncCheck]]],
         max_async_concurrent: int | None = None,
     ) -> list[TestCaseResult]:
     """
     Execute evaluation with optimal sync/async separation across all test cases.
+
+    This function uses the existing event loop - it does not create a new one.
 
     Args:
         work_items: List of (test_case, output, checks) tuples where:
@@ -354,10 +425,10 @@ def _evaluate(
         for check, context in flattened_sync_checks
     ]
 
-    # Execute ALL async checks concurrently in a single event loop
+    # Execute ALL async checks concurrently using existing event loop
     if flattened_async_checks:
-        async_results = asyncio.run(
-            _execute_all_async_checks(flattened_async_checks, max_async_concurrent),
+        async_results = await _execute_all_async_checks(
+            flattened_async_checks, max_async_concurrent,
         )
     else:
         async_results = []
@@ -411,12 +482,17 @@ def _evaluate_with_registry(
         max_async_concurrent: int | None = None,
         registry_state: dict | None = None,
     ) -> list[TestCaseResult]:
-    """Evaluate work items in a separate process with registry restoration."""
+    """
+    Evaluate work items in a separate process with registry restoration.
+
+    Worker processes need to create their own event loop since they run in isolation.
+    """
     # Restore registry state in the worker process
     if registry_state:
         restore_registry_state(registry_state)
 
-    return _evaluate(work_items, max_async_concurrent)
+    # Worker processes create their own event loop via asyncio.run()
+    return asyncio.run(_evaluate_async(work_items, max_async_concurrent))
 
 
 def _execute_sync_check(check: BaseCheck, context: EvaluationContext) -> CheckResult:

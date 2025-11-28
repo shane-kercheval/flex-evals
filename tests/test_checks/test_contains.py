@@ -18,7 +18,7 @@ from flex_evals import (
     EvaluationContext,
     CheckType,
     Status,
-    evaluate,
+    evaluate_sync,
     Check,
     ValidationError,
     TestCase,
@@ -397,7 +397,7 @@ class TestContainsEngineIntegration:
         ("", ["anything"], False),  # Empty text should not contain phrases
         ("Contains everything", ["Contains", "everything"], True),  # Multiple phrases found
     ])
-    def test_contains_via_evaluate(
+    def test_contains_via_evaluate_sync(
         self, output_value: str, phrases: list[str], expected_passed: bool,
     ):
         """Test using JSONPath for text and phrases with various combinations."""
@@ -423,7 +423,7 @@ class TestContainsEngineIntegration:
             Output(value=output_value),
         ]
         # Run evaluation
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.summary.error_test_cases == 0
@@ -434,7 +434,7 @@ class TestContainsEngineIntegration:
         assert "found" in results.results[0].check_results[0].results
         assert isinstance(results.results[0].check_results[0].results["found"], list)
 
-    def test_contains_check_instance_via_evaluate(self):
+    def test_contains_check_instance_via_evaluate_sync(self):
         """Test direct check instance usage in evaluate function."""
         test_cases = [
             TestCase(
@@ -451,7 +451,7 @@ class TestContainsEngineIntegration:
         ]
 
         outputs = [Output(value="The capital of France is Paris.")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
@@ -459,7 +459,7 @@ class TestContainsEngineIntegration:
         assert results.results[0].check_results[0].results["passed"] is True
         assert results.results[0].check_results[0].results["found"] == ["Paris", "France"]
 
-    def test_contains_case_insensitive_via_evaluate(self):
+    def test_contains_case_insensitive_via_evaluate_sync(self):
         """Test case insensitive matching through engine evaluation."""
         test_cases = [
             TestCase(
@@ -480,12 +480,12 @@ class TestContainsEngineIntegration:
         ]
 
         outputs = [Output(value="The capital of France is Paris.")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results["passed"] is True
         assert results.results[0].check_results[0].results["found"] == ["paris", "france"]
 
-    def test_contains_negate_via_evaluate(self):
+    def test_contains_negate_via_evaluate_sync(self):
         """Test negation through engine evaluation."""
         test_cases = [
             TestCase(
@@ -506,7 +506,7 @@ class TestContainsEngineIntegration:
         ]
 
         outputs = [Output(value="The capital of France is Paris.")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results["passed"] is True
         assert results.results[0].check_results[0].results["found"] == []
@@ -566,7 +566,7 @@ class TestContainsErrorHandling:
 
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
-            evaluate(test_cases, outputs)
+            evaluate_sync(test_cases, outputs)
 
 
 class TestContainsJSONPathIntegration:
@@ -600,7 +600,7 @@ class TestContainsJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results["passed"] is True
         assert results.results[0].check_results[0].results["found"] == ["success", "completed"]
 
@@ -633,7 +633,7 @@ class TestContainsJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         # Should fail because text contains "error" but not "failed" (ContainsCheck requires ALL phrases)  # noqa: E501
         assert results.results[0].check_results[0].results["passed"] is False
         assert results.results[0].check_results[0].results["found"] == ["error"]
@@ -666,7 +666,7 @@ class TestContainsJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results["passed"] is True
         assert results.results[0].check_results[0].results["found"] == [
             "machine learning",

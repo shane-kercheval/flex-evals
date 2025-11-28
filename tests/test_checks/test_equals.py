@@ -19,7 +19,7 @@ from flex_evals import (
     EvaluationContext,
     CheckType,
     Status,
-    evaluate,
+    evaluate_sync,
     Check,
     ValidationError,
     TestCase,
@@ -292,7 +292,7 @@ class TestEqualsEngineIntegration:
         ({"result": [1, 2, 3]}, [1, 2, 3], True),  # Identical lists
         ({"result": [1, 2, 3]}, [3, 2, 1], False),  # Different order
     ])
-    def test_equals_via_evaluate(
+    def test_equals_via_evaluate_sync(
         self, output_value: Any, expected_value: Any, expected_passed: bool,
     ):
         """Test using JSONPath for actual and expected with various combinations."""
@@ -317,7 +317,7 @@ class TestEqualsEngineIntegration:
         ]
 
         outputs = [Output(value=output_value)]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
@@ -326,7 +326,7 @@ class TestEqualsEngineIntegration:
         assert results.results[0].check_results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": expected_passed}
 
-    def test_equals_check_instance_via_evaluate(self):
+    def test_equals_check_instance_via_evaluate_sync(self):
         """Test direct check instance usage in evaluate function."""
         test_cases = [
             TestCase(
@@ -343,14 +343,14 @@ class TestEqualsEngineIntegration:
         ]
 
         outputs = [Output(value="Paris")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": True}
 
-    def test_equals_negate_via_evaluate(self):
+    def test_equals_negate_via_evaluate_sync(self):
         """Test negation through engine evaluation."""
         test_cases = [
             TestCase(
@@ -371,7 +371,7 @@ class TestEqualsEngineIntegration:
         ]
 
         outputs = [Output(value="Paris")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -401,7 +401,7 @@ class TestEqualsErrorHandling:
 
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
-            evaluate(test_cases, outputs)
+            evaluate_sync(test_cases, outputs)
 
     def test_equals_missing_jsonpath_data(self):
         """Test behavior when JSONPath doesn't find data."""
@@ -423,7 +423,7 @@ class TestEqualsErrorHandling:
 
         outputs = [Output(value={"response": "test"})]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         # Should result in error when JSONPath resolution fails
         assert results.results[0].status == Status.ERROR
         # Missing JSONPath data now causes errors rather than silent failures
@@ -458,7 +458,7 @@ class TestEqualsJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_equals_array_access_jsonpath(self):
@@ -487,7 +487,7 @@ class TestEqualsJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_equals_complex_data_structures(self):
@@ -524,5 +524,5 @@ class TestEqualsJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}

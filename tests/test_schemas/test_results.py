@@ -16,7 +16,7 @@ from flex_evals import (
     CheckResult,
     CheckError,
     Check,
-    evaluate,
+    evaluate_sync,
 )
 from flex_evals.schemas.results import ExecutionContext
 
@@ -971,7 +971,7 @@ class TestEvaluationRunResult:
         assert row['check_type'] == "exact_match"
         assert row['check_status'] == 'completed'
 
-    def test_metadata_propagation_through_evaluate(self):
+    def test_metadata_propagation_through_evaluate_sync(self):
         """Test Check metadata and version propagation through evaluate to to_dict_list."""
         # Create test cases with different types of checks
         test_cases = [
@@ -1007,7 +1007,7 @@ class TestEvaluationRunResult:
         ]
 
         # Execute evaluation
-        result = evaluate(test_cases, outputs, checks)
+        result = evaluate_sync(test_cases, outputs, checks)
 
         # Convert to dict list for analysis
         dict_list = result.to_dict_list()

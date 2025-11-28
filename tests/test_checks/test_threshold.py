@@ -19,7 +19,7 @@ from flex_evals import (
     EvaluationContext,
     CheckType,
     Status,
-    evaluate,
+    evaluate_sync,
     Check,
     ValidationError,
     TestCase,
@@ -212,7 +212,7 @@ class TestThresholdEngineIntegration:
         ({"score": 42}, 0, 100, True),       # Integer within range
         ({"score": -5}, 0, 100, False),      # Below minimum
     ])
-    def test_threshold_via_evaluate(
+    def test_threshold_via_evaluate_sync(
         self, output_value: dict[str, Any], min_val: float, max_val: float, expected_passed: bool,
     ):
         """Test using JSONPath for value with various threshold combinations."""
@@ -234,7 +234,7 @@ class TestThresholdEngineIntegration:
         ]
 
         outputs = [Output(value=output_value)]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
@@ -243,7 +243,7 @@ class TestThresholdEngineIntegration:
         assert results.results[0].check_results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": expected_passed}
 
-    def test_threshold_check_instance_via_evaluate(self):
+    def test_threshold_check_instance_via_evaluate_sync(self):
         """Test direct check instance usage in evaluate function."""
         test_cases = [
             TestCase(
@@ -260,14 +260,14 @@ class TestThresholdEngineIntegration:
         ]
 
         outputs = [Output(value={"confidence": 0.95})]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": True}
 
-    def test_threshold_negate_via_evaluate(self):
+    def test_threshold_negate_via_evaluate_sync(self):
         """Test negation through engine evaluation."""
         test_cases = [
             TestCase(
@@ -288,11 +288,11 @@ class TestThresholdEngineIntegration:
         ]
 
         outputs = [Output(value={"score": 0.5})]  # Below minimum
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results == {"passed": True}
 
-    def test_threshold_exclusivity_via_evaluate(self):
+    def test_threshold_exclusivity_via_evaluate_sync(self):
         """Test inclusive/exclusive bounds through engine evaluation."""
         test_cases = [
             TestCase(
@@ -314,7 +314,7 @@ class TestThresholdEngineIntegration:
         ]
 
         outputs = [Output(value={"score": 0.8})]  # Exactly at minimum
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         # Should fail because 0.8 is not > 0.8 (exclusive minimum)
         assert results.results[0].check_results[0].results == {"passed": False}
@@ -345,7 +345,7 @@ class TestThresholdErrorHandling:
 
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
-            evaluate(test_cases, outputs)
+            evaluate_sync(test_cases, outputs)
 
     def test_threshold_missing_jsonpath_data(self):
         """Test behavior when JSONPath doesn't find data."""
@@ -367,7 +367,7 @@ class TestThresholdErrorHandling:
 
         outputs = [Output(value={"response": "test"})]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         # Should result in error when JSONPath resolution fails
         assert results.results[0].status == Status.ERROR
         # Missing JSONPath data now causes errors rather than silent failures
@@ -502,7 +502,7 @@ class TestThresholdJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_threshold_array_access_jsonpath(self):
@@ -531,7 +531,7 @@ class TestThresholdJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_threshold_dynamic_bounds_from_jsonpath(self):
@@ -564,5 +564,5 @@ class TestThresholdJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}

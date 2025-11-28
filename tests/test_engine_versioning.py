@@ -31,7 +31,8 @@ class TestEngineVersioning:
         clear_registry()
         restore_standard_checks()
 
-    def test_engine_uses_specific_check_version(self):
+    @pytest.mark.asyncio
+    async def test_engine_uses_specific_check_version(self):
         """Test that engine uses the specific version requested in Check object."""
 
         @register("version_test", version="1.0.0")
@@ -71,20 +72,21 @@ class TestEngineVersioning:
         check_v2 = Check(type="version_test", arguments={}, version="2.0.0")
 
         # Test v1.0.0
-        result_v1 = evaluate([test_case], [output], [check_v1])
+        result_v1 = await evaluate([test_case], [output], [check_v1])
         check_result_v1 = result_v1.results[0].check_results[0]
 
         assert check_result_v1.status == "completed"
         assert check_result_v1.results["version"] == "1.0.0"
 
         # Test v2.0.0
-        result_v2 = evaluate([test_case], [output], [check_v2])
+        result_v2 = await evaluate([test_case], [output], [check_v2])
         check_result_v2 = result_v2.results[0].check_results[0]
 
         assert check_result_v2.status == "completed"
         assert check_result_v2.results["version"] == "2.0.0"
 
-    def test_engine_uses_latest_version_when_none_specified(self):
+    @pytest.mark.asyncio
+    async def test_engine_uses_latest_version_when_none_specified(self):
         """Test that engine uses latest version when Check.version is None."""
 
         @register("latest_test", version="1.0.0")
@@ -136,13 +138,14 @@ class TestEngineVersioning:
         # Create check without version (should use latest)
         check_latest = Check(type="latest_test", arguments={}, version=None)
 
-        result = evaluate([test_case], [output], [check_latest])
+        result = await evaluate([test_case], [output], [check_latest])
         check_result = result.results[0].check_results[0]
 
         assert check_result.status == "completed"
         assert check_result.results["version"] == "2.1.0"  # Should be latest
 
-    def test_engine_async_check_versioning(self):
+    @pytest.mark.asyncio
+    async def test_engine_async_check_versioning(self):
         """Test that engine handles async check versioning correctly."""
 
         @register("async_version_test", version="1.0.0")
@@ -182,20 +185,21 @@ class TestEngineVersioning:
         check_v2 = Check(type="async_version_test", arguments={}, version="2.0.0")
 
         # Test v1.0.0
-        result_v1 = evaluate([test_case], [output], [check_v1])
+        result_v1 = await evaluate([test_case], [output], [check_v1])
         check_result_v1 = result_v1.results[0].check_results[0]
 
         assert check_result_v1.status == "completed"
         assert check_result_v1.results["version"] == "1.0.0"
 
         # Test v2.0.0
-        result_v2 = evaluate([test_case], [output], [check_v2])
+        result_v2 = await evaluate([test_case], [output], [check_v2])
         check_result_v2 = result_v2.results[0].check_results[0]
 
         assert check_result_v2.status == "completed"
         assert check_result_v2.results["version"] == "2.0.0"
 
-    def test_engine_mixed_sync_async_versions(self):
+    @pytest.mark.asyncio
+    async def test_engine_mixed_sync_async_versions(self):
         """Test engine with mixed sync/async checks across versions."""
 
         @register("mixed_test", version="1.0.0")
@@ -227,7 +231,7 @@ class TestEngineVersioning:
         check_async = Check(type="mixed_test", arguments={}, version="2.0.0")
 
         # Test both in same evaluation
-        result = evaluate([test_case], [output], [check_sync, check_async])
+        result = await evaluate([test_case], [output], [check_sync, check_async])
 
         assert len(result.results[0].check_results) == 2
 
@@ -250,7 +254,8 @@ class TestEngineVersioning:
         assert sync_result.status == "completed"
         assert async_result.status == "completed"
 
-    def test_engine_version_not_found_error(self):
+    @pytest.mark.asyncio
+    async def test_engine_version_not_found_error(self):
         """Test engine fails fast when requested version doesn't exist."""
 
         @register("error_test", version="1.0.0")
@@ -276,9 +281,10 @@ class TestEngineVersioning:
 
         # Should raise ValueError for version not found
         with pytest.raises(ValueError, match="Version '99.0.0' not found for check type 'error_test'"):  # noqa: E501
-            evaluate([test_case], [output], [check_nonexistent])
+            await evaluate([test_case], [output], [check_nonexistent])
 
-    def test_engine_version_in_check_result_metadata(self):
+    @pytest.mark.asyncio
+    async def test_engine_version_in_check_result_metadata(self):
         """Test that check version is included in CheckResult metadata."""
 
         @register("metadata_test", version="1.5.0")
@@ -302,14 +308,15 @@ class TestEngineVersioning:
         # Create check with specific version
         check = Check(type="metadata_test", arguments={}, version="1.5.0")
 
-        result = evaluate([test_case], [output], [check])
+        result = await evaluate([test_case], [output], [check])
         check_result = result.results[0].check_results[0]
 
         assert check_result.status == "completed"
         # The version should be included as first-class field
         assert check_result.check_version == "1.5.0"
 
-    def test_engine_with_check_no_version_uses_latest(self):
+    @pytest.mark.asyncio
+    async def test_engine_with_check_no_version_uses_latest(self):
         """Test that engine uses latest version when Check has no version specified."""
         @register("latest_check", version="1.0.0")
         class LatestCheck_v1(BaseCheck):  # noqa: N801
@@ -346,7 +353,7 @@ class TestEngineVersioning:
         # Create check WITHOUT version (should use latest)
         check_no_version = Check(type="latest_check", arguments={})
 
-        result = evaluate([test_case], [output], [check_no_version])
+        result = await evaluate([test_case], [output], [check_no_version])
         check_result = result.results[0].check_results[0]
 
         assert check_result.status == "completed"
@@ -355,7 +362,8 @@ class TestEngineVersioning:
         # Version should be recorded as first-class field
         assert check_result.check_version == "2.1.0"
 
-    def test_engine_with_schema_check_includes_version(self):
+    @pytest.mark.asyncio
+    async def test_engine_with_schema_check_includes_version(self):
         """Test that engine properly handles SchemaCheck objects with version."""
         # Need standard checks for SchemaCheck objects
         restore_standard_checks()
@@ -370,7 +378,7 @@ class TestEngineVersioning:
             phrases=["hello"],
         )
 
-        result = evaluate([test_case], [output], [schema_check])
+        result = await evaluate([test_case], [output], [schema_check])
         check_result = result.results[0].check_results[0]
 
         assert check_result.status == "completed"
@@ -378,7 +386,8 @@ class TestEngineVersioning:
         # Version from SchemaCheck.VERSION should be recorded as first-class field
         assert check_result.check_version == "1.0.0"
 
-    def test_engine_mixed_check_types_with_versions(self):
+    @pytest.mark.asyncio
+    async def test_engine_mixed_check_types_with_versions(self):
         """Test engine handles mix of Check (no version) and SchemaCheck together."""
         @register("mixed_check", version="1.0.0")
         class MixedCheck_v1(BaseCheck):  # noqa: N801
@@ -408,7 +417,7 @@ class TestEngineVersioning:
             expected=JSONPath(expression="$.test_case.expected"),
         )
 
-        result = evaluate([test_case], [output], [check_no_version, schema_check])
+        result = await evaluate([test_case], [output], [check_no_version, schema_check])
 
         # Check first result (Check with no version - should get latest version)
         check_result_1 = result.results[0].check_results[0]
@@ -422,7 +431,8 @@ class TestEngineVersioning:
         assert check_result_2.results["passed"] is True
         assert check_result_2.check_version == "1.0.0"
 
-    def test_engine_with_testcase_checks_field(self):
+    @pytest.mark.asyncio
+    async def test_engine_with_testcase_checks_field(self):
         """Test engine handles checks defined in TestCase.checks field."""
         @register("testcase_check", version="1.5.0")
         class TestCaseCheck(BaseCheck):
@@ -462,7 +472,7 @@ class TestEngineVersioning:
         output = Output(value="output not used in this test")
 
         # Pass checks=None to use TestCase.checks
-        result = evaluate([test_case], [output], checks=None)
+        result = await evaluate([test_case], [output], checks=None)
 
         # Should have 2 check results
         assert len(result.results[0].check_results) == 2

@@ -19,7 +19,7 @@ from flex_evals import (
     EvaluationContext,
     CheckType,
     Status,
-    evaluate,
+    evaluate_sync,
     Check,
     ValidationError,
     TestCase,
@@ -270,7 +270,7 @@ class TestIsEmptyEngineIntegration:
         ({"result": {}}, True),  # Empty dict (via JSONPath)
         ({"result": {"key": "value"}}, False),  # Non-empty dict (via JSONPath)
     ])
-    def test_is_empty_via_evaluate(self, output_value: Any, expected_passed: bool):
+    def test_is_empty_via_evaluate_sync(self, output_value: Any, expected_passed: bool):
         """Test using JSONPath for value with various combinations."""
         # Use different JSONPath based on output structure
         value_path = "$.output.value.result" if isinstance(output_value, dict) and "result" in output_value else "$.output.value"  # noqa: E501
@@ -291,7 +291,7 @@ class TestIsEmptyEngineIntegration:
         ]
 
         outputs = [Output(value=output_value)]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
@@ -300,7 +300,7 @@ class TestIsEmptyEngineIntegration:
         assert results.results[0].check_results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": expected_passed}
 
-    def test_is_empty_check_instance_via_evaluate(self):
+    def test_is_empty_check_instance_via_evaluate_sync(self):
         """Test direct check instance usage in evaluate function."""
         test_cases = [
             TestCase(
@@ -315,14 +315,14 @@ class TestIsEmptyEngineIntegration:
         ]
 
         outputs = [Output(value={"content": ""})]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": True}
 
-    def test_is_empty_negate_via_evaluate(self):
+    def test_is_empty_negate_via_evaluate_sync(self):
         """Test negation through engine evaluation."""
         test_cases = [
             TestCase(
@@ -341,11 +341,11 @@ class TestIsEmptyEngineIntegration:
         ]
 
         outputs = [Output(value="not empty")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results == {"passed": True}
 
-    def test_is_empty_strip_whitespace_via_evaluate(self):
+    def test_is_empty_strip_whitespace_via_evaluate_sync(self):
         """Test strip_whitespace option through engine evaluation."""
         test_cases = [
             TestCase(
@@ -364,7 +364,7 @@ class TestIsEmptyEngineIntegration:
         ]
 
         outputs = [Output(value="   ")]  # Whitespace only
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         # With strip_whitespace=False, whitespace is not empty
         assert results.results[0].check_results[0].results == {"passed": False}
@@ -394,7 +394,7 @@ class TestIsEmptyErrorHandling:
 
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
-            evaluate(test_cases, outputs)
+            evaluate_sync(test_cases, outputs)
 
     def test_is_empty_missing_jsonpath_data(self):
         """Test behavior when JSONPath doesn't find data."""
@@ -415,7 +415,7 @@ class TestIsEmptyErrorHandling:
 
         outputs = [Output(value={"response": "test"})]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         # Should result in error when JSONPath resolution fails
         assert results.results[0].status == Status.ERROR
         # Missing JSONPath data now causes errors rather than silent failures
@@ -453,7 +453,7 @@ class TestIsEmptyJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_is_empty_array_access_jsonpath(self):
@@ -482,7 +482,7 @@ class TestIsEmptyJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_is_empty_complex_data_structures(self):
@@ -512,5 +512,5 @@ class TestIsEmptyJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}

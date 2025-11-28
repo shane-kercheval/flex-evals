@@ -177,37 +177,41 @@ class TestEvaluationEngine:
         # Restore standard checks for other tests
         restore_standard_checks()
 
-    def test_evaluate_function_signature(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_function_signature(self):
         """Test function accepts correct parameters."""
-        result = evaluate(self.test_cases, self.outputs, self.shared_checks)
+        result = await evaluate(self.test_cases, self.outputs, self.shared_checks)
 
         assert isinstance(result, EvaluationRunResult)
         assert result.evaluation_id is not None
         assert isinstance(result.started_at, datetime)
         assert isinstance(result.completed_at, datetime)
 
-    def test_evaluate_length_constraint(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_length_constraint(self):
         """Test test_cases and outputs same length validation."""
         # Mismatched lengths should raise ValidationError
         with pytest.raises(ValidationError, match="test_cases and outputs must have same length"):
-            evaluate(
+            await evaluate(
                 self.test_cases,
                 [Output(value="Paris", id="output_001")],
                 self.shared_checks,
             )  # Only 1 output
 
-    def test_evaluate_empty_inputs(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_empty_inputs(self):
         """Test behavior with empty test_cases and outputs."""
         with pytest.raises(ValidationError, match="At least one test case is required"):
-            evaluate([], [], [])
+            await evaluate([], [], [])
 
-    def test_evaluate_association(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_association(self):
         """Test test_cases[i] paired with outputs[i]."""
         checks = [
             Check(type="test_check", arguments={"expected": "Paris", "actual": "$.output.value"}),
         ]
 
-        result = evaluate(self.test_cases, self.outputs, checks)
+        result = await evaluate(self.test_cases, self.outputs, checks)
 
         # Verify each test case is paired with correct output
         assert len(result.results) == 2
@@ -220,9 +224,10 @@ class TestEvaluationEngine:
         assert result.results[0].check_results[0].results["passed"] is True
         assert result.results[1].check_results[0].results["passed"] is False
 
-    def test_evaluate_shared_checks(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_shared_checks(self):
         """Test same checks applied to all test cases."""
-        result = evaluate(self.test_cases, self.outputs, self.shared_checks)
+        result = await evaluate(self.test_cases, self.outputs, self.shared_checks)
 
         assert len(result.results) == 2
 
@@ -231,14 +236,15 @@ class TestEvaluationEngine:
             assert len(test_result.check_results) == 1
             assert test_result.check_results[0].check_type == "test_check"
 
-    def test_evaluate_per_test_case_checks(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_per_test_case_checks(self):
         """Test different checks per test case."""
         per_test_case_checks = [
             [Check(type="test_check", arguments={"expected": "Paris", "actual": "$.output.value"})],  # noqa: E501
             [Check(type="test_check", arguments={"expected": "4", "actual": "$.output.value"})],
         ]
 
-        result = evaluate(self.test_cases, self.outputs, per_test_case_checks)
+        result = await evaluate(self.test_cases, self.outputs, per_test_case_checks)
 
         assert len(result.results) == 2
 
@@ -246,7 +252,8 @@ class TestEvaluationEngine:
         assert result.results[0].check_results[0].results["passed"] is True
         assert result.results[1].check_results[0].results["passed"] is True
 
-    def test_evaluate_per_test_case_checks_length_mismatch(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_per_test_case_checks_length_mismatch(self):
         """Test per-test-case checks length validation."""
         per_test_case_checks = [
             [Check(type="test_check", arguments={"expected": "Paris"})],
@@ -254,9 +261,10 @@ class TestEvaluationEngine:
         ]
 
         with pytest.raises(ValidationError, match="checks list must have same length as test_cases"):  # noqa: E501
-            evaluate(self.test_cases, self.outputs, per_test_case_checks)
+            await evaluate(self.test_cases, self.outputs, per_test_case_checks)
 
-    def test_evaluate_checks_none_fallback(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_checks_none_fallback(self):
         """Test using TestCase.checks when checks=None."""
         test_cases_with_checks = [
             TestCase(
@@ -271,13 +279,14 @@ class TestEvaluationEngine:
             ),
         ]
 
-        result = evaluate(test_cases_with_checks, self.outputs, checks=None)
+        result = await evaluate(test_cases_with_checks, self.outputs, checks=None)
 
         assert len(result.results) == 2
         assert result.results[0].check_results[0].results["passed"] is True
         assert result.results[1].check_results[0].results["passed"] is True
 
-    def test_evaluate_mixed_checks_none(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_mixed_checks_none(self):
         """Test some test cases have checks, others don't."""
         test_cases_mixed = [
             TestCase(
@@ -295,7 +304,7 @@ class TestEvaluationEngine:
             ),
         ]
 
-        result = evaluate(test_cases_mixed, self.outputs, checks=None)
+        result = await evaluate(test_cases_mixed, self.outputs, checks=None)
 
         assert len(result.results) == 2
         assert len(result.results[0].check_results) == 1
@@ -304,7 +313,8 @@ class TestEvaluationEngine:
         assert result.results[1].check_results[0].resolved_arguments["expected"]["value"] == "Richland"  # noqa: E501
         assert result.results[1].check_results[1].resolved_arguments["expected"]["value"] == "Seattle"  # noqa: E501
 
-    def test_evaluate_mixed_checks_none__missing_check_raises_error(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_mixed_checks_none__missing_check_raises_error(self):
         """Test some test cases have checks, others don't."""
         test_cases_mixed = [
             TestCase(
@@ -316,11 +326,12 @@ class TestEvaluationEngine:
         ]
 
         with pytest.raises(ValidationError):
-            _ = evaluate(test_cases_mixed, self.outputs, checks=None)
+            _ = await evaluate(test_cases_mixed, self.outputs, checks=None)
 
-    def test_evaluate_sync_only(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_sync_only(self):
         """Test pure sync execution path."""
-        result = evaluate(self.test_cases, self.outputs, self.shared_checks)
+        result = await evaluate(self.test_cases, self.outputs, self.shared_checks)
 
         assert result.status == 'completed'
         assert len(result.results) == 2
@@ -331,13 +342,14 @@ class TestEvaluationEngine:
             for check_result in test_result.check_results:
                 assert check_result.status == 'completed'
 
-    def test_evaluate_async_detection(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_async_detection(self):
         """Test async checks trigger async execution."""
         async_checks = [
             Check(type="test_async_check", arguments={"expected": "$.test_case.expected", "actual": "$.output.value"}),  # noqa: E501
         ]
 
-        result = evaluate(self.test_cases, self.outputs, async_checks)
+        result = await evaluate(self.test_cases, self.outputs, async_checks)
 
         assert result.status == 'completed'
         assert len(result.results) == 2
@@ -347,14 +359,15 @@ class TestEvaluationEngine:
             assert test_result.status == 'completed'
             assert test_result.check_results[0].check_type == "test_async_check"
 
-    def test_evaluate_mixed_async_sync(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_mixed_async_sync(self):
         """Test evaluation with both async and sync checks."""
         mixed_checks = [
             Check(type="test_check", arguments={"expected": "$.test_case.expected"}),
             Check(type="test_async_check", arguments={"expected": "$.test_case.expected"}),
         ]
 
-        result = evaluate(self.test_cases, self.outputs, mixed_checks)
+        result = await evaluate(self.test_cases, self.outputs, mixed_checks)
 
         assert result.status == 'completed'
 
@@ -365,26 +378,34 @@ class TestEvaluationEngine:
             assert "test_check" in check_types
             assert "test_async_check" in check_types
 
-    def test_evaluate_with_metadata(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_metadata(self):
         """Test metadata parameter included in result."""
         metadata = {
             "experiment_name": "test_experiment",
             "version": "1.0",
             "purpose": "testing",
         }
-        result = evaluate(self.test_cases, self.outputs, self.shared_checks, metadata=metadata)
+        result = await evaluate(
+            self.test_cases,
+            self.outputs,
+            self.shared_checks,
+            metadata=metadata,
+        )
         assert result.metadata == metadata
 
-    def test_evaluate_unique_evaluation_id(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_unique_evaluation_id(self):
         """Test each evaluation gets unique ID."""
-        result1 = evaluate(self.test_cases, self.outputs, self.shared_checks)
-        result2 = evaluate(self.test_cases, self.outputs, self.shared_checks)
+        result1 = await evaluate(self.test_cases, self.outputs, self.shared_checks)
+        result2 = await evaluate(self.test_cases, self.outputs, self.shared_checks)
 
         assert result1.evaluation_id != result2.evaluation_id
 
-    def test_evaluate_timestamps(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_timestamps(self):
         """Test started_at and completed_at are set correctly."""
-        result = evaluate(self.test_cases, self.outputs, self.shared_checks)
+        result = await evaluate(self.test_cases, self.outputs, self.shared_checks)
 
         assert isinstance(result.started_at, datetime)
         assert isinstance(result.completed_at, datetime)
@@ -392,7 +413,8 @@ class TestEvaluationEngine:
         assert result.started_at.tzinfo == UTC
         assert result.completed_at.tzinfo == UTC
 
-    def test_evaluate_check_version_preservation(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_check_version_preservation(self):
         """Test check version is preserved in results."""
         checks_with_version = [
             Check(
@@ -402,12 +424,13 @@ class TestEvaluationEngine:
             ),
         ]
 
-        result = evaluate(self.test_cases, self.outputs, checks_with_version)
+        result = await evaluate(self.test_cases, self.outputs, checks_with_version)
 
         check_result = result.results[0].check_results[0]
         assert check_result.check_version == "1.0.0"
 
-    def test_evaluate_jsonpath_resolution(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_jsonpath_resolution(self):
         """Test JSONPath expressions are resolved correctly."""
         checks_with_jsonpath = [
             Check(
@@ -419,7 +442,7 @@ class TestEvaluationEngine:
             ),
         ]
 
-        result = evaluate(self.test_cases, self.outputs, checks_with_jsonpath)
+        result = await evaluate(self.test_cases, self.outputs, checks_with_jsonpath)
 
         check_result = result.results[0].check_results[0]
 
@@ -429,13 +452,14 @@ class TestEvaluationEngine:
         assert check_result.resolved_arguments["actual"]["jsonpath"] == "$.output.value"
         assert check_result.resolved_arguments["actual"]["value"] == "Paris"
 
-    def test_evaluate_error_handling(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_error_handling(self):
         """Test error handling for failing checks."""
         failing_checks = [
             Check(type="test_failing_check", arguments={}),
         ]
 
-        result = evaluate(self.test_cases, self.outputs, failing_checks)
+        result = await evaluate(self.test_cases, self.outputs, failing_checks)
 
         assert result.status == 'error'  # Overall status should be error
 
@@ -447,16 +471,18 @@ class TestEvaluationEngine:
             assert check_result.error is not None
             assert "This check always fails" in check_result.error.message
 
-    def test_evaluate_unregistered_check_type(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_unregistered_check_type(self):
         """Test that unregistered check types fail early with clear error."""
         invalid_checks = [
             Check(type="nonexistent_check", arguments={}),
         ]
 
         with pytest.raises(ValueError, match="Check type 'nonexistent_check' is not registered"):
-            evaluate(self.test_cases, self.outputs, invalid_checks)
+            await evaluate(self.test_cases, self.outputs, invalid_checks)
 
-    def test_evaluate_summary_statistics(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_summary_statistics(self):
         """Test summary statistics are computed correctly."""
         # Mix of passing and failing checks
         mixed_checks = [
@@ -464,29 +490,31 @@ class TestEvaluationEngine:
             Check(type="test_failing_check", arguments={}),  # Will fail for both
         ]
 
-        result = evaluate(self.test_cases, self.outputs, mixed_checks)
+        result = await evaluate(self.test_cases, self.outputs, mixed_checks)
 
         assert result.summary.total_test_cases == 2
         assert result.summary.error_test_cases == 2  # Both have failing checks
         assert result.summary.completed_test_cases == 0
 
-    def test_evaluate_status_computation(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_status_computation(self):
         """Test overall status computation from test case results."""
         # All passing
         passing_checks = [
             Check(type="test_check", arguments={"expected": "$.test_case.expected"}),
         ]
-        result = evaluate(self.test_cases, self.outputs, passing_checks)
+        result = await evaluate(self.test_cases, self.outputs, passing_checks)
         assert result.status == 'completed'
 
         # Some failing
         failing_checks = [
             Check(type="test_failing_check", arguments={}),
         ]
-        result = evaluate(self.test_cases, self.outputs, failing_checks)
+        result = await evaluate(self.test_cases, self.outputs, failing_checks)
         assert result.status == 'error'
 
-    def test_async_checks_run_concurrently(self):
+    @pytest.mark.asyncio
+    async def test_async_checks_run_concurrently(self):
         """Test that multiple async checks run in parallel, not sequentially."""
         # Create 20 async checks, each with 0.1s delay
         # If sequential: ~2.0s total (20 * 0.1s)
@@ -503,7 +531,7 @@ class TestEvaluationEngine:
         ]
 
         start_time = time.time()
-        result = evaluate(
+        result = await evaluate(
             test_cases=[TestCase(id="test_1", input="test input", expected="test")],
             outputs=[Output(value="test", id="output_test")],
             checks=[concurrent_checks],
@@ -533,7 +561,8 @@ class TestEvaluationEngine:
             f"(took {duration:.3f}s, expected < {max_allowed_time:.1f}s)"
         )
 
-    def test_mixed_sync_async_performance(self):
+    @pytest.mark.asyncio
+    async def test_mixed_sync_async_performance(self):
         """Test that mixed sync/async checks perform optimally."""
         # Create mix: 20 fast sync checks + 20 slow async checks
         # Total time should be dominated by async (concurrent) not sync (sequential)
@@ -559,7 +588,7 @@ class TestEvaluationEngine:
             )
 
         start_time = time.time()
-        result = evaluate(
+        result = await evaluate(
             test_cases=[TestCase(id="test_1", input="test", expected="test")],
             outputs=[Output(value="test", id="output_test")],
             checks=mixed_checks,
@@ -580,7 +609,8 @@ class TestEvaluationEngine:
             f"(took {duration:.3f}s, expected < {max_allowed_time:.1f}s)"
         )
 
-    def test_check_order_preservation_mixed(self):
+    @pytest.mark.asyncio
+    async def test_check_order_preservation_mixed(self):
         """Test that check results maintain original order in mixed sync/async scenarios."""
         # Create alternating pattern: sync, async, sync, async, sync
         checks = [
@@ -591,7 +621,7 @@ class TestEvaluationEngine:
             Check(type="test_check", arguments={"expected": "sync3"}),          # sync
         ]
 
-        result = evaluate(
+        result = await evaluate(
             test_cases=[TestCase(id="test_1", input="test", expected="test")],
             outputs=[Output(value="test", id="output_test")],
             checks=checks,
@@ -619,7 +649,8 @@ class TestEvaluationEngine:
             resolved_expected = sync_result.resolved_arguments["expected"]["value"]
             assert resolved_expected == expected, f"Sync check {i+1} order wrong"
 
-    def test_pure_sync_no_async_overhead(self):
+    @pytest.mark.asyncio
+    async def test_pure_sync_no_async_overhead(self):
         """Test that pure sync checks don't use async machinery."""
         # This test verifies that sync-only evaluations don't call asyncio.run()
         # We test this indirectly by ensuring very fast execution
@@ -630,7 +661,7 @@ class TestEvaluationEngine:
         ]
 
         start_time = time.time()
-        result = evaluate(
+        result = await evaluate(
             test_cases=[TestCase(id="test_1", input="test", expected="test")],
             outputs=[Output(value="test", id="output_test")],
             checks=sync_checks,
@@ -649,7 +680,8 @@ class TestEvaluationEngine:
             f"(took {duration:.4f}s, expected < {max_allowed_time:.2f}s)"
         )
 
-    def test_evaluate_with_async_concurrency_limit(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_async_concurrency_limit(self):
         """Test async concurrency control with max_async_concurrent parameter."""
         # Create 10 async checks with delay
         num_checks = 10
@@ -665,7 +697,7 @@ class TestEvaluationEngine:
         ]
 
         start_time = time.time()
-        result = evaluate(
+        result = await evaluate(
             test_cases=[TestCase(id="test_1", input="test input", expected="test")],
             outputs=[Output(value="test", id="output_test")],
             checks=concurrent_checks,
@@ -694,7 +726,8 @@ class TestEvaluationEngine:
             f"(took {duration:.3f}s, expected < {max_allowed_time:.3f}s)"
         )
 
-    def test_evaluate_with_parallel_workers(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_parallel_workers(self):
         """Test parallel test case processing with max_parallel_workers parameter."""
         # Create multiple test cases to distribute across workers
         num_test_cases = 8
@@ -719,7 +752,7 @@ class TestEvaluationEngine:
         ]
 
         start_time = time.time()
-        result = evaluate(
+        result = await evaluate(
             test_cases=test_cases,
             outputs=outputs,
             checks=checks,
@@ -767,7 +800,8 @@ class TestEvaluationEngine:
         for i, test_result in enumerate(result.results):
             assert test_result.execution_context.test_case.id == f"test_{i}"
 
-    def test_evaluate_mixed_parallelization_and_async_concurrency(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_mixed_parallelization_and_async_concurrency(self):
         """Test combination of parallel workers and async concurrency control."""
         # Create test cases with async checks
         num_test_cases = 6
@@ -793,7 +827,7 @@ class TestEvaluationEngine:
         ]
 
         start_time = time.time()
-        result = evaluate(
+        result = await evaluate(
             test_cases=test_cases,
             outputs=outputs,
             checks=checks,
@@ -821,13 +855,14 @@ class TestEvaluationEngine:
             f"(took {duration:.3f}s, expected < {max_allowed_time:.1f}s)"
         )
 
-    def test_evaluate_default_parameters_unchanged(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_default_parameters_unchanged(self):
         """Test that default behavior is unchanged when new parameters not specified."""
         # This test ensures backward compatibility
-        result1 = evaluate(self.test_cases, self.outputs, self.shared_checks)
+        result1 = await evaluate(self.test_cases, self.outputs, self.shared_checks)
 
         # Same call with explicit defaults
-        result2 = evaluate(
+        result2 = await evaluate(
             self.test_cases,
             self.outputs,
             self.shared_checks,
@@ -844,7 +879,8 @@ class TestEvaluationEngine:
             assert r1.status == r2.status
             assert len(r1.check_results) == len(r2.check_results)
 
-    def test_evaluate_single_worker_same_as_serial(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_single_worker_same_as_serial(self):
         """Test that max_parallel_workers=1 produces same results as serial execution."""
         # Test with both sync and async checks
         mixed_checks = [
@@ -853,10 +889,10 @@ class TestEvaluationEngine:
         ]
 
         # Serial execution (default)
-        result_serial = evaluate(self.test_cases, self.outputs, mixed_checks)
+        result_serial = await evaluate(self.test_cases, self.outputs, mixed_checks)
 
         # Parallel with 1 worker (should be equivalent)
-        result_parallel = evaluate(
+        result_parallel = await evaluate(
             self.test_cases,
             self.outputs,
             mixed_checks,
@@ -878,7 +914,8 @@ class TestEvaluationEngine:
                 assert c1.status == c2.status
                 assert c1.results.get("passed") == c2.results.get("passed")
 
-    def test_evaluate_async_concurrency_no_limit(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_async_concurrency_no_limit(self):
         """Test that max_async_concurrent=None allows unlimited concurrency."""
         # Create many async checks that should all run concurrently
         num_checks = 20
@@ -893,7 +930,7 @@ class TestEvaluationEngine:
         ]
 
         start_time = time.time()
-        result = evaluate(
+        result = await evaluate(
             test_cases=[TestCase(id="test_1", input="test", expected="test")],
             outputs=[Output(value="test", id="output_test")],
             checks=concurrent_checks,
@@ -911,7 +948,8 @@ class TestEvaluationEngine:
             f"(took {duration:.3f}s, expected < {max_allowed_time:.1f}s)"
         )
 
-    def test_evaluate_custom_checks_available_in_parallel_workers(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_custom_checks_available_in_parallel_workers(self):
         """
         Test that custom user-registered checks work correctly in parallel workers.
 
@@ -939,7 +977,7 @@ class TestEvaluationEngine:
         ]
 
         # Execute with parallel workers
-        result = evaluate(
+        result = await evaluate(
             test_cases=test_cases,
             outputs=outputs,
             checks=per_test_case_checks,
@@ -964,7 +1002,8 @@ class TestEvaluationEngine:
             assert check_result.results["check_identifier"] == "custom_user_check_v2"
             assert check_result.results["test_value"] == f"custom_value_{i}"
 
-    def test_output_id_preservation(self):
+    @pytest.mark.asyncio
+    async def test_output_id_preservation(self):
         """Test that output IDs are preserved through evaluation process."""
         # Create test cases with specific output IDs
         test_cases = [
@@ -979,7 +1018,7 @@ class TestEvaluationEngine:
             Check(type="test_check", arguments={"expected": "test", "actual": "$.output.value"}),
         ]
 
-        result = evaluate(test_cases, outputs, checks)
+        result = await evaluate(test_cases, outputs, checks)
 
         # Verify output ID is preserved in execution context
         assert result.status == 'completed'
@@ -990,7 +1029,8 @@ class TestEvaluationEngine:
         assert test_result.execution_context.output.id == "output_unique_123"
         assert test_result.execution_context.output.value == "test"
 
-    def test_jsonpath_resolution_per_test_case_checks(self):
+    @pytest.mark.asyncio
+    async def test_jsonpath_resolution_per_test_case_checks(self):
         """
         Test JSONPath correctly resolves different values for each test case with per-test-case
         checks.
@@ -1146,7 +1186,7 @@ class TestEvaluationEngine:
         ]
 
         # Execute evaluation using per-test-case checks
-        result = evaluate(test_cases, outputs, checks=None)
+        result = await evaluate(test_cases, outputs, checks=None)
 
         # Verify evaluation succeeded
         assert result.status == "completed"
@@ -1238,7 +1278,8 @@ class TestEvaluationEngine:
         assert geo_check2.resolved_arguments["expected"]["value"] == 1001  # Geography user
         # Math test doesn't use user_id in checks, but we verified it has 2002 in input
 
-    def test_evaluate_combined_testcase_and_global_checks_basic(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_combined_testcase_and_global_checks_basic(self):
         """Test that both TestCase.checks and global checks parameter are executed."""
         # Create test cases with their own checks
         test_cases_with_checks = [
@@ -1274,7 +1315,7 @@ class TestEvaluationEngine:
             ),
         ]
 
-        result = evaluate(test_cases_with_checks, self.outputs, global_checks)
+        result = await evaluate(test_cases_with_checks, self.outputs, global_checks)
 
         assert result.status == 'completed'
         assert len(result.results) == 2
@@ -1301,7 +1342,8 @@ class TestEvaluationEngine:
             assert testcase_check is not None, "TestCase-specific check should be present"
             assert global_check is not None, "Global check should be present"
 
-    def test_evaluate_combined_testcase_and_global_checks_multiple_each(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_combined_testcase_and_global_checks_multiple_each(self):
         """Test multiple TestCase checks and multiple global checks are all executed."""
         # Create test cases with multiple checks each
         test_cases_with_checks = [
@@ -1330,7 +1372,7 @@ class TestEvaluationEngine:
             Check(type="test_check", arguments={"expected": "global_check_2", "actual": "global_check_2"}),  # noqa: E501
         ]
 
-        result = evaluate(test_cases_with_checks, self.outputs, global_checks)
+        result = await evaluate(test_cases_with_checks, self.outputs, global_checks)
 
         assert result.status == 'completed'
         assert len(result.results) == 2
@@ -1358,7 +1400,8 @@ class TestEvaluationEngine:
         }
         assert expected_values == actual_values
 
-    def test_evaluate_combined_checks_with_per_testcase_checks_list(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_combined_checks_with_per_testcase_checks_list(self):
         """Test that both per-test-case checks list and TestCase.checks are executed."""
         # Test cases with their own checks
         test_cases_with_checks = [
@@ -1386,7 +1429,7 @@ class TestEvaluationEngine:
             [Check(type="test_check", arguments={"expected": "per_test_2", "actual": "per_test_2"})],  # For test case 2  # noqa: E501
         ]
 
-        result = evaluate(test_cases_with_checks, self.outputs, per_testcase_checks)
+        result = await evaluate(test_cases_with_checks, self.outputs, per_testcase_checks)
 
         assert result.status == 'completed'
         assert len(result.results) == 2
@@ -1446,7 +1489,8 @@ class TestSchemaCheckTypes:
             ),
         ]
 
-    def test_attribute_exists_check_schema(self):
+    @pytest.mark.asyncio
+    async def test_attribute_exists_check_schema(self):
         """Test AttributeExistsCheck schema type via evaluate()."""
         # Create schema checks using AttributeExistsCheck
         schema_checks = [
@@ -1455,7 +1499,7 @@ class TestSchemaCheckTypes:
             AttributeExistsCheck(path="$.output.value.nonexistent", negate=True),
         ]
 
-        result = evaluate(self.test_cases, self.outputs, schema_checks)
+        result = await evaluate(self.test_cases, self.outputs, schema_checks)
 
         assert result.status == 'completed'
         assert len(result.results) == 2
@@ -1474,7 +1518,8 @@ class TestSchemaCheckTypes:
         # nonexistent doesn't exist (negate=True means this should pass)
         assert test1_result.check_results[2].results["passed"] is True
 
-    def test_contains_check_schema(self):
+    @pytest.mark.asyncio
+    async def test_contains_check_schema(self):
         """Test ContainsCheck schema type via evaluate()."""
         # Use per-test-case checks since data structures are different
         per_case_checks = [
@@ -1492,7 +1537,7 @@ class TestSchemaCheckTypes:
             )],
         ]
 
-        result = evaluate(self.test_cases, self.outputs, per_case_checks)
+        result = await evaluate(self.test_cases, self.outputs, per_case_checks)
 
         assert result.status == 'completed'
 
@@ -1504,7 +1549,8 @@ class TestSchemaCheckTypes:
         test2_result = result.results[1]
         assert test2_result.check_results[0].results["passed"] is True
 
-    def test_equals_check_schema(self):
+    @pytest.mark.asyncio
+    async def test_equals_check_schema(self):
         """Test EqualsCheck schema type via evaluate()."""
         # Use per-test-case checks for different field structures
         per_case_checks = [
@@ -1520,7 +1566,7 @@ class TestSchemaCheckTypes:
             )],
         ]
 
-        result = evaluate(self.test_cases, self.outputs, per_case_checks)
+        result = await evaluate(self.test_cases, self.outputs, per_case_checks)
 
         assert result.status == 'completed'
 
@@ -1530,7 +1576,8 @@ class TestSchemaCheckTypes:
             assert test_result.check_results[0].check_type == "equals"
             assert test_result.check_results[0].results["passed"] is True
 
-    def test_exact_match_check_schema(self):
+    @pytest.mark.asyncio
+    async def test_exact_match_check_schema(self):
         """Test ExactMatchCheck schema type via evaluate()."""
         # Use per-test-case checks for different field structures
         per_case_checks = [
@@ -1548,7 +1595,7 @@ class TestSchemaCheckTypes:
             )],
         ]
 
-        result = evaluate(self.test_cases, self.outputs, per_case_checks)
+        result = await evaluate(self.test_cases, self.outputs, per_case_checks)
 
         assert result.status == 'completed'
 
@@ -1557,7 +1604,8 @@ class TestSchemaCheckTypes:
             assert len(test_result.check_results) == 1
             assert test_result.check_results[0].results["passed"] is True
 
-    def test_is_empty_check_schema(self):
+    @pytest.mark.asyncio
+    async def test_is_empty_check_schema(self):
         """Test IsEmptyCheck schema type via evaluate()."""
         # Create output with empty values to test
         empty_outputs = [
@@ -1579,7 +1627,7 @@ class TestSchemaCheckTypes:
             ],
         ]
 
-        result = evaluate(self.test_cases, empty_outputs, per_case_checks)
+        result = await evaluate(self.test_cases, empty_outputs, per_case_checks)
 
         assert result.status == 'completed'
 
@@ -1595,7 +1643,8 @@ class TestSchemaCheckTypes:
         assert len(test2_result.check_results) == 1
         assert test2_result.check_results[0].results["passed"] is True
 
-    def test_regex_check_schema(self):
+    @pytest.mark.asyncio
+    async def test_regex_check_schema(self):
         """Test RegexCheck schema type via evaluate()."""
         # Use per-test-case checks for different field structures
         per_case_checks = [
@@ -1611,7 +1660,7 @@ class TestSchemaCheckTypes:
             )],
         ]
 
-        result = evaluate(self.test_cases, self.outputs, per_case_checks)
+        result = await evaluate(self.test_cases, self.outputs, per_case_checks)
 
         assert result.status == 'completed'
 
@@ -1623,7 +1672,8 @@ class TestSchemaCheckTypes:
         test2_result = result.results[1]
         assert test2_result.check_results[0].results["passed"] is True
 
-    def test_threshold_check_schema(self):
+    @pytest.mark.asyncio
+    async def test_threshold_check_schema(self):
         """Test ThresholdCheck schema type via evaluate()."""
         # Only test first case since only it has confidence field
         schema_checks = [
@@ -1639,7 +1689,7 @@ class TestSchemaCheckTypes:
         ]
 
         # Test just the first test case and output that has confidence
-        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+        result = await evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
 
         assert result.status == 'completed'
 
@@ -1649,7 +1699,8 @@ class TestSchemaCheckTypes:
         assert test1_result.check_results[0].results["passed"] is True  # 0.8 <= 0.95 <= 1.0
         assert test1_result.check_results[1].results["passed"] is True  # 0.95 >= 0.9
 
-    def test_mixed_schema_and_generic_checks(self):
+    @pytest.mark.asyncio
+    async def test_mixed_schema_and_generic_checks(self):
         """Test mixing schema checks with generic Check objects."""
         # Test that schema checks work alongside standard checks
         mixed_checks = [
@@ -1662,7 +1713,7 @@ class TestSchemaCheckTypes:
             ),
         ]
 
-        result = evaluate(self.test_cases[:1], self.outputs[:1], mixed_checks)
+        result = await evaluate(self.test_cases[:1], self.outputs[:1], mixed_checks)
 
         assert result.status == 'completed'
 
@@ -1677,7 +1728,8 @@ class TestSchemaCheckTypes:
         assert "attribute_exists" in check_types
         assert "exact_match" in check_types
 
-    def test_schema_check_jsonpath_validation(self):
+    @pytest.mark.asyncio
+    async def test_schema_check_jsonpath_validation(self):
         """Test that schema checks properly validate JSONPath expressions."""
         # Test with invalid JSONPath (should work but give unexpected results)
         try:
@@ -1686,7 +1738,7 @@ class TestSchemaCheckTypes:
                 expected="Paris",
             )
 
-            result = evaluate(self.test_cases, self.outputs, [schema_check])
+            result = await evaluate(self.test_cases, self.outputs, [schema_check])
 
             # Should complete but fail the equality check (literal "invalid_jsonpath" != "Paris")
             assert result.status == 'completed'
@@ -1696,7 +1748,8 @@ class TestSchemaCheckTypes:
             # If validation catches this, that's also acceptable
             assert "jsonpath" in str(e).lower() or "path" in str(e).lower()  # noqa: PT017
 
-    def test_schema_check_type_safety(self):
+    @pytest.mark.asyncio
+    async def test_schema_check_type_safety(self):
         """Test that schema checks provide type safety and validation."""
         # Test that schema checks validate their arguments
         with pytest.raises((ValueError, TypeError)):
@@ -1709,7 +1762,8 @@ class TestSchemaCheckTypes:
             # So let's test with an invalid type instead
             ThresholdCheck(value="$.output.value.confidence", min_value=["invalid"])  # type: ignore
 
-    def test_schema_check_with_per_testcase_checks(self):
+    @pytest.mark.asyncio
+    async def test_schema_check_with_per_testcase_checks(self):
         """Test schema checks used as per-test-case checks."""
         # Create different schema checks for each test case
         per_testcase_schema_checks = [
@@ -1725,7 +1779,7 @@ class TestSchemaCheckTypes:
             ],
         ]
 
-        result = evaluate(self.test_cases, self.outputs, per_testcase_schema_checks)
+        result = await evaluate(self.test_cases, self.outputs, per_testcase_schema_checks)
 
         assert result.status == 'completed'
         assert len(result.results) == 2
@@ -1736,7 +1790,8 @@ class TestSchemaCheckTypes:
             assert all(cr.status == 'completed' for cr in test_result.check_results)
             assert all(cr.results["passed"] is True for cr in test_result.check_results)
 
-    def test_schema_check_metadata_preservation(self):
+    @pytest.mark.asyncio
+    async def test_schema_check_metadata_preservation(self):
         """Test that schema check metadata is preserved through evaluation."""
         schema_check = EqualsCheck(
             actual="$.output.value.answer",
@@ -1744,7 +1799,7 @@ class TestSchemaCheckTypes:
             metadata={"test_category": "geography", "difficulty": "easy"},
         )
 
-        result = evaluate(self.test_cases[:1], self.outputs[:1], [schema_check])
+        result = await evaluate(self.test_cases[:1], self.outputs[:1], [schema_check])
 
         assert result.status == 'completed'
         check_result = result.results[0].check_results[0]
@@ -1774,7 +1829,8 @@ class TestSchemaCheckTypesWithLiteralValues:
             Output(value="4", id="output_002"),
         ]
 
-    def test_contains_check_with_literal_values(self):
+    @pytest.mark.asyncio
+    async def test_contains_check_with_literal_values(self):
         """Test ContainsCheck using literal string values instead of JSONPath."""
         # Extract values manually and use literal strings
         schema_checks = [
@@ -1782,7 +1838,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             ContainsCheck(text="The answer is 4", phrases=["answer", "4"], case_sensitive=False),
         ]
 
-        result = evaluate(self.test_cases, self.outputs, schema_checks)
+        result = await evaluate(self.test_cases, self.outputs, schema_checks)
 
         assert result.status == 'completed'
 
@@ -1791,7 +1847,8 @@ class TestSchemaCheckTypesWithLiteralValues:
             for check_result in test_result.check_results:
                 assert check_result.results["passed"] is True
 
-    def test_equals_check_with_literal_values(self):
+    @pytest.mark.asyncio
+    async def test_equals_check_with_literal_values(self):
         """Test EqualsCheck using literal values instead of JSONPath."""
         schema_checks = [
             EqualsCheck(actual="Paris", expected="Paris"),
@@ -1800,7 +1857,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             EqualsCheck(actual="", expected=""),  # Empty strings are valid literal values
         ]
 
-        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+        result = await evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
 
         assert result.status == 'completed'
 
@@ -1810,7 +1867,8 @@ class TestSchemaCheckTypesWithLiteralValues:
         for check_result in test_result.check_results:
             assert check_result.results["passed"] is True
 
-    def test_exact_match_check_with_literal_values(self):
+    @pytest.mark.asyncio
+    async def test_exact_match_check_with_literal_values(self):
         """Test ExactMatchCheck using literal string values instead of JSONPath."""
         schema_checks = [
             ExactMatchCheck(actual="Paris", expected="Paris", case_sensitive=True),
@@ -1820,7 +1878,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             ),  # Should pass
         ]
 
-        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+        result = await evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
 
         assert result.status == 'completed'
 
@@ -1830,7 +1888,8 @@ class TestSchemaCheckTypesWithLiteralValues:
         for check_result in test_result.check_results:
             assert check_result.results["passed"] is True
 
-    def test_is_empty_check_with_literal_values(self):
+    @pytest.mark.asyncio
+    async def test_is_empty_check_with_literal_values(self):
         """Test IsEmptyCheck using literal values instead of JSONPath."""
         schema_checks = [
             IsEmptyCheck(value=""),           # Empty string
@@ -1841,7 +1900,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             IsEmptyCheck(value=[1, 2, 3], negate=True),    # Non-empty list (negated)
         ]
 
-        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+        result = await evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
 
         assert result.status == 'completed'
 
@@ -1851,7 +1910,8 @@ class TestSchemaCheckTypesWithLiteralValues:
         for check_result in test_result.check_results:
             assert check_result.results["passed"] is True
 
-    def test_regex_check_with_literal_values(self):
+    @pytest.mark.asyncio
+    async def test_regex_check_with_literal_values(self):
         """Test RegexCheck using literal string values instead of JSONPath."""
         schema_checks = [
             RegexCheck(text="Paris", pattern=r"^[A-Z][a-z]+$"),           # Capital + lowercase
@@ -1862,7 +1922,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             RegexCheck(text="Hello123", pattern=r"\d+"),                   # Contains digits
         ]
 
-        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+        result = await evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
 
         assert result.status == 'completed'
 
@@ -1872,7 +1932,8 @@ class TestSchemaCheckTypesWithLiteralValues:
         for check_result in test_result.check_results:
             assert check_result.results["passed"] is True
 
-    def test_threshold_check_with_literal_values(self):
+    @pytest.mark.asyncio
+    async def test_threshold_check_with_literal_values(self):
         """Test ThresholdCheck using literal numeric values instead of JSONPath."""
         schema_checks = [
             ThresholdCheck(value=0.95, min_value=0.8, max_value=1.0),     # Within range
@@ -1881,7 +1942,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             ThresholdCheck(value=3.14159, min_value=3.0, max_value=4.0),  # Float within range
         ]
 
-        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+        result = await evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
 
         assert result.status == 'completed'
 
@@ -1891,7 +1952,8 @@ class TestSchemaCheckTypesWithLiteralValues:
         for check_result in test_result.check_results:
             assert check_result.results["passed"] is True
 
-    def test_mixed_literal_and_jsonpath_values(self):
+    @pytest.mark.asyncio
+    async def test_mixed_literal_and_jsonpath_values(self):
         """Test mixing literal values with JSONPath expressions in same evaluation."""
         # Create more complex output structure
         complex_outputs = [
@@ -1907,7 +1969,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             ContainsCheck(text="$.output.value.text", phrases=["World"]),
         ]
 
-        result = evaluate(self.test_cases[:1], complex_outputs, schema_checks)
+        result = await evaluate(self.test_cases[:1], complex_outputs, schema_checks)
 
         assert result.status == 'completed'
 
@@ -1917,7 +1979,8 @@ class TestSchemaCheckTypesWithLiteralValues:
         for check_result in test_result.check_results:
             assert check_result.results["passed"] is True
 
-    def test_literal_values_with_complex_data_types(self):
+    @pytest.mark.asyncio
+    async def test_literal_values_with_complex_data_types(self):
         """Test schema checks with complex literal data types."""
         schema_checks = [
             # Complex data structure comparisons
@@ -1939,7 +2002,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             ),
         ]
 
-        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+        result = await evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
 
         assert result.status == 'completed'
 
@@ -1949,7 +2012,8 @@ class TestSchemaCheckTypesWithLiteralValues:
         for check_result in test_result.check_results:
             assert check_result.results["passed"] is True
 
-    def test_user_resolved_values_pattern(self):
+    @pytest.mark.asyncio
+    async def test_user_resolved_values_pattern(self):
         """Test a realistic pattern where users resolve values themselves."""
         # Simulate user extracting and processing values from outputs
         raw_output = {"model_response": "The capital of France is Paris", "confidence": 0.92}
@@ -1969,7 +2033,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             RegexCheck(text=extracted_text, pattern=r"The .+ of .+ is .+"),  # Template pattern
         ]
 
-        result = evaluate(self.test_cases[:1], self.outputs[:1], user_resolved_checks)
+        result = await evaluate(self.test_cases[:1], self.outputs[:1], user_resolved_checks)
 
         assert result.status == 'completed'
 
@@ -1981,7 +2045,8 @@ class TestSchemaCheckTypesWithLiteralValues:
                 f"Check {i} failed: {check_result.check_type}"
             )
 
-    def test_literal_values_error_cases(self):
+    @pytest.mark.asyncio
+    async def test_literal_values_error_cases(self):
         """Test that literal values still produce meaningful errors when checks fail."""
         schema_checks = [
             ContainsCheck(text="Hello", phrases=["Goodbye"]),  # Should fail
@@ -1989,7 +2054,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             ThresholdCheck(value=5, min_value=10),              # Should fail
         ]
 
-        result = evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
+        result = await evaluate(self.test_cases[:1], self.outputs[:1], schema_checks)
 
         assert result.status == 'completed'
 
@@ -2000,7 +2065,8 @@ class TestSchemaCheckTypesWithLiteralValues:
             assert check_result.status == 'completed'
             assert check_result.results["passed"] is False
 
-    def test_evaluate_with_none_output_values(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_none_output_values(self):
         """Test evaluation engine with None output values (system failure scenarios)."""
         test_cases = [
             TestCase(id="test_success", input="What is 2+2?", expected="4"),
@@ -2027,7 +2093,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             ExactMatchCheck(actual="$.output.value", expected="", negate=True),
         ]
 
-        result = evaluate(test_cases, outputs, checks)
+        result = await evaluate(test_cases, outputs, checks)
 
         # Overall evaluation should complete (no errors thrown)
         assert result.status == 'completed'
@@ -2077,7 +2143,8 @@ class TestSchemaCheckTypesWithLiteralValues:
             assert result3.check_results[i].status == 'completed'
             assert result3.check_results[i].results['passed'] == result2.check_results[i].results['passed']  # noqa: E501
 
-    def test_evaluate_none_output_jsonpath_errors_vs_success(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_none_output_jsonpath_errors_vs_success(self):
         """Test distinction between JSONPath errors and successful None resolution."""
         test_case = TestCase(id="test", input="test", expected="test")
         none_output = Output(value=None, id="none_output")
@@ -2087,7 +2154,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             Check(type="exact_match", arguments={"actual": "$.output.value", "expected": ""}),
         ]
 
-        result_success = evaluate([test_case], [none_output], checks_success)
+        result_success = await evaluate([test_case], [none_output], checks_success)
 
         assert result_success.status == 'completed'
         check_result = result_success.results[0].check_results[0]
@@ -2102,7 +2169,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             ),
         ]
 
-        result_error = evaluate([test_case], [none_output], checks_error)
+        result_error = await evaluate([test_case], [none_output], checks_error)
 
         assert result_error.status == 'error'  # JSONPath resolution fails
         check_result_error = result_error.results[0].check_results[0]
@@ -2110,7 +2177,8 @@ class TestSchemaCheckTypesWithLiteralValues:
         assert check_result_error.error is not None
         assert 'jsonpath' in check_result_error.error.message.lower()
 
-    def test_evaluate_none_output_with_attribute_exists_special_behavior(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_none_output_with_attribute_exists_special_behavior(self):
         """Test that attribute_exists check has special behavior for missing attributes."""
         test_cases = [TestCase(id="test", input="test", expected="test")]
 
@@ -2126,7 +2194,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             AttributeExistsCheck(path="$.output.value.nonexistent", negate=True),
         ]
 
-        result = evaluate(test_cases, [none_output], checks)
+        result = await evaluate(test_cases, [none_output], checks)
 
         # No errors, all checks handle missing attributes gracefully
         assert result.status == 'completed'
@@ -2146,7 +2214,8 @@ class TestSchemaCheckTypesWithLiteralValues:
         assert test_result.check_results[2].status == 'completed'
         assert test_result.check_results[2].results['passed'] is True
 
-    def test_evaluate_mixed_none_and_valid_outputs(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_mixed_none_and_valid_outputs(self):
         """Test evaluation with mix of None and valid outputs for comprehensive coverage."""
         test_cases = [
             TestCase(id="success_case", input="Easy question", expected="easy_answer"),
@@ -2170,7 +2239,7 @@ class TestSchemaCheckTypesWithLiteralValues:
             IsEmptyCheck(value="$.output.value", negate=True),
         ]
 
-        result = evaluate(test_cases, outputs, checks)
+        result = await evaluate(test_cases, outputs, checks)
 
         assert result.status == 'completed'
         assert len(result.results) == 3
@@ -2294,7 +2363,8 @@ class TestSharedCheckConcurrency:
         """Clean up after tests."""
         restore_standard_checks()
 
-    def test__shared_check_instances_cause_data_corruption_with_concurrency(
+    @pytest.mark.asyncio
+    async def test__shared_check_instances_cause_data_corruption_with_concurrency(
         self,
     ) -> None:
         """
@@ -2319,7 +2389,7 @@ class TestSharedCheckConcurrency:
         ]
         outputs = [Output(value=f"out{i}") for i in range(100)]
 
-        result = evaluate(
+        result = await evaluate(
             test_cases=test_cases,
             outputs=outputs,
             checks=[shared_check],  # Shared pattern: same instance reused
@@ -2368,7 +2438,8 @@ class TestTestCaseWithOptionalID:
         """Set up test fixtures with standard checks."""
         restore_standard_checks()
 
-    def test_testcase_with_none_id_basic(self):
+    @pytest.mark.asyncio
+    async def test_testcase_with_none_id_basic(self):
         """Test that TestCase can be created with id=None."""
         # Should not raise any exception
         test_case = TestCase(input="What is the capital of France?", expected="Paris")
@@ -2376,22 +2447,26 @@ class TestTestCaseWithOptionalID:
         assert test_case.input == "What is the capital of France?"
         assert test_case.expected == "Paris"
 
-    def test_testcase_with_explicit_none_id(self):
+    @pytest.mark.asyncio
+    async def test_testcase_with_explicit_none_id(self):
         """Test that TestCase can be created with explicit id=None."""
         test_case = TestCase(input="test input", id=None)
         assert test_case.id is None
 
-    def test_testcase_with_empty_string_id_raises_error(self):
+    @pytest.mark.asyncio
+    async def test_testcase_with_empty_string_id_raises_error(self):
         """Test that TestCase with empty string ID raises ValueError."""
         with pytest.raises(ValueError, match="TestCase.id must be a non-empty string when provided"):  # noqa: E501
             TestCase(input="test", id="")
 
-    def test_testcase_with_non_string_id_raises_error(self):
+    @pytest.mark.asyncio
+    async def test_testcase_with_non_string_id_raises_error(self):
         """Test that TestCase with non-string ID raises ValueError."""
         with pytest.raises(ValueError, match="TestCase.id must be a string or None"):
             TestCase(input="test", id=123)  # type: ignore
 
-    def test_evaluate_with_none_ids_basic(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_none_ids_basic(self):
         """Test evaluate() works end-to-end with TestCase instances that have None IDs."""
         # Create test cases without IDs
         test_cases = [
@@ -2408,7 +2483,7 @@ class TestTestCaseWithOptionalID:
             EqualsCheck(actual="$.output.value", expected="$.test_case.expected"),
         ]
 
-        result = evaluate(test_cases, outputs, checks)
+        result = await evaluate(test_cases, outputs, checks)
 
         # Verify evaluation completed successfully
         assert result.status == 'completed'
@@ -2424,7 +2499,8 @@ class TestTestCaseWithOptionalID:
         assert result.results[0].execution_context.test_case.id is None
         assert result.results[1].execution_context.test_case.id is None
 
-    def test_evaluate_with_none_ids_shared_checks(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_none_ids_shared_checks(self):
         """Test shared checks pattern with None IDs."""
         test_cases = [
             TestCase(input="test1", expected="output1"),
@@ -2444,7 +2520,7 @@ class TestTestCaseWithOptionalID:
             AttributeExistsCheck(path="$.output.value"),
         ]
 
-        result = evaluate(test_cases, outputs, checks)
+        result = await evaluate(test_cases, outputs, checks)
 
         assert result.status == 'completed'
         assert len(result.results) == 3
@@ -2457,7 +2533,8 @@ class TestTestCaseWithOptionalID:
             for check_result in test_result.check_results:
                 assert check_result.results["passed"] is True
 
-    def test_evaluate_with_none_ids_per_testcase_checks(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_none_ids_per_testcase_checks(self):
         """Test per-test-case checks pattern with None IDs."""
         test_cases = [
             TestCase(input="What is the capital of France?", expected="Paris"),
@@ -2475,7 +2552,7 @@ class TestTestCaseWithOptionalID:
             [RegexCheck(text="$.output.value", pattern=r"^\d+$")],
         ]
 
-        result = evaluate(test_cases, outputs, per_testcase_checks)
+        result = await evaluate(test_cases, outputs, per_testcase_checks)
 
         assert result.status == 'completed'
         assert len(result.results) == 2
@@ -2490,7 +2567,8 @@ class TestTestCaseWithOptionalID:
         assert result.results[1].check_results[0].check_type == "regex"
         assert result.results[1].check_results[0].results["passed"] is True
 
-    def test_evaluate_with_none_ids_testcase_checks_field(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_none_ids_testcase_checks_field(self):
         """Test using TestCase.checks field with None IDs."""
         test_cases = [
             TestCase(
@@ -2515,7 +2593,7 @@ class TestTestCaseWithOptionalID:
             Output(value="4", id="output_002"),
         ]
 
-        result = evaluate(test_cases, outputs, checks=None)
+        result = await evaluate(test_cases, outputs, checks=None)
 
         assert result.status == 'completed'
         assert len(result.results) == 2
@@ -2530,7 +2608,8 @@ class TestTestCaseWithOptionalID:
         assert len(result.results[1].check_results) == 1
         assert result.results[1].check_results[0].results["passed"] is True
 
-    def test_evaluate_with_none_ids_combined_checks(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_none_ids_combined_checks(self):
         """Test combination of TestCase.checks and global checks with None IDs."""
         test_cases = [
             TestCase(
@@ -2559,7 +2638,7 @@ class TestTestCaseWithOptionalID:
             AttributeExistsCheck(path="$.output.value"),
         ]
 
-        result = evaluate(test_cases, outputs, global_checks)
+        result = await evaluate(test_cases, outputs, global_checks)
 
         assert result.status == 'completed'
         assert len(result.results) == 2
@@ -2570,7 +2649,8 @@ class TestTestCaseWithOptionalID:
             assert len(test_result.check_results) == 2  # 1 from TestCase + 1 global
             assert all(cr.results["passed"] is True for cr in test_result.check_results)
 
-    def test_evaluate_with_none_ids_async_checks(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_none_ids_async_checks(self):
         """Test that async checks work with None IDs."""
         # This test uses semantic_similarity which is async
         test_cases = [
@@ -2588,13 +2668,14 @@ class TestTestCaseWithOptionalID:
             IsEmptyCheck(value="$.output.value", negate=True),
         ]
 
-        result = evaluate(test_cases, outputs, checks)
+        result = await evaluate(test_cases, outputs, checks)
 
         assert result.status == 'completed'
         assert result.results[0].execution_context.test_case.id is None
         assert all(cr.results["passed"] is True for cr in result.results[0].check_results)
 
-    def test_evaluate_with_none_ids_parallel_workers(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_none_ids_parallel_workers(self):
         """Test parallel execution with None IDs."""
         num_test_cases = 8
         test_cases = [
@@ -2611,7 +2692,7 @@ class TestTestCaseWithOptionalID:
             EqualsCheck(actual="$.output.value", expected="$.test_case.expected"),
         ]
 
-        result = evaluate(test_cases, outputs, checks, max_parallel_workers=4)
+        result = await evaluate(test_cases, outputs, checks, max_parallel_workers=4)
 
         assert result.status == 'completed'
         assert len(result.results) == num_test_cases
@@ -2622,7 +2703,8 @@ class TestTestCaseWithOptionalID:
             assert test_result.status == 'completed'
             assert test_result.check_results[0].results["passed"] is True
 
-    def test_evaluate_with_none_ids_error_handling(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_none_ids_error_handling(self):
         """Test error handling with None IDs."""
         test_cases = [
             TestCase(input="test1"),
@@ -2642,7 +2724,7 @@ class TestTestCaseWithOptionalID:
             ),
         ]
 
-        result = evaluate(test_cases, outputs, checks)
+        result = await evaluate(test_cases, outputs, checks)
 
         # Should have errors but complete
         assert result.status == 'error'
@@ -2653,7 +2735,8 @@ class TestTestCaseWithOptionalID:
             assert test_result.status == 'error'
             assert test_result.check_results[0].status == 'error'
 
-    def test_evaluate_with_none_ids_jsonpath_resolution(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_none_ids_jsonpath_resolution(self):
         """Test JSONPath resolution works correctly with None IDs."""
         test_cases = [
             TestCase(
@@ -2679,7 +2762,7 @@ class TestTestCaseWithOptionalID:
             AttributeExistsCheck(path="$.output.metadata.source"),
         ]
 
-        result = evaluate(test_cases, outputs, checks)
+        result = await evaluate(test_cases, outputs, checks)
 
         assert result.status == 'completed'
         assert result.results[0].execution_context.test_case.id is None
@@ -2691,7 +2774,8 @@ class TestTestCaseWithOptionalID:
         assert check_results[1].resolved_arguments["actual"]["value"] == "geography"
         assert all(cr.results["passed"] is True for cr in check_results)
 
-    def test_evaluate_with_mixed_none_and_valid_ids(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_mixed_none_and_valid_ids(self):
         """Test that evaluate() works with mix of None and valid IDs."""
         test_cases = [
             TestCase(id="test_001", input="input1", expected="output1"),  # Has ID
@@ -2711,7 +2795,7 @@ class TestTestCaseWithOptionalID:
             EqualsCheck(actual="$.output.value", expected="$.test_case.expected"),
         ]
 
-        result = evaluate(test_cases, outputs, checks)
+        result = await evaluate(test_cases, outputs, checks)
 
         assert result.status == 'completed'
         assert len(result.results) == 4
@@ -2726,7 +2810,8 @@ class TestTestCaseWithOptionalID:
         for test_result in result.results:
             assert test_result.check_results[0].results["passed"] is True
 
-    def test_evaluate_with_none_ids_to_dict_list_serialization(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_none_ids_to_dict_list_serialization(self):
         """Test that results with None IDs can be serialized to dict list."""
         test_cases = [
             TestCase(input="test", expected="output"),
@@ -2740,7 +2825,7 @@ class TestTestCaseWithOptionalID:
             EqualsCheck(actual="$.output.value", expected="output"),
         ]
 
-        result = evaluate(test_cases, outputs, checks)
+        result = await evaluate(test_cases, outputs, checks)
 
         # Should be able to convert to dict list without errors
         result_dict_list = result.to_dict_list()
@@ -2751,7 +2836,8 @@ class TestTestCaseWithOptionalID:
         assert result_dict_list[0]["check_type"] == "equals"
         assert result_dict_list[0]["actual_output"] == "output"
 
-    def test_evaluate_with_none_ids_and_metadata(self):
+    @pytest.mark.asyncio
+    async def test_evaluate_with_none_ids_and_metadata(self):
         """Test None IDs work with metadata parameter."""
         test_cases = [
             TestCase(input="test1", expected="out1"),
@@ -2772,7 +2858,7 @@ class TestTestCaseWithOptionalID:
             "purpose": "testing None IDs",
         }
 
-        result = evaluate(test_cases, outputs, checks, metadata=metadata)
+        result = await evaluate(test_cases, outputs, checks, metadata=metadata)
 
         assert result.status == 'completed'
         assert result.metadata == metadata

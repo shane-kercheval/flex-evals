@@ -17,7 +17,7 @@ from flex_evals import (
     EvaluationContext,
     CheckType,
     Status,
-    evaluate,
+    evaluate_sync,
     Check,
     ValidationError,
     TestCase,
@@ -127,7 +127,7 @@ class TestAttributeExistsEngineIntegration:
         ]
 
         # Run evaluation
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
@@ -156,7 +156,7 @@ class TestAttributeExistsEngineIntegration:
         ]
 
         # Run evaluation
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
@@ -186,7 +186,7 @@ class TestAttributeExistsEngineIntegration:
         ]
 
         # Run evaluation
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
@@ -216,7 +216,7 @@ class TestAttributeExistsEngineIntegration:
         ]
 
         # Run evaluation
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
@@ -252,7 +252,7 @@ class TestAttributeExistsEngineIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_attribute_exists_nested_path_missing(self):
@@ -282,7 +282,7 @@ class TestAttributeExistsEngineIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": False}
 
     def test_attribute_exists_various_data_types(self):
@@ -311,7 +311,7 @@ class TestAttributeExistsEngineIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         # All checks should pass
         for i in range(5):
@@ -348,7 +348,7 @@ class TestAttributeExistsEngineIntegration:
 
         outputs = [Output(value=output_value)]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
@@ -381,7 +381,7 @@ class TestAttributeExistsErrorHandling:
 
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match=r"Check arguments validation failed"):
-            evaluate(test_cases, outputs)
+            evaluate_sync(test_cases, outputs)
 
     def test_attribute_exists_missing_path_argument(self):
         """Test missing path argument raises validation error."""
@@ -407,7 +407,7 @@ class TestAttributeExistsErrorHandling:
 
         # Should raise validation error for missing required field
         with pytest.raises(ValidationError, match=r"Check arguments validation failed"):
-            evaluate(test_cases, outputs)
+            evaluate_sync(test_cases, outputs)
 
     def test_attribute_exists_required_fields(self):
         """Test that required fields are enforced."""

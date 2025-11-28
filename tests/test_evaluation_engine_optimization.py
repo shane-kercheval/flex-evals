@@ -433,7 +433,8 @@ class TestConvertCheckInput:
         assert converted is base_check
         assert converted.metadata == {"custom": "value", "test": True}
 
-    def test_convert_check_input_metadata_integration_with_evaluation(self):
+    @pytest.mark.asyncio
+    async def test_convert_check_input_metadata_integration_with_evaluation(self):
         """Test metadata flows through the entire evaluation pipeline."""
         # Create test case and output
         test_case = TestCase(id="meta-test", input="test input")
@@ -448,7 +449,7 @@ class TestConvertCheckInput:
         )
 
         # Run evaluation
-        result = evaluate([test_case], [output], [check])
+        result = await evaluate([test_case], [output], [check])
 
         # Verify metadata appears in results
         check_result = result.results[0].check_results[0]
@@ -456,7 +457,8 @@ class TestConvertCheckInput:
         assert check_result.metadata["experiment"] == "metadata_test"
         assert check_result.metadata["version"] == "v2.1"
 
-    def test_flatten_unflatten_end_to_end(self):
+    @pytest.mark.asyncio
+    async def test_flatten_unflatten_end_to_end(self):
         """Test end-to-end flattening and unflattening with actual evaluation."""
         # Register async check
         register("async_sleep")(AsyncSleepCheck)
@@ -501,7 +503,7 @@ class TestConvertCheckInput:
         ]
 
         # Run evaluation (uses flatten/unflatten internally)
-        result = evaluate(test_cases, outputs)
+        result = await evaluate(test_cases, outputs)
 
         # Verify results
         assert result.status == "completed"
@@ -532,7 +534,8 @@ class TestConvertCheckInput:
 class TestPerformanceOptimization:
     """Test performance improvements from the optimization."""
 
-    def test_async_checks_run_concurrently_across_test_cases(self):
+    @pytest.mark.asyncio
+    async def test_async_checks_run_concurrently_across_test_cases(self):
         """Test that async checks run concurrently across all test cases."""
         # Register async check
         register("async_sleep")(AsyncSleepCheck)
@@ -557,7 +560,7 @@ class TestPerformanceOptimization:
 
         # Measure execution time
         start_time = time.time()
-        result = evaluate(test_cases, outputs, checks)
+        result = await evaluate(test_cases, outputs, checks)
         end_time = time.time()
 
         total_time = end_time - start_time
@@ -578,7 +581,8 @@ class TestPerformanceOptimization:
             assert check_result.status == "completed"
             assert abs(check_result.results["slept_for"] - sleep_duration) < 0.05
 
-    def test_sync_checks_have_no_async_overhead(self):
+    @pytest.mark.asyncio
+    async def test_sync_checks_have_no_async_overhead(self):
         """Test that sync-only evaluations don't create event loops."""
         # Create many test cases with sync checks
         num_test_cases = 200
@@ -603,7 +607,7 @@ class TestPerformanceOptimization:
         # This should be fast as no event loop is created
         # With caching fix, 200 test cases should complete in well under 1 second
         start_time = time.time()
-        result = evaluate(test_cases, outputs, checks)
+        result = await evaluate(test_cases, outputs, checks)
         end_time = time.time()
 
         total_time = end_time - start_time
@@ -638,7 +642,8 @@ class TestPerformanceOptimization:
                     f"got error: {check_result.error}"
                 )
 
-    def test_max_async_concurrent_applies_globally(self):
+    @pytest.mark.asyncio
+    async def test_max_async_concurrent_applies_globally(self):
         """Test that max_async_concurrent limits concurrency across all test cases."""
         # Register async check
         register("async_sleep")(AsyncSleepCheck)
@@ -663,7 +668,7 @@ class TestPerformanceOptimization:
 
         # Measure execution time with concurrency limit
         start_time = time.time()
-        result = evaluate(test_cases, outputs, checks, max_async_concurrent=max_concurrent)
+        result = await evaluate(test_cases, outputs, checks, max_async_concurrent=max_concurrent)
         end_time = time.time()
 
         total_time = end_time - start_time
@@ -678,7 +683,8 @@ class TestPerformanceOptimization:
         assert result.status == "completed"
         assert result.summary.completed_test_cases == num_test_cases
 
-    def test_complex_per_test_case_performance(self):
+    @pytest.mark.asyncio
+    async def test_complex_per_test_case_performance(self):
         """Test performance with complex per-test-case check scenarios."""
         # Register async check
         register("async_sleep")(AsyncSleepCheck)
@@ -726,7 +732,7 @@ class TestPerformanceOptimization:
 
         # Measure execution time
         start_time = time.time()
-        result = evaluate(test_cases, outputs)
+        result = await evaluate(test_cases, outputs)
         end_time = time.time()
 
         total_time = end_time - start_time
