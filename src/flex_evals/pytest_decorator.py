@@ -16,7 +16,7 @@ from functools import wraps
 
 import pytest
 
-from .engine import evaluate as engine_evaluate
+from .engine import evaluate as evaluate_async, evaluate_sync
 from .schemas import TestCase, Output, Check, CheckResult
 
 F = TypeVar('F', bound=Callable[..., Any])
@@ -114,10 +114,10 @@ def evaluate(  # noqa: PLR0915
             )
 
 
-        def _evaluate_results(expanded_test_cases, outputs, exceptions) -> None:  # noqa: ANN001
-            """Evaluate results and check success threshold."""
+        def _evaluate_results_sync(expanded_test_cases, outputs, exceptions) -> None:  # noqa: ANN001
+            """Evaluate results and check success threshold (synchronous)."""
             try:
-                evaluation_result = engine_evaluate(
+                evaluation_result = evaluate_sync(
                     test_cases=expanded_test_cases,
                     outputs=outputs,
                     checks=checks,
@@ -125,6 +125,23 @@ def evaluate(  # noqa: PLR0915
             except Exception as e:
                 pytest.fail(f"Evaluation failed: {e}")
 
+            _process_evaluation_result(evaluation_result, exceptions)
+
+        async def _evaluate_results_async(expanded_test_cases, outputs, exceptions) -> None:  # noqa: ANN001
+            """Evaluate results and check success threshold (asynchronous)."""
+            try:
+                evaluation_result = await evaluate_async(
+                    test_cases=expanded_test_cases,
+                    outputs=outputs,
+                    checks=checks,
+                )
+            except Exception as e:
+                pytest.fail(f"Evaluation failed: {e}")
+
+            _process_evaluation_result(evaluation_result, exceptions)
+
+        def _process_evaluation_result(evaluation_result, exceptions) -> None:  # noqa: ANN001
+            """Process evaluation result and check success threshold."""
             # Calculate sample-based success rate
             num_test_cases_per_sample = len(test_cases)
             passed_samples = 0
@@ -201,7 +218,7 @@ def evaluate(  # noqa: PLR0915
                     outputs.append(Output(value=result, metadata=metadata))
                     exceptions.append(None)
 
-            _evaluate_results(expanded_test_cases, outputs, exceptions)
+            await _evaluate_results_async(expanded_test_cases, outputs, exceptions)
 
         def _execute_sync_calls(expanded_test_cases, args, kwargs) -> None:  # noqa: ANN001
             """Execute sync function calls sequentially."""
@@ -224,7 +241,7 @@ def evaluate(  # noqa: PLR0915
                     outputs.append(_create_error_output(e, duration))
                     exceptions.append(e)
 
-            _evaluate_results(expanded_test_cases, outputs, exceptions)
+            _evaluate_results_sync(expanded_test_cases, outputs, exceptions)
 
         async def _resolve_async_fixtures(kwargs: dict) -> dict:
             """

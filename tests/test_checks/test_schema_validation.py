@@ -22,7 +22,7 @@ from flex_evals import (
     EvaluationContext,
     CheckType,
     Status,
-    evaluate,
+    evaluate_sync,
     Check,
     ValidationError,
     TestCase,
@@ -322,7 +322,7 @@ class TestSchemaCheckEngineIntegration:
         ]
 
         outputs = [Output(value=VALID_DATA_DICT)]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
@@ -352,7 +352,7 @@ class TestSchemaCheckEngineIntegration:
         ]
 
         outputs = [Output(value=INVALID_DATA_DICT)]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
@@ -361,7 +361,7 @@ class TestSchemaCheckEngineIntegration:
         assert results.results[0].check_results[0].results["passed"] is False
         assert results.results[0].check_results[0].results["validation_errors"] is not None
 
-    def test_schema_check_instance_via_evaluate(self) -> None:
+    def test_schema_check_instance_via_evaluate_sync(self) -> None:
         """Test direct SchemaCheck instance usage in evaluate function."""
         test_cases = [
             TestCase(
@@ -378,14 +378,14 @@ class TestSchemaCheckEngineIntegration:
         ]
 
         outputs = [Output(value=VALID_DATA_DICT)]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results["passed"] is True
 
-    def test_schema_check_json_string_via_evaluate(self) -> None:
+    def test_schema_check_json_string_via_evaluate_sync(self) -> None:
         """Test SchemaCheck with JSON string inputs through engine."""
         test_cases = [
             TestCase(
@@ -408,7 +408,7 @@ class TestSchemaCheckEngineIntegration:
         ]
 
         outputs = [Output(value="dummy")]  # Not used in this test
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results["passed"] is True
 
@@ -472,7 +472,7 @@ class TestSchemaCheckEngineIntegration:
         ]
 
         outputs = [Output(value=valid_nested_data)]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results["passed"] is True
 
@@ -548,7 +548,7 @@ class TestSchemaCheckErrorHandling:
 
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
-            evaluate(test_cases, outputs)
+            evaluate_sync(test_cases, outputs)
 
     def test_schema_check_default_results(self) -> None:
         """Test that default_results property returns correct structure."""
@@ -594,7 +594,7 @@ class TestSchemaCheckJSONPathIntegration:
         ]
 
         outputs = [Output(value="dummy")]  # Not used in this test
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results["passed"] is True
 
@@ -624,6 +624,6 @@ class TestSchemaCheckJSONPathIntegration:
         ]
 
         outputs = [Output(value="dummy")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results["passed"] is True

@@ -18,7 +18,7 @@ from flex_evals import (
     EvaluationContext,
     CheckType,
     Status,
-    evaluate,
+    evaluate_sync,
     Check,
     ValidationError,
     TestCase,
@@ -226,7 +226,7 @@ class TestExactMatchEngineIntegration:
         ("London", "Paris", False),  # Different values should fail
         ("", "", True),  # Empty strings should match
     ])
-    def test_exact_match_via_evaluate(
+    def test_exact_match_via_evaluate_sync(
         self, output_value: str, expected_value: str, expected_passed: bool,
     ):
         """Test using JSONPath for actual and expected values with various combinations."""
@@ -252,7 +252,7 @@ class TestExactMatchEngineIntegration:
             Output(value=output_value),
         ]
         # Run evaluation
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.summary.error_test_cases == 0
@@ -260,7 +260,7 @@ class TestExactMatchEngineIntegration:
         assert results.results[0].check_results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": expected_passed}
 
-    def test_exact_match_check_instance_via_evaluate(self):
+    def test_exact_match_check_instance_via_evaluate_sync(self):
         """Test direct check instance usage in evaluate function."""
         # Test with check instance instead of Check dataclass
         test_cases = [
@@ -278,14 +278,14 @@ class TestExactMatchEngineIntegration:
         ]
 
         outputs = [Output(value="Paris")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": True}
 
-    def test_exact_match_with_case_insensitive_via_evaluate(self):
+    def test_exact_match_with_case_insensitive_via_evaluate_sync(self):
         """Test case insensitive matching through engine evaluation."""
         test_cases = [
             TestCase(
@@ -306,11 +306,11 @@ class TestExactMatchEngineIntegration:
         ]
 
         outputs = [Output(value="Paris")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results == {"passed": True}
 
-    def test_exact_match_with_negate_via_evaluate(self):
+    def test_exact_match_with_negate_via_evaluate_sync(self):
         """Test negation through engine evaluation."""
         test_cases = [
             TestCase(
@@ -331,7 +331,7 @@ class TestExactMatchEngineIntegration:
         ]
 
         outputs = [Output(value="Paris")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -383,7 +383,7 @@ class TestExactMatchErrorHandling:
 
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
-            evaluate(test_cases, outputs)
+            evaluate_sync(test_cases, outputs)
 
     def test_exact_match_complex_data_types(self):
         """Test exact match with complex data types."""
@@ -441,7 +441,7 @@ class TestExactMatchJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_exact_match_array_access_jsonpath(self):
@@ -470,7 +470,7 @@ class TestExactMatchJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_exact_match_missing_jsonpath_data(self):
@@ -493,7 +493,7 @@ class TestExactMatchJSONPathIntegration:
 
         outputs = [Output(value={"response": "test"})]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         # Should result in error when JSONPath resolution fails
         assert results.results[0].status == Status.ERROR
         # Missing JSONPath data now causes errors rather than silent failures

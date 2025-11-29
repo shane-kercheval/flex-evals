@@ -19,7 +19,7 @@ from flex_evals import (
     EvaluationContext,
     CheckType,
     Status,
-    evaluate,
+    evaluate_sync,
     Check,
     ValidationError,
     TestCase,
@@ -266,7 +266,7 @@ class TestRegexEngineIntegration:
         ("user@test.com", "@", True),     # Contains @
         ("user.test.com", "@", False),    # No @
     ])
-    def test_regex_via_evaluate(
+    def test_regex_via_evaluate_sync(
         self, output_value: str, pattern: str, expected_passed: bool,
     ):
         """Test using JSONPath for text and pattern with various combinations."""
@@ -288,7 +288,7 @@ class TestRegexEngineIntegration:
         ]
 
         outputs = [Output(value=output_value)]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
@@ -297,7 +297,7 @@ class TestRegexEngineIntegration:
         assert results.results[0].check_results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": expected_passed}
 
-    def test_regex_check_instance_via_evaluate(self):
+    def test_regex_check_instance_via_evaluate_sync(self):
         """Test direct check instance usage in evaluate function."""
         test_cases = [
             TestCase(
@@ -313,14 +313,14 @@ class TestRegexEngineIntegration:
         ]
 
         outputs = [Output(value={"message": "An error occurred during processing"})]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
         assert results.results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results == {"passed": True}
 
-    def test_regex_flags_via_evaluate(self):
+    def test_regex_flags_via_evaluate_sync(self):
         """Test regex flags through engine evaluation."""
         test_cases = [
             TestCase(
@@ -344,12 +344,12 @@ class TestRegexEngineIntegration:
         ]
 
         outputs = [Output(value="hello world")]  # Lowercase
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         # Should pass due to case_insensitive=True
         assert results.results[0].check_results[0].results == {"passed": True}
 
-    def test_regex_negate_via_evaluate(self):
+    def test_regex_negate_via_evaluate_sync(self):
         """Test negation through engine evaluation."""
         test_cases = [
             TestCase(
@@ -369,7 +369,7 @@ class TestRegexEngineIntegration:
         ]
 
         outputs = [Output(value="hello world")]  # No digits
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results == {"passed": True}
 
@@ -399,7 +399,7 @@ class TestRegexErrorHandling:
 
         # Should raise validation error for invalid JSONPath
         with pytest.raises(ValidationError, match="Invalid JSONPath expression"):
-            evaluate(test_cases, outputs)
+            evaluate_sync(test_cases, outputs)
 
     def test_regex_missing_jsonpath_data(self):
         """Test behavior when JSONPath doesn't find data."""
@@ -421,7 +421,7 @@ class TestRegexErrorHandling:
 
         outputs = [Output(value={"response": "test"})]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         # Should result in error when JSONPath resolution fails
         assert results.results[0].status == Status.ERROR
         # Missing JSONPath data now causes errors rather than silent failures
@@ -479,7 +479,7 @@ class TestRegexJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_regex_array_access_jsonpath(self):
@@ -509,7 +509,7 @@ class TestRegexJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_regex_complex_text_processing(self):
@@ -542,7 +542,7 @@ class TestRegexJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}
 
     def test_regex_unicode_and_special_characters(self):
@@ -570,5 +570,5 @@ class TestRegexJSONPathIntegration:
             }),
         ]
 
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
         assert results.results[0].check_results[0].results == {"passed": True}

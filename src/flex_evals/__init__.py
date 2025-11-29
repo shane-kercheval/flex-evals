@@ -5,7 +5,7 @@ A vendor-neutral, schema-driven standard for measuring the quality of any system
 that produces complex or variable outputs.
 """
 
-from .engine import evaluate
+from .engine import evaluate, evaluate_sync
 from .constants import CheckType, Status, ErrorType, SimilarityMetric
 # Import checks to trigger registration of standard checks
 from . import checks  # noqa: F401
@@ -87,6 +87,7 @@ __all__ = [
     "ValidationError",
     # Core evaluation functionality
     "evaluate",
+    "evaluate_sync",
     # Schema generators
     "generate_check_schema",
     "generate_checks_schema",

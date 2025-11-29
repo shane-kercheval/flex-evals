@@ -20,7 +20,7 @@ from flex_evals import (
     JSONPath,
     CheckType,
     Status,
-    evaluate,
+    evaluate_sync,
     Check,
     Output,
     TestCase,
@@ -277,7 +277,7 @@ class TestLLMJudgeExecution:
 class TestLLMJudgeEngineIntegration:
     """Test LLMJudgeCheck integration with the evaluation engine."""
 
-    def test_llm_judge_via_evaluate(self):
+    def test_llm_judge_via_evaluate_sync(self):
         """Test LLM judge through engine evaluation."""
         def mock_llm_function(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict]:  # noqa: ARG001, E501
             # Simple evaluation based on content
@@ -305,7 +305,7 @@ class TestLLMJudgeEngineIntegration:
         ]
 
         outputs = [Output(value="Good quality response")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
@@ -314,7 +314,7 @@ class TestLLMJudgeEngineIntegration:
         assert results.results[0].check_results[0].status == Status.COMPLETED
         assert results.results[0].check_results[0].results["passed"] is True
 
-    def test_llm_judge_check_instance_via_evaluate(self):
+    def test_llm_judge_check_instance_via_evaluate_sync(self):
         """Test direct check instance usage in evaluate function."""
         def mock_llm_function(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict]:  # noqa: ARG001, E501
             return JudgeResponse(
@@ -338,7 +338,7 @@ class TestLLMJudgeEngineIntegration:
         ]
 
         outputs = [Output(value="Poor quality response")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
@@ -346,7 +346,7 @@ class TestLLMJudgeEngineIntegration:
         assert results.results[0].check_results[0].results["passed"] is False
         assert results.results[0].check_results[0].results["confidence"] == 0.8
 
-    def test_llm_judge_template_via_evaluate(self):
+    def test_llm_judge_template_via_evaluate_sync(self):
         """Test template processing through engine evaluation."""
         def mock_llm_function(prompt: str, response_format: type[BaseModel]) -> tuple[BaseModel, dict]:  # noqa: ARG001, E501
             # Check that template was processed correctly
@@ -376,7 +376,7 @@ class TestLLMJudgeEngineIntegration:
         ]
 
         outputs = [Output(value="test response")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results["passed"] is True
 
@@ -407,7 +407,7 @@ class TestLLMJudgeErrorHandling:
         ]
 
         outputs = [Output(value="test")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         # Should result in error when LLM function fails
         assert results.results[0].status == Status.ERROR
@@ -436,7 +436,7 @@ class TestLLMJudgeErrorHandling:
         ]
 
         outputs = [Output(value="test")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         # Should result in error when template processing fails
         assert results.results[0].status == Status.ERROR
@@ -480,7 +480,7 @@ class TestLLMJudgeErrorHandling:
         ]
 
         outputs = [Output(value={"response": "test"})]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         # Should result in error when JSONPath resolution fails in template
         assert results.results[0].status == Status.ERROR
@@ -517,7 +517,7 @@ class TestLLMJudgeTemplateProcessing:
         ]
 
         outputs = [Output(value="test response")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results["passed"] is True
 
@@ -550,7 +550,7 @@ class TestLLMJudgeTemplateProcessing:
             "user": {"name": "Alice", "role": "admin"},
             "scores": [95, 87, 92],
         })]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results["passed"] is True
 
@@ -578,7 +578,7 @@ class TestLLMJudgeTemplateProcessing:
         ]
 
         outputs = [Output(value="test")]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.results[0].check_results[0].results["passed"] is True
 
@@ -672,7 +672,7 @@ class TestLLMJudgeComputedFields:
         ]
 
         outputs = [Output(value='High quality response')]
-        results = evaluate(test_cases, outputs)
+        results = evaluate_sync(test_cases, outputs)
 
         assert results.summary.total_test_cases == 1
         assert results.summary.completed_test_cases == 1
