@@ -28,8 +28,8 @@ outputs = [
     Output(value="The capital of France is Paris."),
 ]
 
-# Run evaluation
-results = evaluate(test_cases, outputs)
+# Run evaluation (async)
+results = await evaluate(test_cases, outputs)
 print(f"Evaluation completed: {results.status}")
 print(f"Passed: {results.results[0].check_results[0].results['passed']}")
 ```
@@ -219,7 +219,7 @@ checks = [
     ),
 ]
 
-results = evaluate(test_cases, outputs, checks)
+results = await evaluate(test_cases, outputs, checks)
 ```
 
 ### **Pattern 1: Shared Checks (1-to-Many)**
@@ -244,7 +244,7 @@ checks = [
     )
 ]
 
-results = evaluate(test_cases, outputs, checks)
+results = await evaluate(test_cases, outputs, checks)
 ```
 
 ### **Pattern 2: Per-Test-Case Checks (1-to-1)**
@@ -280,7 +280,7 @@ outputs = [
 ]
 
 # No global checks needed - using per-test-case checks
-results = evaluate(test_cases, outputs, checks=None)
+results = await evaluate(test_cases, outputs, checks=None)
 ```
 
 ## JSONPath Support
@@ -381,7 +381,7 @@ with open('test_cases.yaml', 'r') as f:
 checks = [Check(**check_config) for check_config in config['checks']]
 
 # Use in evaluation
-results = evaluate(test_cases, outputs, checks)
+results = await evaluate(test_cases, outputs, checks)
 ```
 
 See [example_yaml_test_cases.ipynb](examples/example_yaml_test_cases.ipynb) for comprehensive YAML configuration examples.
@@ -522,7 +522,7 @@ checks = [
 # 1. Detects async checks  
 # 2. Runs all async checks in event loop
 # 3. Maintains proper result ordering after execution
-results = evaluate(test_cases, outputs, checks)
+results = await evaluate(test_cases, outputs, checks)
 ```
 
 ### **Custom Async Checks**
@@ -847,7 +847,7 @@ def test_my_check_with_jsonpath():
         )
     ]
     
-    results = evaluate(test_cases, outputs, checks)
+    results = await evaluate(test_cases, outputs, checks)
     assert results.results[0].check_results[0].status == 'completed'
 ```
 
