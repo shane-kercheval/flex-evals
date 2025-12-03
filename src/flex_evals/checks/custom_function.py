@@ -1,131 +1,132 @@
 """Custom Function Check - executes user-provided python functions with JSONPath support."""
 
 import asyncio
-from datetime import datetime, UTC
 from typing import Any
-from collections.abc import Callable
-from collections.abc import Mapping
-from pydantic import Field
+from collections.abc import Callable, Mapping
+from pydantic import Field, field_validator
 
-from .base import BaseAsyncCheck, EvaluationContext, JSONPath
+from .base import BaseAsyncCheck, JSONPath, _convert_to_jsonpath, EvaluationContext
 from ..registry import register
 from ..exceptions import ValidationError, CheckExecutionError
-from ..schemas import CheckResult
 from ..constants import CheckType
 from ..utils.jsonpath_resolver import resolve_argument
 
 
 @register(CheckType.CUSTOM_FUNCTION, version='1.0.0')
 class CustomFunctionCheck(BaseAsyncCheck):
-    """Executes user-provided python validation functions."""
+    """
+    Executes user-provided python validation functions.
 
-    # Pydantic fields with validation - function_args can contain JSONPath objects
-    validation_function: Any = Field(
+    This check supports both sync and async validation functions, which can be provided as:
+    - Direct callables (functions or lambdas)
+    - String function definitions (lambda or named functions)
+    - JSONPath expressions that resolve to either of the above
+
+    Special JSONPath handling:
+        In addition to standard JSONPath support at the field level, this check also resolves
+        JSONPath strings within the function_args dictionary values. For example:
+
+            CustomFunctionCheck(
+                validation_function=my_func,
+                function_args={
+                    "text": "$.output.value",      # JSONPath string resolved at runtime
+                    "expected": "$.test_case.expected",
+                    "threshold": 0.95,              # Regular literal value
+                }
+            )
+
+    Known limitation:
+        The resolved_arguments field in CheckResult shows the original function_args dict
+        with JSONPath strings, not the final resolved values. The actual resolution happens
+        during execution and the resolved values are used correctly, but they are not
+        captured in the resolved_arguments metadata. This is a known trade-off for the
+        flexibility of supporting JSONPath strings within dict values.
+
+    Returns:
+        The validation function must return a dict containing the check results.
+        Common pattern: {'passed': bool, ...additional fields...}
+    """
+
+    # Pydantic fields with validation - can be literals or JSONPath objects
+    validation_function: str | Callable[..., Any] | JSONPath = Field(
         ...,
-        description="User-provided function or string function definition",
+        description=(
+            "Function returning dict (sync or async), string function definition, or JSONPath"
+        ),
     )
-    function_args: dict[str, Any] = Field(
-        ...,
-        description="Arguments to pass to validation_function (JSONPath expressions supported)",
+    function_args: dict[str, Any] | JSONPath = Field(
+        default_factory=dict,
+        description="Arguments to pass to validation_function or JSONPath to dict",
     )
+
+    @field_validator('validation_function', 'function_args', mode='before')
+    @classmethod
+    def convert_jsonpath(cls, value: object) -> object | JSONPath:
+        """Convert JSONPath-like strings to JSONPath objects."""
+        return _convert_to_jsonpath(value)
 
     @property
     def default_results(self) -> dict[str, Any]:
         """Return default results structure for custom_function checks on error."""
         return {}
 
-    async def execute(
-        self,
-        check_type: str,
-        arguments: dict[str, Any],
-        context: EvaluationContext,
-        check_metadata: dict[str, Any] | None = None,
-    ) -> CheckResult:
+    def resolve_fields(self, context: EvaluationContext) -> dict[str, Any]:
         """
-        Execute custom function check with JSONPath resolution for function_args.
+        Resolve JSONPath fields including JSONPath strings within function_args dict.
 
-        This method overrides the base class execute() to handle JSONPath resolution
-        within the function_args dictionary before delegating to the parent class.
+        This override handles the special case where function_args is a dict containing
+        JSONPath strings as values (e.g., {"text": "$.output.value"}).
         """
-        # Get version from registry using the class
-        check_version = self._get_version()
+        # First, resolve any top-level JSONPath fields normally
+        resolved_arguments = super().resolve_fields(context)
 
-        # Validate that function_args is provided and is a dict
-        if "function_args" not in arguments:
-            return self._create_error_result(
-                check_type=check_type,
-                error_type='validation_error',
-                error_message="function_args is required for custom_function checks",
-                resolved_arguments={},
-                evaluated_at=datetime.now(UTC),
-                check_version=check_version,
-                check_metadata=check_metadata,
-            )
-
-        if not isinstance(arguments["function_args"], dict):
-            return self._create_error_result(
-                check_type=check_type,
-                error_type='validation_error',
-                error_message="function_args must be a dictionary",
-                resolved_arguments={},
-                evaluated_at=datetime.now(UTC),
-                check_version=check_version,
-                check_metadata=check_metadata,
-            )
-
-        # Process function_args JSONPath expressions
-        try:
-            # Resolve JSONPath expressions in function_args
+        # Special handling: if function_args is a dict (not JSONPath), check for JSONPath strings
+        if isinstance(self.function_args, dict):
             resolved_function_args = {}
-            for key, value in arguments["function_args"].items():
+            for key, value in self.function_args.items():
                 if isinstance(value, str) and value.startswith("$."):
-                    # This looks like a JSONPath expression
-                    resolved_result = resolve_argument(value, context.context_dict)
-                    resolved_function_args[key] = resolved_result["value"]
+                    # This is a JSONPath string - resolve it
+                    try:
+                        resolved_result = resolve_argument(value, context.context_dict)
+                        resolved_function_args[key] = resolved_result["value"]
+                    except Exception as e:
+                        # Let the error propagate naturally
+                        raise ValidationError(
+                            f"Failed to resolve JSONPath in function_args['{key}']: {e}",
+                        ) from e
                 else:
-                    # Not a JSONPath expression, use as-is
+                    # Not a JSONPath string, use as-is
                     resolved_function_args[key] = value
 
-            # Create modified arguments with resolved function_args
-            modified_arguments = arguments.copy()
-            modified_arguments["function_args"] = resolved_function_args
+            # Update the function_args with resolved values
+            self.function_args = resolved_function_args
 
-        except Exception as e:
-            # JSONPath resolution failed - return error result
-            return self._create_error_result(
-                check_type=check_type,
-                error_type='jsonpath_error',
-                error_message=f"Error resolving function_args: {e}",
-                resolved_arguments={},
-                evaluated_at=datetime.now(UTC),
-                check_version=check_version,
-                check_metadata=check_metadata,
-            )
+        return resolved_arguments
 
-        # Delegate to parent class for standard execution
-        return await super().execute(
-            check_type,
-            modified_arguments,
-            context,
-            check_metadata,
-        )
-
-    async def __call__(self) -> Any:  # noqa: ANN401
+    async def __call__(self) -> dict[str, Any]:
         """
         Execute custom function check using resolved Pydantic fields.
 
         All JSONPath objects should have been resolved by execute() before this is called.
 
         Returns:
-            Whatever the validation function returns (no processing or structure imposed)
+            Dictionary with results from the validation function
 
         Raises:
-            RuntimeError: If function_args contains unresolved JSONPath objects
+            RuntimeError: If any field contains unresolved JSONPath objects
+            ValidationError: If validation_function is invalid or result is not a dict
+            CheckExecutionError: If function execution fails
         """
-        # Validate that function_args doesn't contain unresolved JSONPath objects
-        for key, value in self.function_args.items():
-            if isinstance(value, JSONPath):
-                raise RuntimeError(f"JSONPath not resolved for function_args['{key}']: {value}")
+        # Validate that all fields are resolved (no JSONPath objects remain)
+        if isinstance(self.validation_function, JSONPath):
+            raise RuntimeError(
+                f"JSONPath not resolved for 'validation_function' field: "
+                f"{self.validation_function}",
+            )
+        if isinstance(self.function_args, JSONPath):
+            raise RuntimeError(
+                f"JSONPath not resolved for 'function_args' field: {self.function_args}",
+            )
 
         # Convert string function to callable if needed
         if isinstance(self.validation_function, str):
@@ -137,7 +138,7 @@ class CustomFunctionCheck(BaseAsyncCheck):
         else:
             validation_function = self.validation_function
 
-        # Prepare function arguments (these are already resolved values from JSONPath)
+        # Validate function_args is a dictionary
         if not isinstance(self.function_args, Mapping):
             raise ValidationError("function_args must be a dictionary")
         fn_kwargs = dict(self.function_args)
@@ -149,9 +150,17 @@ class CustomFunctionCheck(BaseAsyncCheck):
             else:
                 result = validation_function(**fn_kwargs)
 
-            # Return whatever the function returned - no processing
+            # Validate that result is a dictionary
+            if not isinstance(result, dict):
+                raise ValidationError(
+                    f"Validation function must return dict, got {type(result).__name__}",
+                )
+
             return result
 
+        except ValidationError:
+            # Re-raise ValidationError as-is
+            raise
         except Exception as e:
             raise CheckExecutionError(f"Error executing validation function: {e!s}") from e
 
