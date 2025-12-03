@@ -519,10 +519,10 @@ class TestJSONPathBehaviorRealWorldValidation:
         assert behavior is None
 
     def test_custom_function_check_dict_args(self):
-        """Test Custom Function check's dict field (not JSONPath union)."""
-        # function_args: dict[str, Any] (no JSONPath union)
+        """Test Custom Function check's dict field with JSONPath union."""
+        # function_args: dict[str, Any] | JSONPath (optional)
         behavior = get_jsonpath_behavior(CustomFunctionCheck, 'function_args')
-        assert behavior is None
+        assert behavior == JSONPathBehavior.OPTIONAL
 
     def test_all_basic_check_text_fields(self):
         """Test that all basic checks have correct JSONPath behavior for text fields."""
