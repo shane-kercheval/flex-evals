@@ -583,6 +583,78 @@ class TestLLMJudgeTemplateProcessing:
         assert results.results[0].check_results[0].results["passed"] is True
 
 
+class TestLLMJudgeJSONPathPromptWithTemplates:
+    """Test JSONPath prompt resolution with nested template placeholders."""
+
+    def test_jsonpath_prompt_with_nested_templates(self):
+        """
+        This reproduces an issue found a prompt was referenced via JSONPath, but contain
+        template placeholders (also JSONPath) that weren't being interpolated. This tests that
+        JSONPath-resolved prompts still process template placeholders.
+
+        This tests the scenario where:
+        1. The prompt field is a JSONPath reference (e.g., $.test_case.expected.prompt_template)
+        2. The resolved prompt string contains template placeholders (e.g., {{$.output.value}})
+        3. Those nested templates should be processed after JSONPath resolution
+        """
+        def mock_llm_function(prompt: str, _: type[BaseModel]) -> tuple[BaseModel, dict]:
+            # Verify that the nested templates were processed
+            assert "test source document" in prompt, f"Expected source document in prompt, got: {prompt}"  # noqa: E501
+            assert "test output value" in prompt, f"Expected output value in prompt, got: {prompt}"
+            # Should not contain unresolved template markers
+            assert "{{$." not in prompt, f"Unresolved template found in prompt: {prompt}"
+
+            return JudgeResponse(
+                passed=True,
+                confidence=0.95,
+                reasoning="Nested templates processed correctly",
+            ), {}
+
+        # Define a prompt template with placeholders (like in definitions)
+        prompt_template = """
+Evaluate the response against the source.
+
+**Source Document:**
+```
+{{$.test_case.expected.source_document}}
+```
+
+**AI Response:**
+```
+{{$.output.value}}
+```
+"""
+
+        test_cases = [
+            TestCase(
+                input="test input",
+                expected={
+                    "prompt_template": prompt_template,
+                    "source_document": "test source document",
+                },
+                checks=[
+                    Check(
+                        type=CheckType.LLM_JUDGE,
+                        arguments={
+                            # Use JSONPath to reference the prompt template
+                            "prompt": "$.test_case.expected.prompt_template",
+                            "response_format": JudgeResponse,
+                            "llm_function": mock_llm_function,
+                        },
+                    ),
+                ],
+            ),
+        ]
+
+        outputs = [Output(value="test output value")]
+        results = evaluate_sync(test_cases, outputs)
+
+        # Verify the check executed successfully
+        assert results.results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].status == Status.COMPLETED
+        assert results.results[0].check_results[0].results["passed"] is True
+
+
 class TestLLMJudgeComputedFields:
     """Test computed field functionality with LLMJudgeCheck."""
 

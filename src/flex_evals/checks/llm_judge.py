@@ -93,6 +93,26 @@ class LLMJudgeCheck(BaseAsyncCheck):
                 try:
                     prompt_result = resolve_argument(self.prompt.expression, context.context_dict)
                     prompt_to_use = prompt_result.get("value")
+
+                    # After resolving JSONPath, check if the resolved string contains template
+                    # placeholders and process them (nested template processing)
+                    if isinstance(prompt_to_use, str) and '{{$.' in prompt_to_use:
+                        try:
+                            prompt_to_use = self._process_prompt_template(
+                                template=prompt_to_use,
+                                context=context,
+                            )
+                        except JSONPathError as e:
+                            # Nested template processing failed - return error result
+                            return self._create_error_result(
+                                check_type=check_type,
+                                error_type='jsonpath_error',
+                                error_message=f"Error processing nested templates in JSONPath-resolved prompt: {e}",  # noqa: E501
+                                resolved_arguments={},
+                                evaluated_at=evaluated_at,
+                                check_version=check_version,
+                                check_metadata=check_metadata,
+                            )
                 except Exception as e:
                     return self._create_error_result(
                         check_type=check_type,
