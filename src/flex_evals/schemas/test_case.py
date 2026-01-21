@@ -26,6 +26,8 @@ class TestCase:
     - checks: Convenience extension of protocol for per-test-case pattern of checks
     """
 
+    __test__ = False  # Tell pytest this isn't a test class
+
     input: str | dict[str, Any] | list[Any] | Any
     id: str | None = None
     expected: str | dict[str, Any] | None = None
