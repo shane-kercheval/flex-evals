@@ -61,7 +61,7 @@ def evaluate(  # noqa: PLR0915
             the FLEX_EVALS_OUTPUT_DIR environment variable. If neither is set, results are
             not saved.
         metadata: Optional dictionary of metadata to include in the saved result. Keys
-            prefixed with ``_eval_`` are reserved for auto-captured data and will be
+            prefixed with ``_test_`` are reserved for auto-captured data and will be
             overwritten if provided.
 
     Returns:
@@ -146,18 +146,17 @@ def evaluate(  # noqa: PLR0915
                 failed = samples - passed
                 success_rate = passed / samples
 
-                serialized = evaluation_result.serialize()
-                serialized['metadata'] = {
-                    **(serialized.get('metadata') or {}),
+                evaluation_result.metadata = {
+                    **(evaluation_result.metadata or {}),
                     **(metadata or {}),
-                    '_eval_config': {
+                    '_test_config': {
                         'test_function': func.__name__,
                         'test_module': func.__module__,
                         'samples': samples,
                         'success_threshold': success_threshold,
                         'num_test_cases': num_tc,
                     },
-                    '_eval_results': {
+                    '_test_results': {
                         'passed_samples': passed,
                         'failed_samples': failed,
                         'total_samples': samples,
@@ -167,6 +166,7 @@ def evaluate(  # noqa: PLR0915
                     },
                 }
 
+                serialized = evaluation_result.serialize()
                 timestamp = datetime.now(UTC).isoformat().replace(':', '-')
                 filename = f"{timestamp}_{uuid.uuid4().hex[:8]}.json"
                 out_path = Path(effective_dir)

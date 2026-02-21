@@ -1547,7 +1547,7 @@ class TestEvaluateDecoratorResultPersistence:
         assert data["metadata"]["provider"] == "test"
 
     def test__auto_metadata_included(self, tmp_path: Path) -> None:
-        """Test that _eval_config auto-metadata is correctly populated."""
+        """Test that _test_config auto-metadata is correctly populated."""
         @evaluate(
             test_cases=[
                 TestCase(id="auto_meta_1", input="test"),
@@ -1567,7 +1567,7 @@ class TestEvaluateDecoratorResultPersistence:
         my_test_func()
 
         data = json.loads(next(tmp_path.glob("*.json")).read_text())
-        config = data["metadata"]["_eval_config"]
+        config = data["metadata"]["_test_config"]
         assert config["test_function"] == "my_test_func"
         assert isinstance(config["test_module"], str)
         assert config["test_module"]
@@ -1575,8 +1575,8 @@ class TestEvaluateDecoratorResultPersistence:
         assert config["success_threshold"] == 0.5
         assert config["num_test_cases"] == 2
 
-    def test__saved_file_contains_eval_results(self, tmp_path: Path) -> None:
-        """Test that _eval_results has correct pass/fail counts."""
+    def test__saved_file_contains_test_results(self, tmp_path: Path) -> None:
+        """Test that _test_results has correct pass/fail counts."""
         call_count = 0
 
         @evaluate(
@@ -1597,7 +1597,7 @@ class TestEvaluateDecoratorResultPersistence:
         mixed_func()
 
         data = json.loads(next(tmp_path.glob("*.json")).read_text())
-        results = data["metadata"]["_eval_results"]
+        results = data["metadata"]["_test_results"]
         assert results["passed_samples"] == 3
         assert results["failed_samples"] == 1
         assert results["total_samples"] == 4
@@ -1662,7 +1662,7 @@ class TestEvaluateDecoratorResultPersistence:
         json_files = list(tmp_path.glob("*.json"))
         assert len(json_files) == 1
         data = json.loads(json_files[0].read_text())
-        assert data["metadata"]["_eval_results"]["passed"] is False
+        assert data["metadata"]["_test_results"]["passed"] is False
 
     def test__env_var_output_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that FLEX_EVALS_OUTPUT_DIR env var is used as fallback."""
@@ -1733,7 +1733,7 @@ class TestEvaluateDecoratorResultPersistence:
         data = json.loads(json_files[0].read_text())
         assert "evaluation_id" in data
         assert "metadata" in data
-        assert data["metadata"]["_eval_results"]["passed"] is True
+        assert data["metadata"]["_test_results"]["passed"] is True
 
 
 class TestEvaluateDecoratorParametrizeIntegration:
