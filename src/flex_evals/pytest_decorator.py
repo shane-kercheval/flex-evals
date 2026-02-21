@@ -8,8 +8,14 @@ multiple times and validating success rates using existing flex-evals checks.
 import asyncio
 import concurrent.futures
 import inspect
+import json
+import os
 import time
 import traceback
+import uuid
+import warnings
+from datetime import datetime, UTC
+from pathlib import Path
 from typing import Any, TypeVar
 from collections.abc import Callable
 from functools import wraps
@@ -17,7 +23,7 @@ from functools import wraps
 import pytest
 
 from .engine import evaluate as evaluate_async, evaluate_sync
-from .schemas import TestCase, Output, Check, CheckResult
+from .schemas import TestCase, Output, Check, CheckResult, FlexEvalsJSONEncoder
 
 F = TypeVar('F', bound=Callable[..., Any])
 
@@ -27,6 +33,8 @@ def evaluate(  # noqa: PLR0915
     checks: list[Check] | None = None,
     samples: int = 1,
     success_threshold: float = 1.0,
+    output_dir: str | Path | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> Callable[[F], F]:
     """
     Pytest decorator for statistical evaluation of test functions.
@@ -49,6 +57,12 @@ def evaluate(  # noqa: PLR0915
             passes only if ALL its checks pass. For example, with 10 test cases (each with
             3 checks), samples=5, and success_threshold=0.6, at least 3 out of 5 samples
             must have all 10 test cases pass (with all 3 checks passing in each)
+        output_dir: Directory to save evaluation results as JSON. If None, falls back to
+            the FLEX_EVALS_OUTPUT_DIR environment variable. If neither is set, results are
+            not saved.
+        metadata: Optional dictionary of metadata to include in the saved result. Keys
+            prefixed with ``_eval_`` are reserved for auto-captured data and will be
+            overwritten if provided.
 
     Returns:
         Decorated function that performs statistical evaluation
@@ -114,6 +128,59 @@ def evaluate(  # noqa: PLR0915
             )
 
 
+        def _save_result_if_configured(evaluation_result) -> None:  # noqa: ANN001
+            """Save evaluation result to JSON if output_dir is configured."""
+            try:
+                effective_dir = output_dir if output_dir is not None else os.environ.get('FLEX_EVALS_OUTPUT_DIR')  # noqa: E501
+                if effective_dir is None:
+                    return
+
+                num_tc = len(test_cases)
+                passed = sum(
+                    1 for i in range(samples)
+                    if all(
+                        _check_sample_passed(tcr.check_results)
+                        for tcr in evaluation_result.results[i * num_tc:(i + 1) * num_tc]
+                    )
+                )
+                failed = samples - passed
+                success_rate = passed / samples
+
+                serialized = evaluation_result.serialize()
+                serialized['metadata'] = {
+                    **(serialized.get('metadata') or {}),
+                    **(metadata or {}),
+                    '_eval_config': {
+                        'test_function': func.__name__,
+                        'test_module': func.__module__,
+                        'samples': samples,
+                        'success_threshold': success_threshold,
+                        'num_test_cases': num_tc,
+                    },
+                    '_eval_results': {
+                        'passed_samples': passed,
+                        'failed_samples': failed,
+                        'total_samples': samples,
+                        'success_rate': success_rate,
+                        'success_threshold': success_threshold,
+                        'passed': success_rate >= success_threshold,
+                    },
+                }
+
+                timestamp = datetime.now(UTC).isoformat().replace(':', '-')
+                filename = f"{timestamp}_{uuid.uuid4().hex[:8]}.json"
+                out_path = Path(effective_dir)
+                out_path.mkdir(parents=True, exist_ok=True)
+                (out_path / filename).write_text(
+                    json.dumps(serialized, indent=2, cls=FlexEvalsJSONEncoder),
+                )
+            except Exception as e:
+                warnings.warn(
+                    f"Failed to save evaluation result: {e}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+
         def _evaluate_results_sync(expanded_test_cases, outputs, exceptions) -> None:  # noqa: ANN001
             """Evaluate results and check success threshold (synchronous)."""
             try:
@@ -125,6 +192,7 @@ def evaluate(  # noqa: PLR0915
             except Exception as e:
                 pytest.fail(f"Evaluation failed: {e}")
 
+            _save_result_if_configured(evaluation_result)
             _process_evaluation_result(evaluation_result, exceptions)
 
         async def _evaluate_results_async(expanded_test_cases, outputs, exceptions) -> None:  # noqa: ANN001
@@ -138,6 +206,7 @@ def evaluate(  # noqa: PLR0915
             except Exception as e:
                 pytest.fail(f"Evaluation failed: {e}")
 
+            _save_result_if_configured(evaluation_result)
             _process_evaluation_result(evaluation_result, exceptions)
 
         def _process_evaluation_result(evaluation_result, exceptions) -> None:  # noqa: ANN001
