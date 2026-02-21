@@ -8,7 +8,13 @@ CheckResult, TestCaseResult, and EvaluationRunResult.
 from .test_case import TestCase
 from .output import Output
 from .check import Check, CheckResult, CheckError
-from .results import TestCaseResult, TestCaseSummary, EvaluationRunResult, EvaluationSummary
+from .results import (
+    TestCaseResult,
+    TestCaseSummary,
+    EvaluationRunResult,
+    EvaluationSummary,
+    FlexEvalsJSONEncoder,
+)
 
 __all__ = [
     "Check",
@@ -16,6 +22,7 @@ __all__ = [
     "CheckResult",
     "EvaluationRunResult",
     "EvaluationSummary",
+    "FlexEvalsJSONEncoder",
     "Output",
     "TestCase",
     "TestCaseResult",

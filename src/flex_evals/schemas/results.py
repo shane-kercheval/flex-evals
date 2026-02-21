@@ -12,6 +12,44 @@ from flex_evals.schemas.output import Output
 from ..constants import Status
 
 
+class FlexEvalsJSONEncoder(json.JSONEncoder):
+    """JSON encoder that handles datetime, Pydantic models, and non-serializable objects."""
+
+    def default(self, obj: Any) -> Any:  # noqa: ANN401, PLR0911
+        """Convert non-serializable objects to JSON-compatible format."""
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+
+        # Handle classes/types FIRST (before checking for methods)
+        # Classes have methods like model_dump as unbound methods, which would
+        # pass hasattr/callable checks but fail when called without an instance
+        if isinstance(obj, type):
+            return f"<class {obj.__name__}>"
+
+        # Handle Pydantic models (v2 has model_dump, v1 has dict)
+        if hasattr(obj, 'model_dump') and callable(getattr(obj, 'model_dump')):
+            return obj.model_dump()
+        if hasattr(obj, 'dict') and callable(getattr(obj, 'dict')):
+            # Pydantic v1 compatibility
+            return obj.dict()
+
+        # Handle objects with common dict conversion methods
+        if hasattr(obj, 'to_dict') and callable(getattr(obj, 'to_dict')):
+            return obj.to_dict()
+        if hasattr(obj, 'todict') and callable(getattr(obj, 'todict')):
+            return obj.todict()
+
+        # Handle functions/lambdas/callables
+        if callable(obj):
+            return f"<function {getattr(obj, '__name__', 'anonymous')}>"
+
+        # Try to convert to string as last resort
+        try:
+            return str(obj)
+        except Exception:
+            return "<non-serializable object>"
+
+
 @dataclass
 class ExecutionContext:
     """Complete execution context - the test case and output that were evaluated together."""
@@ -290,45 +328,7 @@ class EvaluationRunResult:
             >>> serialized = result.serialize()
             >>> # Can now safely use json.dumps(serialized) or send via HTTP
         """
-
-        class CustomEncoder(json.JSONEncoder):
-            """Custom JSON encoder that handles datetime and non-serializable objects."""
-
-            def default(self, obj: Any) -> Any:  # noqa: ANN401, PLR0911
-                """Convert non-serializable objects to JSON-compatible format."""
-                if isinstance(obj, datetime):
-                    return obj.isoformat()
-
-                # Handle classes/types FIRST (before checking for methods)
-                # Classes have methods like model_dump as unbound methods, which would
-                # pass hasattr/callable checks but fail when called without an instance
-                if isinstance(obj, type):
-                    return f"<class {obj.__name__}>"
-
-                # Handle Pydantic models (v2 has model_dump, v1 has dict)
-                if hasattr(obj, 'model_dump') and callable(getattr(obj, 'model_dump')):
-                    return obj.model_dump()
-                if hasattr(obj, 'dict') and callable(getattr(obj, 'dict')):
-                    # Pydantic v1 compatibility
-                    return obj.dict()
-
-                # Handle objects with common dict conversion methods
-                if hasattr(obj, 'to_dict') and callable(getattr(obj, 'to_dict')):
-                    return obj.to_dict()
-                if hasattr(obj, 'todict') and callable(getattr(obj, 'todict')):
-                    return obj.todict()
-
-                # Handle functions/lambdas/callables
-                if callable(obj):
-                    return f"<function {getattr(obj, '__name__', 'anonymous')}>"
-
-                # Try to convert to string as last resort
-                try:
-                    return str(obj)
-                except Exception:
-                    return "<non-serializable object>"
-
         # Convert dataclass to dict, then serialize and deserialize to handle special objects
         result_dict = asdict(self)
-        json_str = json.dumps(result_dict, cls=CustomEncoder)
+        json_str = json.dumps(result_dict, cls=FlexEvalsJSONEncoder)
         return json.loads(json_str)

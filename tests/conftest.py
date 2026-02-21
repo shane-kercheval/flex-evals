@@ -1,4 +1,5 @@
 """Test configuration for package."""
+
 from flex_evals import (
     AttributeExistsCheck,
     ContainsCheck,

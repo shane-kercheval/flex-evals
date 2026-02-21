@@ -1,24 +1,27 @@
 """Tests for pytest decorator implementation using real checks (no mocks)."""
 
 import inspect
+import json
 import os
 import pytest
 import time
 import _pytest.outcomes
 import asyncio
+from pathlib import Path
 from pydantic import BaseModel, Field
 import threading
 
-from flex_evals.pytest_decorator import evaluate
-from flex_evals import (
+pytest_plugins = ["pytester"]
+
+from flex_evals.pytest_decorator import evaluate  # noqa: E402
+from flex_evals import (  # noqa: E402
     TestCase,
     Check,
     CheckType,
     ContainsCheck,
     JSONPath,
 )
-
-from typing import Never
+from typing import Never  # noqa: E402
 
 
 # Test response models for LLM judge tests
@@ -1444,3 +1447,322 @@ class TestEvaluateDecoratorDurationMetadata:
             raise ValueError("Test exception")
 
         exception_test()
+
+
+class TestEvaluateDecoratorResultPersistence:
+    """Test output_dir and metadata parameters for result persistence."""
+
+    def test__output_dir_saves_json_file(self, tmp_path: Path) -> None:
+        """Test that setting output_dir saves a JSON file with expected keys."""
+        @evaluate(
+            test_cases=[TestCase(id="save_test", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["hello"]},
+            )],
+            samples=1,
+            success_threshold=1.0,
+            output_dir=tmp_path,
+        )
+        def passing_func(test_case) -> str:  # noqa: ANN001, ARG001
+            return "hello world"
+
+        passing_func()
+
+        json_files = list(tmp_path.glob("*.json"))
+        assert len(json_files) == 1
+        data = json.loads(json_files[0].read_text())
+        assert "evaluation_id" in data
+        assert "results" in data
+        assert "metadata" in data
+
+    def test__output_dir_none_does_not_save(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test that no file is saved when output_dir is None and env var is unset."""
+        monkeypatch.delenv("FLEX_EVALS_OUTPUT_DIR", raising=False)
+
+        @evaluate(
+            test_cases=[TestCase(id="no_save", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["hello"]},
+            )],
+            samples=1,
+            success_threshold=1.0,
+            output_dir=None,
+        )
+        def passing_func(test_case) -> str:  # noqa: ANN001, ARG001
+            return "hello world"
+
+        passing_func()
+
+        assert list(tmp_path.glob("*.json")) == []
+
+    def test__output_dir_creates_directory(self, tmp_path: Path) -> None:
+        """Test that nested non-existent directories are created."""
+        nested = tmp_path / "nested" / "deep" / "dir"
+
+        @evaluate(
+            test_cases=[TestCase(id="mkdir_test", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["hello"]},
+            )],
+            samples=1,
+            success_threshold=1.0,
+            output_dir=nested,
+        )
+        def passing_func(test_case) -> str:  # noqa: ANN001, ARG001
+            return "hello world"
+
+        passing_func()
+
+        assert nested.exists()
+        json_files = list(nested.glob("*.json"))
+        assert len(json_files) == 1
+
+    def test__metadata_included_in_saved_file(self, tmp_path: Path) -> None:
+        """Test that user-provided metadata appears in the saved JSON."""
+        user_meta = {"model": "test-model", "provider": "test"}
+
+        @evaluate(
+            test_cases=[TestCase(id="meta_test", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["hello"]},
+            )],
+            samples=1,
+            success_threshold=1.0,
+            output_dir=tmp_path,
+            metadata=user_meta,
+        )
+        def passing_func(test_case) -> str:  # noqa: ANN001, ARG001
+            return "hello world"
+
+        passing_func()
+
+        data = json.loads(next(tmp_path.glob("*.json")).read_text())
+        assert data["metadata"]["model"] == "test-model"
+        assert data["metadata"]["provider"] == "test"
+
+    def test__auto_metadata_included(self, tmp_path: Path) -> None:
+        """Test that _test_config auto-metadata is correctly populated."""
+        @evaluate(
+            test_cases=[
+                TestCase(id="auto_meta_1", input="test"),
+                TestCase(id="auto_meta_2", input="test"),
+            ],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["hello"]},
+            )],
+            samples=3,
+            success_threshold=0.5,
+            output_dir=tmp_path,
+        )
+        def my_test_func(test_case) -> str:  # noqa: ANN001, ARG001
+            return "hello world"
+
+        my_test_func()
+
+        data = json.loads(next(tmp_path.glob("*.json")).read_text())
+        config = data["metadata"]["_test_config"]
+        assert config["test_function"] == "my_test_func"
+        assert isinstance(config["test_module"], str)
+        assert config["test_module"]
+        assert config["samples"] == 3
+        assert config["success_threshold"] == 0.5
+        assert config["num_test_cases"] == 2
+
+    def test__saved_file_contains_test_results(self, tmp_path: Path) -> None:
+        """Test that _test_results has correct pass/fail counts."""
+        call_count = 0
+
+        @evaluate(
+            test_cases=[TestCase(id="results_test", input="test")],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "pass", "actual": "$.output.value"},
+            )],
+            samples=4,
+            success_threshold=0.25,
+            output_dir=tmp_path,
+        )
+        def mixed_func(test_case) -> str:  # noqa: ANN001, ARG001
+            nonlocal call_count
+            call_count += 1
+            return "pass" if call_count <= 3 else "fail"
+
+        mixed_func()
+
+        data = json.loads(next(tmp_path.glob("*.json")).read_text())
+        results = data["metadata"]["_test_results"]
+        assert results["passed_samples"] == 3
+        assert results["failed_samples"] == 1
+        assert results["total_samples"] == 4
+        assert results["success_rate"] == 0.75
+        assert results["success_threshold"] == 0.25
+        assert results["passed"] is True
+
+    def test__save_failure_does_not_mask_test_result(self) -> None:
+        """Test that a save failure emits a warning but doesn't alter test outcome."""
+        @evaluate(
+            test_cases=[TestCase(id="save_fail", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["hello"]},
+            )],
+            samples=1,
+            success_threshold=1.0,
+            output_dir="/dev/null/impossible",
+        )
+        def passing_func(test_case) -> str:  # noqa: ANN001, ARG001
+            return "hello world"
+
+        with pytest.warns(RuntimeWarning, match="Failed to save evaluation result"):
+            passing_func()
+
+    def test__save_failure_does_not_mask_failing_test(self) -> None:
+        """Test that a save failure doesn't mask a test that should fail."""
+        @evaluate(
+            test_cases=[TestCase(id="save_fail_mask", input="test")],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "never", "actual": "$.output.value"},
+            )],
+            samples=1,
+            success_threshold=1.0,
+            output_dir="/dev/null/impossible",
+        )
+        def failing_func(test_case) -> str:  # noqa: ANN001, ARG001
+            return "always wrong"
+
+        with pytest.warns(RuntimeWarning), pytest.raises(_pytest.outcomes.Failed):
+            failing_func()
+
+    def test__results_saved_on_threshold_failure(self, tmp_path: Path) -> None:
+        """Test that results are saved even when the threshold check fails."""
+        @evaluate(
+            test_cases=[TestCase(id="threshold_fail", input="test")],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "never", "actual": "$.output.value"},
+            )],
+            samples=2,
+            success_threshold=1.0,
+            output_dir=tmp_path,
+        )
+        def failing_func(test_case) -> str:  # noqa: ANN001, ARG001
+            return "always wrong"
+
+        with pytest.raises(_pytest.outcomes.Failed):
+            failing_func()
+
+        json_files = list(tmp_path.glob("*.json"))
+        assert len(json_files) == 1
+        data = json.loads(json_files[0].read_text())
+        assert data["metadata"]["_test_results"]["passed"] is False
+
+    def test__env_var_output_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that FLEX_EVALS_OUTPUT_DIR env var is used as fallback."""
+        monkeypatch.setenv("FLEX_EVALS_OUTPUT_DIR", str(tmp_path))
+
+        @evaluate(
+            test_cases=[TestCase(id="env_test", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["hello"]},
+            )],
+            samples=1,
+            success_threshold=1.0,
+        )
+        def passing_func(test_case) -> str:  # noqa: ANN001, ARG001
+            return "hello world"
+
+        passing_func()
+
+        assert len(list(tmp_path.glob("*.json"))) == 1
+
+    def test__explicit_output_dir_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test that explicit output_dir takes precedence over env var."""
+        explicit_dir = tmp_path / "explicit"
+        env_dir = tmp_path / "env"
+        monkeypatch.setenv("FLEX_EVALS_OUTPUT_DIR", str(env_dir))
+
+        @evaluate(
+            test_cases=[TestCase(id="override_test", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["hello"]},
+            )],
+            samples=1,
+            success_threshold=1.0,
+            output_dir=explicit_dir,
+        )
+        def passing_func(test_case) -> str:  # noqa: ANN001, ARG001
+            return "hello world"
+
+        passing_func()
+
+        assert len(list(explicit_dir.glob("*.json"))) == 1
+        assert not env_dir.exists()
+
+    def test__async_output_dir_saves_json_file(self, tmp_path: Path) -> None:
+        """Test that output_dir works through the async execution path."""
+        @evaluate(
+            test_cases=[TestCase(id="async_save", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["async"]},
+            )],
+            samples=2,
+            success_threshold=1.0,
+            output_dir=tmp_path,
+        )
+        async def async_func(test_case) -> str:  # noqa: ANN001, ARG001
+            await asyncio.sleep(0.01)
+            return "async hello"
+
+        async_func()
+
+        json_files = list(tmp_path.glob("*.json"))
+        assert len(json_files) == 1
+        data = json.loads(json_files[0].read_text())
+        assert "evaluation_id" in data
+        assert "metadata" in data
+        assert data["metadata"]["_test_results"]["passed"] is True
+
+
+class TestEvaluateDecoratorParametrizeIntegration:
+    """Test that @pytest.mark.parametrize composes correctly with @evaluate."""
+
+    def test__parametrize_with_evaluate(self, pytester: pytest.Pytester) -> None:
+        """Use pytester to verify parametrize + evaluate compose through real pytest."""
+        pytester.makeini("""
+            [pytest]
+            asyncio_mode = auto
+            asyncio_default_fixture_loop_scope = function
+        """)
+        pytester.makepyfile("""
+            import pytest
+            from flex_evals.pytest_decorator import evaluate
+            from flex_evals import TestCase, Check, CheckType
+
+            @pytest.mark.parametrize("greeting", ["hello", "hi"])
+            @evaluate(
+                test_cases=[TestCase(id="basic", input="test")],
+                checks=[Check(
+                    type=CheckType.CONTAINS,
+                    arguments={"text": "$.output.value", "phrases": ["world"]},
+                )],
+                samples=1,
+                success_threshold=1.0,
+            )
+            def test_greet(test_case, greeting):
+                return f"{greeting} world"
+        """)
+        result = pytester.runpytest("-v")
+        result.assert_outcomes(passed=2)
