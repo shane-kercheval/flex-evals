@@ -7,9 +7,12 @@ multiple times and validating success rates using existing flex-evals checks.
 
 import asyncio
 import concurrent.futures
+import gc
 import inspect
 import json
+import logging
 import os
+import sys
 import time
 import traceback
 import uuid
@@ -17,7 +20,7 @@ import warnings
 from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, TypeVar
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from functools import wraps
 
 import pytest
@@ -26,6 +29,38 @@ from .engine import evaluate as evaluate_async, evaluate_sync
 from .schemas import TestCase, Output, Check, CheckResult, FlexEvalsJSONEncoder
 
 F = TypeVar('F', bound=Callable[..., Any])
+
+
+T = TypeVar('T')
+
+
+def _run_async_suppressing_cleanup_errors(coro: Coroutine[object, object, T]) -> T:
+    """Run async coroutine via asyncio.run(), suppressing event-loop-closed cleanup noise."""
+    original_hook = sys.unraisablehook
+
+    def _suppressing_hook(unraisable: object) -> None:
+        if (
+            isinstance(unraisable.exc_value, RuntimeError)
+            and "Event loop is closed" in str(unraisable.exc_value)
+        ):
+            return
+        original_hook(unraisable)
+
+    class _EventLoopClosedFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return "Event loop is closed" not in record.getMessage()
+
+    asyncio_logger = logging.getLogger("asyncio")
+    log_filter = _EventLoopClosedFilter()
+
+    sys.unraisablehook = _suppressing_hook
+    asyncio_logger.addFilter(log_filter)
+    try:
+        return asyncio.run(coro)
+    finally:
+        gc.collect()  # Force __del__ methods while suppression is active
+        sys.unraisablehook = original_hook
+        asyncio_logger.removeFilter(log_filter)
 
 
 def evaluate(  # noqa: PLR0915
@@ -416,7 +451,10 @@ def evaluate(  # noqa: PLR0915
                     # This is expected in some pytest-asyncio setups
                     # Use threading approach as the designed solution, not a fallback
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, resolve_and_run())
+                        future = executor.submit(
+                            _run_async_suppressing_cleanup_errors,
+                            resolve_and_run(),
+                        )
                         try:
                             return future.result(timeout=300)  # 5 minute timeout
                         except concurrent.futures.TimeoutError:
@@ -476,9 +514,13 @@ def evaluate(  # noqa: PLR0915
                         # FIX: Instead of throwing "Detected async fixtures but no running event
                         # loop", create a new event loop and resolve the async fixtures properly.
                         # This enables IDE integration for tests with async fixtures.
-                        return asyncio.run(_run_with_async_fixtures_resolved(args, kwargs))
+                        return _run_async_suppressing_cleanup_errors(
+                            _run_with_async_fixtures_resolved(args, kwargs),
+                        )
                     # Normal standalone case (no async fixtures)
-                    return asyncio.run(_run_async_evaluation(args, kwargs))
+                    return _run_async_suppressing_cleanup_errors(
+                        _run_async_evaluation(args, kwargs),
+                    )
 
             async_wrapper.__signature__ = new_sig
             return async_wrapper

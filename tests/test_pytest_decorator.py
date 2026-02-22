@@ -3,6 +3,7 @@
 import inspect
 import json
 import os
+import sys
 import pytest
 import time
 import _pytest.outcomes
@@ -13,7 +14,7 @@ import threading
 
 pytest_plugins = ["pytester"]
 
-from flex_evals.pytest_decorator import evaluate  # noqa: E402
+from flex_evals.pytest_decorator import evaluate, _run_async_suppressing_cleanup_errors  # noqa: E402
 from flex_evals import (  # noqa: E402
     TestCase,
     Check,
@@ -1766,3 +1767,108 @@ class TestEvaluateDecoratorParametrizeIntegration:
         """)
         result = pytester.runpytest("-v")
         result.assert_outcomes(passed=2)
+
+
+class TestRunAsyncSuppressingCleanupErrors:
+    """Unit tests for _run_async_suppressing_cleanup_errors helper."""
+
+    def test_return_value_preserved(self) -> None:
+        async def coro() -> dict:
+            return {"key": "value"}
+        result = _run_async_suppressing_cleanup_errors(coro())
+        assert result == {"key": "value"}
+
+    def test_coroutine_exceptions_propagate(self) -> None:
+        async def failing() -> None:
+            raise ValueError("real error")
+        with pytest.raises(ValueError, match="real error"):
+            _run_async_suppressing_cleanup_errors(failing())
+
+    def test_hook_restored_after_success(self) -> None:
+        original = sys.unraisablehook
+        async def coro() -> str:
+            return "ok"
+        _run_async_suppressing_cleanup_errors(coro())
+        assert sys.unraisablehook is original
+
+    def test_hook_restored_after_failure(self) -> None:
+        original = sys.unraisablehook
+        async def failing() -> None:
+            raise RuntimeError("fail")
+        with pytest.raises(RuntimeError):
+            _run_async_suppressing_cleanup_errors(failing())
+        assert sys.unraisablehook is original
+
+
+class TestAsyncCleanupErrorSuppression:
+    """Verify 'Event loop is closed' noise is suppressed when async tests run."""
+
+    def test_no_event_loop_closed_noise_on_failure(self, pytester: pytest.Pytester) -> None:
+        """Failing async test should not produce 'Event loop is closed' tracebacks."""
+        pytester.makeini("""
+            [pytest]
+            asyncio_mode = auto
+            asyncio_default_fixture_loop_scope = function
+        """)
+        pytester.makepyfile("""
+            import asyncio
+            from flex_evals.pytest_decorator import evaluate
+            from flex_evals import TestCase, Check, CheckType
+
+            class _NoisyCleanup:
+                def __del__(self):
+                    raise RuntimeError("Event loop is closed")
+
+            @evaluate(
+                test_cases=[TestCase(id="t1", input="data")],
+                checks=[Check(
+                    type=CheckType.EXACT_MATCH,
+                    arguments={"expected": "never_matches", "actual": "$.output.value"},
+                )],
+                samples=1,
+                success_threshold=1.0,
+            )
+            async def test_with_noisy_cleanup(test_case):
+                obj = _NoisyCleanup()
+                return "wrong_value"
+        """)
+        result = pytester.runpytest("-v", "-s")
+        result.assert_outcomes(failed=1)
+
+        full_output = "\n".join(result.outlines + result.errlines)
+        assert "Event loop is closed" not in full_output
+
+    def test_no_event_loop_closed_noise_on_success(self, pytester: pytest.Pytester) -> None:
+        """Passing async test should also not produce cleanup noise."""
+        pytester.makeini("""
+            [pytest]
+            asyncio_mode = auto
+            asyncio_default_fixture_loop_scope = function
+        """)
+        pytester.makepyfile("""
+            import asyncio
+            from flex_evals.pytest_decorator import evaluate
+            from flex_evals import TestCase, Check, CheckType
+
+            class _NoisyCleanup:
+                def __del__(self):
+                    raise RuntimeError("Event loop is closed")
+
+            @evaluate(
+                test_cases=[TestCase(id="t1", input="data")],
+                checks=[Check(
+                    type=CheckType.CONTAINS,
+                    arguments={"text": "$.output.value", "phrases": ["hello"]},
+                )],
+                samples=1,
+                success_threshold=1.0,
+            )
+            async def test_with_noisy_cleanup(test_case):
+                obj = _NoisyCleanup()
+                return "hello world"
+        """)
+        result = pytester.runpytest("-v", "-s")
+        result.assert_outcomes(passed=1)
+
+        full_output = "\n".join(result.outlines + result.errlines)
+        assert "Event loop is closed" not in full_output
