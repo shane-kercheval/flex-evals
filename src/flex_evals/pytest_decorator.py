@@ -621,4 +621,4 @@ def _generate_failure_report(
     if len(failed_samples) > 5:
         report_lines.append(f"  ... and {len(failed_samples) - 5} more failures")
 
-    pytest.fail("\n".join(report_lines))
+    pytest.fail("\n".join(report_lines), pytrace=False)

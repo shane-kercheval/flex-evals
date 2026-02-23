@@ -1872,3 +1872,42 @@ class TestAsyncCleanupErrorSuppression:
 
         full_output = "\n".join(result.outlines + result.errlines)
         assert "Event loop is closed" not in full_output
+
+
+class TestFailureReportCleanOutput:
+    """Tests that eval failure output is clean without async traceback noise."""
+
+    def test_no_traceback_noise_on_eval_failure(self, pytester: pytest.Pytester) -> None:
+        """Eval failure should show clean report without async stack trace."""
+        pytester.makeini("""
+            [pytest]
+            asyncio_mode = auto
+            asyncio_default_fixture_loop_scope = function
+        """)
+        pytester.makepyfile("""
+            from flex_evals.pytest_decorator import evaluate
+            from flex_evals import TestCase, Check, CheckType
+
+            @evaluate(
+                test_cases=[TestCase(id="t1", input="data")],
+                checks=[Check(
+                    type=CheckType.EXACT_MATCH,
+                    arguments={"expected": "expected_value", "actual": "$.output.value"},
+                )],
+                samples=1,
+                success_threshold=1.0,
+            )
+            async def test_failing_eval(test_case):
+                return "wrong_value"
+        """)
+        result = pytester.runpytest("-v")
+        result.assert_outcomes(failed=1)
+
+        full_output = "\n".join(result.outlines + result.errlines)
+        # The failure report content should be present
+        assert "Statistical evaluation failed" in full_output
+        assert "Success rate:" in full_output
+        # The async decorator internals traceback should NOT be present
+        assert "async_wrapper" not in full_output
+        assert "_run_async_suppressing_cleanup_errors" not in full_output
+        assert "RuntimeError: no running event loop" not in full_output
