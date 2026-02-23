@@ -68,6 +68,7 @@ def evaluate(  # noqa: PLR0915
     checks: list[Check] | None = None,
     samples: int = 1,
     success_threshold: float = 1.0,
+    max_concurrency: int | None = None,
     output_dir: str | Path | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> Callable[[F], F]:
@@ -92,6 +93,11 @@ def evaluate(  # noqa: PLR0915
             passes only if ALL its checks pass. For example, with 10 test cases (each with
             3 checks), samples=5, and success_threshold=0.6, at least 3 out of 5 samples
             must have all 10 test cases pass (with all 3 checks passing in each)
+        max_concurrency: Maximum number of async test cases to execute concurrently
+            (default: None, meaning unlimited). When set, a semaphore limits how many
+            test cases run at once. The semaphore is acquired before timing starts, so
+            queuing time is excluded from duration_seconds. Only affects async functions;
+            sync functions always run sequentially. Must be a positive integer if set.
         output_dir: Directory to save evaluation results as JSON. If None, falls back to
             the FLEX_EVALS_OUTPUT_DIR environment variable. If neither is set, results are
             not saved.
@@ -130,6 +136,8 @@ def evaluate(  # noqa: PLR0915
             raise ValueError("samples must be positive")
         if not 0.0 <= success_threshold <= 1.0:
             raise ValueError("success_threshold must be between 0.0 and 1.0")
+        if max_concurrency is not None and max_concurrency <= 0:
+            raise ValueError("max_concurrency must be a positive integer")
 
         # Validate check configuration
         _validate_check_configuration(test_cases, checks)
@@ -189,6 +197,7 @@ def evaluate(  # noqa: PLR0915
                         'test_module': func.__module__,
                         'samples': samples,
                         'success_threshold': success_threshold,
+                        'max_concurrency': max_concurrency,
                         'num_test_cases': num_tc,
                     },
                     '_test_results': {
@@ -286,6 +295,8 @@ def evaluate(  # noqa: PLR0915
 
         async def _execute_async_calls(expanded_test_cases, args, kwargs) -> None:  # noqa: ANN001
             """Execute async function calls concurrently."""
+            semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency is not None else None
+
             # Create tasks for all calls with timing
             async def _timed_call(test_case):  # noqa: ANN001, ANN202
                 start_time = time.time()
@@ -300,9 +311,13 @@ def evaluate(  # noqa: PLR0915
                     duration = time.time() - start_time
                     return None, duration, e
 
-            tasks = []
-            for test_case in expanded_test_cases:
-                tasks.append(_timed_call(test_case))
+            async def _throttled_call(test_case):  # noqa: ANN001, ANN202
+                if semaphore is not None:
+                    async with semaphore:
+                        return await _timed_call(test_case)
+                return await _timed_call(test_case)
+
+            tasks = [_throttled_call(tc) for tc in expanded_test_cases]
 
             # Execute concurrently and collect results
             try:
@@ -524,6 +539,12 @@ def evaluate(  # noqa: PLR0915
 
             async_wrapper.__signature__ = new_sig
             return async_wrapper
+        if max_concurrency is not None:
+            warnings.warn(
+                "max_concurrency has no effect on synchronous test functions",
+                UserWarning,
+                stacklevel=2,
+            )
         @wraps(func)
         def sync_wrapper(*args, **kwargs) -> None:  # noqa: ANN002, ANN003
             _run_sync_evaluation(args, kwargs)

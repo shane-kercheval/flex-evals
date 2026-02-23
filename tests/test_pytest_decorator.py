@@ -1574,6 +1574,7 @@ class TestEvaluateDecoratorResultPersistence:
         assert config["test_module"]
         assert config["samples"] == 3
         assert config["success_threshold"] == 0.5
+        assert config["max_concurrency"] is None
         assert config["num_test_cases"] == 2
 
     def test__saved_file_contains_test_results(self, tmp_path: Path) -> None:
@@ -1872,6 +1873,221 @@ class TestAsyncCleanupErrorSuppression:
 
         full_output = "\n".join(result.outlines + result.errlines)
         assert "Event loop is closed" not in full_output
+
+
+class TestEvaluateDecoratorMaxConcurrency:
+    """Test max_concurrency parameter for throttling async execution."""
+
+    def test_max_concurrency_limits_concurrent_execution(self) -> None:
+        """Verify peak concurrency never exceeds max_concurrency."""
+        peak_concurrent = 0
+        current_concurrent = 0
+        lock = asyncio.Lock()
+
+        @evaluate(
+            test_cases=[TestCase(id="conc_test", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["done"]},
+            )],
+            samples=10,
+            max_concurrency=2,
+            success_threshold=1.0,
+        )
+        async def test_limited_concurrency(test_case: TestCase) -> str:  # noqa: ARG001
+            nonlocal peak_concurrent, current_concurrent
+            async with lock:
+                current_concurrent += 1
+                peak_concurrent = max(peak_concurrent, current_concurrent)
+            await asyncio.sleep(0.05)
+            async with lock:
+                current_concurrent -= 1
+            return "done"
+
+        test_limited_concurrency()
+
+        assert peak_concurrent <= 2, (
+            f"Peak concurrency was {peak_concurrent}, expected <= 2"
+        )
+        assert peak_concurrent >= 1, "At least one task should have run"
+
+    def test_max_concurrency_timing_excludes_queuing(self) -> None:
+        """Verify duration_seconds excludes time spent waiting for the semaphore."""
+
+        @evaluate(
+            test_cases=[TestCase(id="timing_test", input="test")],
+            checks=[
+                Check(
+                    type=CheckType.CONTAINS,
+                    arguments={"text": "$.output.value", "phrases": ["result"]},
+                ),
+                # Verify duration is populated and reasonable
+                Check(
+                    type=CheckType.THRESHOLD,
+                    arguments={
+                        "value": "$.output.metadata.duration_seconds",
+                        "min_value": 0.0,
+                        # Each call sleeps 0.05s; with max_concurrency=1 and 5 samples,
+                        # if queuing were included, some would be ~0.25s.
+                        # With proper exclusion, each should be ~0.05s.
+                        "max_value": 0.15,
+                    },
+                ),
+            ],
+            samples=5,
+            max_concurrency=1,
+            success_threshold=1.0,
+        )
+        async def test_timing(test_case: TestCase) -> str:  # noqa: ARG001
+            await asyncio.sleep(0.05)
+            return "result"
+
+        test_timing()
+
+    def test_max_concurrency_none_allows_full_concurrency(self) -> None:
+        """Verify max_concurrency=None preserves unlimited concurrent behavior."""
+        num_samples = 20
+        delay = 0.1
+
+        @evaluate(
+            test_cases=[TestCase(id="unlimited_test", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["result"]},
+            )],
+            samples=num_samples,
+            max_concurrency=None,
+            success_threshold=1.0,
+        )
+        async def test_unlimited(test_case: TestCase) -> str:  # noqa: ARG001
+            await asyncio.sleep(delay)
+            return "result"
+
+        start = time.time()
+        test_unlimited()
+        duration = time.time() - start
+
+        # If truly concurrent, total should be ~0.1s, not 2.0s
+        assert duration < 1.0, (
+            f"Unlimited concurrency took {duration:.3f}s, expected < 1.0s"
+        )
+
+    def test_max_concurrency_zero_raises_value_error(self) -> None:
+        """Verify max_concurrency=0 raises ValueError."""
+        with pytest.raises(ValueError, match="max_concurrency must be a positive integer"):
+            @evaluate(
+                test_cases=[TestCase(id="test", input="test")],
+                checks=[Check(
+                    type=CheckType.CONTAINS,
+                    arguments={"text": "$.output.value", "phrases": ["x"]},
+                )],
+                samples=1,
+                max_concurrency=0,
+            )
+            async def test_zero(test_case: TestCase) -> str:  # noqa: ARG001
+                return "x"
+
+    def test_max_concurrency_negative_raises_value_error(self) -> None:
+        """Verify negative max_concurrency raises ValueError."""
+        with pytest.raises(ValueError, match="max_concurrency must be a positive integer"):
+            @evaluate(
+                test_cases=[TestCase(id="test", input="test")],
+                checks=[Check(
+                    type=CheckType.CONTAINS,
+                    arguments={"text": "$.output.value", "phrases": ["x"]},
+                )],
+                samples=1,
+                max_concurrency=-3,
+            )
+            async def test_negative(test_case: TestCase) -> str:  # noqa: ARG001
+                return "x"
+
+    def test_max_concurrency_with_multiple_test_cases(self) -> None:
+        """Verify concurrency limiting works across multiple test cases."""
+        peak_concurrent = 0
+        current_concurrent = 0
+        lock = asyncio.Lock()
+
+        test_cases = [
+            TestCase(id=f"case_{i}", input=f"input_{i}")
+            for i in range(4)
+        ]
+
+        @evaluate(
+            test_cases=test_cases,
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["processed"]},
+            )],
+            samples=3,  # 4 test cases * 3 samples = 12 total calls
+            max_concurrency=3,
+            success_threshold=1.0,
+        )
+        async def test_multi_case(test_case: TestCase) -> str:
+            nonlocal peak_concurrent, current_concurrent
+            async with lock:
+                current_concurrent += 1
+                peak_concurrent = max(peak_concurrent, current_concurrent)
+            await asyncio.sleep(0.03)
+            async with lock:
+                current_concurrent -= 1
+            return f"processed {test_case.input}"
+
+        test_multi_case()
+
+        assert peak_concurrent <= 3, (
+            f"Peak concurrency was {peak_concurrent}, expected <= 3"
+        )
+
+    def test_max_concurrency_one_runs_sequentially(self) -> None:
+        """Verify max_concurrency=1 runs tasks sequentially."""
+        peak_concurrent = 0
+        current_concurrent = 0
+        lock = asyncio.Lock()
+
+        @evaluate(
+            test_cases=[TestCase(id="seq_test", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["done"]},
+            )],
+            samples=5,
+            max_concurrency=1,
+            success_threshold=1.0,
+        )
+        async def test_sequential(test_case: TestCase) -> str:  # noqa: ARG001
+            nonlocal peak_concurrent, current_concurrent
+            async with lock:
+                current_concurrent += 1
+                peak_concurrent = max(peak_concurrent, current_concurrent)
+            await asyncio.sleep(0.02)
+            async with lock:
+                current_concurrent -= 1
+            return "done"
+
+        test_sequential()
+
+        assert peak_concurrent == 1, (
+            f"Peak concurrency was {peak_concurrent}, expected exactly 1"
+        )
+
+    def test_max_concurrency_warns_on_sync_function(self) -> None:
+        """Verify a warning is emitted when max_concurrency is set on a sync function."""
+        with pytest.warns(UserWarning, match="max_concurrency has no effect on synchronous"):
+            @evaluate(
+                test_cases=[TestCase(id="sync_warn", input="test")],
+                checks=[Check(
+                    type=CheckType.CONTAINS,
+                    arguments={"text": "$.output.value", "phrases": ["hello"]},
+                )],
+                samples=1,
+                max_concurrency=2,
+                success_threshold=1.0,
+            )
+            def sync_with_concurrency(test_case: TestCase) -> str:  # noqa: ARG001
+                return "hello"
+
+        sync_with_concurrency()
 
 
 class TestFailureReportCleanOutput:
