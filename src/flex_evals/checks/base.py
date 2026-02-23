@@ -168,31 +168,20 @@ class EvaluationContext:
         return self._context_dict
 
 
-class BaseCheck(BaseModel, ABC):
+class _CheckMixin:
     """
-    Base class for synchronous check implementations.
+    Shared logic for BaseCheck and BaseAsyncCheck.
 
-    Combines Pydantic field validation with check execution capabilities.
-    Subclasses should define their Pydantic fields and implement __call__().
+    Provides check_type lookup, argument serialization, JSONPath field resolution,
+    and error handling. Intended to be used as the first parent in MRO before
+    BaseModel and ABC.
     """
-
-    # Pydantic configuration
-    model_config: ClassVar[dict[str, Any]] = {'extra': 'forbid'}
-    metadata: dict[str, Any] | None = None
-
-    def __init__(self, **data: Any) -> None:  # noqa: ANN401
-        """Initialize check with field validation."""
-        # Initialize Pydantic model first (validates fields)
-        BaseModel.__init__(self, **data)
 
     @property
     def check_type(self) -> CheckType | str:
         """Return the CheckType for this check."""
-        # Import here to avoid circular import
         from ..registry import get_check_type_for_class  # noqa: PLC0415
         check_type_str = get_check_type_for_class(self.__class__)
-
-        # Try to convert to CheckType enum, but allow arbitrary strings for custom/test checks
         try:
             return CheckType(check_type_str)
         except ValueError:
@@ -201,9 +190,7 @@ class BaseCheck(BaseModel, ABC):
     def to_arguments(self) -> dict[str, Any]:
         """Convert Pydantic fields to arguments dict for engine compatibility."""
         data = self.model_dump()
-        # Remove metadata as it's handled separately
         data.pop('metadata', None)
-        # Convert JSONPath objects to their string expressions for engine compatibility
         for key, value in data.items():
             if isinstance(value, JSONPath):
                 data[key] = value.expression
@@ -211,9 +198,117 @@ class BaseCheck(BaseModel, ABC):
 
     def _get_version(self) -> str:
         """Get the registered version for this check class."""
-        # Import here to avoid circular import
         from ..registry import get_version_for_class  # noqa: PLC0415
         return get_version_for_class(self.__class__)
+
+    def resolve_fields(self, context: EvaluationContext) -> dict[str, Any]:
+        """Resolve any JSONPath fields in-place using the evaluation context."""
+        resolved_arguments = {}
+
+        for field_name in self.__class__.model_fields:
+            field_value = getattr(self, field_name)
+
+            if isinstance(field_value, JSONPath):
+                try:
+                    resolved_result = resolve_argument(
+                        field_value.expression,
+                        context.context_dict,
+                    )
+                    resolved_value = resolved_result.get("value")
+                    setattr(self, field_name, resolved_value)
+                    resolved_arguments[field_name] = resolved_result
+                except Exception as e:
+                    raise JSONPathError(
+                        f"Failed to resolve JSONPath in field '{field_name}': {e}",
+                        jsonpath_expression=field_value.expression,
+                    ) from e
+            else:
+                resolved_arguments[field_name] = {
+                    "value": field_value,
+                    "resolved_from": "literal",
+                }
+
+        self._resolved_arguments = resolved_arguments
+        return resolved_arguments
+
+    def _restore_jsonpath_fields(self) -> None:
+        """Restore JSONPath objects from their resolved values (for reuse of check instances)."""
+        if not hasattr(self, '_resolved_arguments'):
+            return
+
+        for field_name, resolved_info in self._resolved_arguments.items():
+            if 'jsonpath' in resolved_info:
+                original_jsonpath = JSONPath(expression=resolved_info['jsonpath'])
+                setattr(self, field_name, original_jsonpath)
+
+    def _handle_check_error(
+        self,
+        error: Exception,
+        check_type: str,
+        check_version: str,
+        evaluated_at: datetime,
+        check_metadata: dict[str, Any] | None,
+    ) -> CheckResult:
+        """Map an exception from check execution to a CheckResult error."""
+        if isinstance(error, JSONPathError):
+            error_type = 'jsonpath_error'
+            error_message = str(error)
+        elif isinstance(error, ValidationError):
+            error_type = 'validation_error'
+            error_message = str(error)
+        elif isinstance(error, CheckExecutionError):
+            error_type = 'unknown_error'
+            error_message = str(error)
+        else:
+            error_type = 'unknown_error'
+            error_message = f"Unexpected error during check execution: {error!s}"
+
+        return self._create_error_result(
+            check_type=check_type,
+            error_type=error_type,
+            error_message=error_message,
+            resolved_arguments={},
+            evaluated_at=evaluated_at,
+            check_version=check_version,
+            check_metadata=check_metadata,
+        )
+
+    def _create_error_result(
+        self,
+        check_type: str,
+        error_type: str,
+        error_message: str,
+        resolved_arguments: dict[str, Any],
+        evaluated_at: datetime,
+        check_version: str,
+        check_metadata: dict[str, Any] | None = None,
+    ) -> CheckResult:
+        """Create a CheckResult for error cases with default results."""
+        return CheckResult(
+            check_type=check_type,
+            check_version=check_version,
+            status='error',
+            results=self.default_results,
+            resolved_arguments=resolved_arguments,
+            evaluated_at=evaluated_at,
+            metadata=check_metadata,
+            error=CheckError(
+                type=error_type,
+                message=error_message,
+            ),
+        )
+
+
+class BaseCheck(_CheckMixin, BaseModel, ABC):
+    """
+    Base class for synchronous check implementations.
+
+    Combines Pydantic field validation with check execution capabilities.
+    Subclasses should define their Pydantic fields and implement __call__().
+    """
+
+    model_config: ClassVar[dict[str, Any]] = {'extra': 'forbid'}
+    metadata: dict[str, Any] | None = None
 
     @property
     @abstractmethod
@@ -250,48 +345,6 @@ class BaseCheck(BaseModel, ABC):
         """
         pass
 
-    def resolve_fields(self, context: EvaluationContext) -> dict[str, Any]:
-        """Resolve any JSONPath fields in-place using the evaluation context."""
-        resolved_arguments = {}
-
-        for field_name in self.__class__.model_fields:
-            field_value = getattr(self, field_name)
-
-            if isinstance(field_value, JSONPath):
-                try:
-                    resolved_result = resolve_argument(
-                        field_value.expression,
-                        context.context_dict,
-                    )
-                    resolved_value = resolved_result.get("value")
-                    setattr(self, field_name, resolved_value)
-                    resolved_arguments[field_name] = resolved_result
-                except Exception as e:
-                    raise JSONPathError(
-                        f"Failed to resolve JSONPath in field '{field_name}': {e}",
-                        jsonpath_expression=field_value.expression,
-                    ) from e
-            else:
-                resolved_arguments[field_name] = {
-                    "value": field_value,
-                    "resolved_from": "literal",
-                }
-
-        self._resolved_arguments = resolved_arguments
-        return resolved_arguments
-
-    def _restore_jsonpath_fields(self) -> None:
-        """Restore JSONPath objects from their resolved values (for reuse of check instances)."""
-        # Only restore if we have the resolved arguments mapping
-        if not hasattr(self, '_resolved_arguments'):
-            return
-
-        for field_name, resolved_info in self._resolved_arguments.items():
-            if 'jsonpath' in resolved_info:
-                # This field was resolved from a JSONPath - restore the JSONPath object
-                original_jsonpath = JSONPath(expression=resolved_info['jsonpath'])
-                setattr(self, field_name, original_jsonpath)
-
     def execute(
         self,
         context: EvaluationContext,
@@ -316,25 +369,18 @@ class BaseCheck(BaseModel, ABC):
             Complete CheckResult with all required fields
         """
         evaluated_at = datetime.now(UTC)
-
-        # Get version from registry using the class
         check_version = self._get_version()
         check_type = str(self.check_type)
 
         try:
-            # Resolve JSONPath fields in-place
             resolved_arguments = self.resolve_fields(context)
-
-            # Execute the check with resolved fields
             try:
                 results = self()
             except TypeError as e:
                 raise ValidationError(f"Invalid arguments for check: {e!s}") from e
             finally:
-                # Restore JSONPath objects to allow reuse of check instances
                 self._restore_jsonpath_fields()
 
-            # Create successful result
             return CheckResult(
                 check_type=check_type,
                 check_version=check_version,
@@ -345,78 +391,17 @@ class BaseCheck(BaseModel, ABC):
                 metadata=check_metadata,
             )
 
-        except JSONPathError as e:
-            return self._create_error_result(
-                check_type=check_type,
-                error_type='jsonpath_error',
-                error_message=str(e),
-                resolved_arguments={},
-                evaluated_at=evaluated_at,
-                check_version=check_version,
-                check_metadata=check_metadata,
-            )
-
-        except ValidationError as e:
-            return self._create_error_result(
-                check_type=check_type,
-                error_type='validation_error',
-                error_message=str(e),
-                resolved_arguments={},
-                evaluated_at=evaluated_at,
-                check_version=check_version,
-                check_metadata=check_metadata,
-            )
-
-        except CheckExecutionError as e:
-            return self._create_error_result(
-                check_type=check_type,
-                error_type='unknown_error',
-                error_message=str(e),
-                resolved_arguments={},
-                evaluated_at=evaluated_at,
-                check_version=check_version,
-                check_metadata=check_metadata,
-            )
-
         except Exception as e:
-            return self._create_error_result(
+            return self._handle_check_error(
+                error=e,
                 check_type=check_type,
-                error_type='unknown_error',
-                error_message=f"Unexpected error during check execution: {e!s}",
-                resolved_arguments={},
-                evaluated_at=evaluated_at,
                 check_version=check_version,
+                evaluated_at=evaluated_at,
                 check_metadata=check_metadata,
             )
 
-    def _create_error_result(
-        self,
-        check_type: str,
-        error_type: str,
-        error_message: str,
-        resolved_arguments: dict[str, Any],
-        evaluated_at: datetime,
-        check_version: str,
-        check_metadata: dict[str, Any] | None = None,
-    ) -> CheckResult:
-        """Create a CheckResult for error cases with default results."""
-        # Get default results from this check instance to maintain consistent API
-        return CheckResult(
-            check_type=check_type,
-            check_version=check_version,
-            status='error',
-            results=self.default_results,
-            resolved_arguments=resolved_arguments,
-            evaluated_at=evaluated_at,
-            metadata=check_metadata,
-            error=CheckError(
-                type=error_type,
-                message=error_message,
-            ),
-        )
 
-
-class BaseAsyncCheck(BaseModel, ABC):
+class BaseAsyncCheck(_CheckMixin, BaseModel, ABC):
     """
     Base class for asynchronous check implementations.
 
@@ -424,45 +409,8 @@ class BaseAsyncCheck(BaseModel, ABC):
     Subclasses should define their Pydantic fields and implement async __call__().
     """
 
-    # Pydantic configuration
     model_config: ClassVar[dict[str, Any]] = {'extra': 'forbid'}
-
     metadata: dict[str, Any] | None = None
-
-    def __init__(self, **data: Any) -> None:  # noqa: ANN401
-        """Initialize async check with field validation."""
-        # Initialize Pydantic model first (validates fields)
-        BaseModel.__init__(self, **data)
-
-    @property
-    def check_type(self) -> CheckType | str:
-        """Return the CheckType for this check."""
-        # Import here to avoid circular import
-        from ..registry import get_check_type_for_class  # noqa: PLC0415
-        check_type_str = get_check_type_for_class(self.__class__)
-
-        # Try to convert to CheckType enum, but allow arbitrary strings for custom/test checks
-        try:
-            return CheckType(check_type_str)
-        except ValueError:
-            return check_type_str
-
-    def to_arguments(self) -> dict[str, Any]:
-        """Convert Pydantic fields to arguments dict for engine compatibility."""
-        data = self.model_dump()
-        # Remove metadata as it's handled separately
-        data.pop('metadata', None)
-        # Convert JSONPath objects to their string expressions for engine compatibility
-        for key, value in data.items():
-            if isinstance(value, JSONPath):
-                data[key] = value.expression
-        return data
-
-    def _get_version(self) -> str:
-        """Get the registered version for this check class."""
-        # Import here to avoid circular import
-        from ..registry import get_version_for_class  # noqa: PLC0415
-        return get_version_for_class(self.__class__)
 
     @property
     @abstractmethod
@@ -499,48 +447,6 @@ class BaseAsyncCheck(BaseModel, ABC):
         """
         pass
 
-    def resolve_fields(self, context: EvaluationContext) -> dict[str, Any]:
-        """Resolve any JSONPath fields in-place using the evaluation context."""
-        resolved_arguments = {}
-
-        for field_name in self.__class__.model_fields:
-            field_value = getattr(self, field_name)
-
-            if isinstance(field_value, JSONPath):
-                try:
-                    resolved_result = resolve_argument(
-                        field_value.expression,
-                        context.context_dict,
-                    )
-                    resolved_value = resolved_result.get("value")
-                    setattr(self, field_name, resolved_value)
-                    resolved_arguments[field_name] = resolved_result
-                except Exception as e:
-                    raise JSONPathError(
-                        f"Failed to resolve JSONPath in field '{field_name}': {e}",
-                        jsonpath_expression=field_value.expression,
-                    ) from e
-            else:
-                resolved_arguments[field_name] = {
-                    "value": field_value,
-                    "resolved_from": "literal",
-                }
-
-        self._resolved_arguments = resolved_arguments
-        return resolved_arguments
-
-    def _restore_jsonpath_fields(self) -> None:
-        """Restore JSONPath objects from their resolved values (for reuse of check instances)."""
-        # Only restore if we have the resolved arguments mapping
-        if not hasattr(self, '_resolved_arguments'):
-            return
-
-        for field_name, resolved_info in self._resolved_arguments.items():
-            if 'jsonpath' in resolved_info:
-                # This field was resolved from a JSONPath - restore the JSONPath object
-                original_jsonpath = JSONPath(expression=resolved_info['jsonpath'])
-                setattr(self, field_name, original_jsonpath)
-
     async def execute(
         self,
         context: EvaluationContext,
@@ -565,25 +471,18 @@ class BaseAsyncCheck(BaseModel, ABC):
             Complete CheckResult with all required fields
         """
         evaluated_at = datetime.now(UTC)
-
-        # Get version from registry using the class
         check_version = self._get_version()
         check_type = str(self.check_type)
 
         try:
-            # Resolve JSONPath fields in-place
             resolved_arguments = self.resolve_fields(context)
-
-            # Execute the check asynchronously with resolved fields
             try:
                 results = await self()
             except TypeError as e:
                 raise ValidationError(f"Invalid arguments for check: {e!s}") from e
             finally:
-                # Restore JSONPath objects to allow reuse of check instances
                 self._restore_jsonpath_fields()
 
-            # Create successful result
             return CheckResult(
                 check_type=check_type,
                 check_version=check_version,
@@ -594,74 +493,14 @@ class BaseAsyncCheck(BaseModel, ABC):
                 metadata=check_metadata,
             )
 
-        except JSONPathError as e:
-            return self._create_error_result(
-                check_type=check_type,
-                error_type='jsonpath_error',
-                error_message=str(e),
-                resolved_arguments={},
-                evaluated_at=evaluated_at,
-                check_version=check_version,
-                check_metadata=check_metadata,
-            )
-
-        except ValidationError as e:
-            return self._create_error_result(
-                check_type=check_type,
-                error_type='validation_error',
-                error_message=str(e),
-                resolved_arguments={},
-                evaluated_at=evaluated_at,
-                check_version=check_version,
-                check_metadata=check_metadata,
-            )
-
-        except CheckExecutionError as e:
-            return self._create_error_result(
-                check_type=check_type,
-                error_type='unknown_error',
-                error_message=str(e),
-                resolved_arguments={},
-                evaluated_at=evaluated_at,
-                check_version=check_version,
-                check_metadata=check_metadata,
-            )
-
         except Exception as e:
-            return self._create_error_result(
+            return self._handle_check_error(
+                error=e,
                 check_type=check_type,
-                error_type='unknown_error',
-                error_message=f"Unexpected error during async check execution: {e!s}",
-                resolved_arguments={},
-                evaluated_at=evaluated_at,
                 check_version=check_version,
+                evaluated_at=evaluated_at,
                 check_metadata=check_metadata,
             )
-
-    def _create_error_result(
-        self,
-        check_type: str,
-        error_type: str,
-        error_message: str,
-        resolved_arguments: dict[str, Any],
-        evaluated_at: datetime,
-        check_version: str,
-        check_metadata: dict[str, Any] | None = None,
-    ) -> CheckResult:
-        """Create a CheckResult for error cases with default results."""
-        return CheckResult(
-            check_type=check_type,
-            check_version=check_version,
-            status='error',
-            results=self.default_results,
-            resolved_arguments=resolved_arguments,
-            evaluated_at=evaluated_at,
-            metadata=check_metadata,
-            error=CheckError(
-                type=error_type,
-                message=error_message,
-            ),
-        )
 
 
 # Type alias for any check type

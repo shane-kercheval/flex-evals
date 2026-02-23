@@ -334,7 +334,7 @@ class TestBaseAsyncCheck:
         assert result.status == 'error'
         assert result.error is not None
         assert result.error.type == 'unknown_error'
-        assert "Unexpected error during async check execution" in result.error.message
+        assert "Unexpected error during check execution" in result.error.message
 
     def test_default_results_for_custom_check(self):
         """Test custom checks implement default_results correctly on errors."""
