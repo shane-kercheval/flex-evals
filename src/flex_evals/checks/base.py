@@ -303,6 +303,11 @@ class BaseCheck(BaseModel, ABC):
         This method handles JSONPath field resolution, error handling, and result formatting
         according to the FEP protocol.
 
+        Note:
+            Check instances are not safe for concurrent use. The engine uses deepcopy
+            internally, but if calling execute() directly on a shared instance, use
+            separate instances or deepcopy for concurrent execution.
+
         Args:
             context: Evaluation context for JSONPath resolution
             check_metadata: Additional metadata from the check definition
@@ -547,6 +552,11 @@ class BaseAsyncCheck(BaseModel, ABC):
         This method handles argument resolution, error handling, and result formatting
         according to the FEP protocol.
 
+        Note:
+            Check instances are not safe for concurrent use. The engine uses deepcopy
+            internally, but if calling execute() directly on a shared instance, use
+            separate instances or deepcopy for concurrent execution.
+
         Args:
             context: Evaluation context for JSONPath resolution
             check_metadata: Additional metadata from the check definition
@@ -625,6 +635,7 @@ class BaseAsyncCheck(BaseModel, ABC):
                 resolved_arguments={},
                 evaluated_at=evaluated_at,
                 check_version=check_version,
+                check_metadata=check_metadata,
             )
 
     def _create_error_result(

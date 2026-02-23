@@ -225,7 +225,7 @@ def evaluate(  # noqa: PLR0915
                     stacklevel=2,
                 )
 
-        def _evaluate_results_sync(expanded_test_cases, outputs, exceptions) -> None:  # noqa: ANN001
+        def _evaluate_results_sync(expanded_test_cases, outputs, exceptions, eval_started_at) -> None:  # noqa: ANN001, E501
             """Evaluate results and check success threshold (synchronous)."""
             try:
                 evaluation_result = evaluate_sync(
@@ -236,10 +236,11 @@ def evaluate(  # noqa: PLR0915
             except Exception as e:
                 pytest.fail(f"Evaluation failed: {e}")
 
+            evaluation_result.started_at = eval_started_at
             _save_result_if_configured(evaluation_result)
             _process_evaluation_result(evaluation_result, exceptions)
 
-        async def _evaluate_results_async(expanded_test_cases, outputs, exceptions) -> None:  # noqa: ANN001
+        async def _evaluate_results_async(expanded_test_cases, outputs, exceptions, eval_started_at) -> None:  # noqa: ANN001, E501
             """Evaluate results and check success threshold (asynchronous)."""
             try:
                 evaluation_result = await evaluate_async(
@@ -250,6 +251,7 @@ def evaluate(  # noqa: PLR0915
             except Exception as e:
                 pytest.fail(f"Evaluation failed: {e}")
 
+            evaluation_result.started_at = eval_started_at
             _save_result_if_configured(evaluation_result)
             _process_evaluation_result(evaluation_result, exceptions)
 
@@ -295,6 +297,7 @@ def evaluate(  # noqa: PLR0915
 
         async def _execute_async_calls(expanded_test_cases, args, kwargs) -> None:  # noqa: ANN001
             """Execute async function calls concurrently."""
+            eval_started_at = datetime.now(UTC)
             semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency is not None else None
 
             # Create tasks for all calls with timing
@@ -337,10 +340,13 @@ def evaluate(  # noqa: PLR0915
                     outputs.append(Output(value=result, metadata=metadata))
                     exceptions.append(None)
 
-            await _evaluate_results_async(expanded_test_cases, outputs, exceptions)
+            await _evaluate_results_async(
+                expanded_test_cases, outputs, exceptions, eval_started_at,
+            )
 
         def _execute_sync_calls(expanded_test_cases, args, kwargs) -> None:  # noqa: ANN001
             """Execute sync function calls sequentially."""
+            eval_started_at = datetime.now(UTC)
             outputs = []
             exceptions = []
 
@@ -360,7 +366,7 @@ def evaluate(  # noqa: PLR0915
                     outputs.append(_create_error_output(e, duration))
                     exceptions.append(e)
 
-            _evaluate_results_sync(expanded_test_cases, outputs, exceptions)
+            _evaluate_results_sync(expanded_test_cases, outputs, exceptions, eval_started_at)
 
         async def _resolve_async_fixtures(kwargs: dict) -> dict:
             """

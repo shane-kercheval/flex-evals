@@ -22,6 +22,7 @@ from flex_evals import (  # noqa: E402
     ContainsCheck,
     JSONPath,
 )
+from datetime import datetime, UTC  # noqa: E402
 from typing import Never  # noqa: E402
 
 
@@ -1736,6 +1737,68 @@ class TestEvaluateDecoratorResultPersistence:
         assert "evaluation_id" in data
         assert "metadata" in data
         assert data["metadata"]["_test_results"]["passed"] is True
+
+    def test__started_at_reflects_full_lifecycle_sync(self, tmp_path: Path) -> None:
+        """Test that started_at in saved JSON precedes function execution (sync)."""
+        before_decorator = datetime.now(UTC)
+
+        @evaluate(
+            test_cases=[TestCase(id="timing_test", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["hello"]},
+            )],
+            samples=1,
+            success_threshold=1.0,
+            output_dir=tmp_path,
+        )
+        def slow_sync_func(test_case) -> str:  # noqa: ANN001, ARG001
+            time.sleep(0.1)
+            return "hello world"
+
+        slow_sync_func()
+
+        data = json.loads(next(tmp_path.glob("*.json")).read_text())
+        started_at = datetime.fromisoformat(data["started_at"])
+        # started_at should be captured before the function executes, so it must
+        # be at or after `before_decorator` (which was taken before any work).
+        assert started_at >= before_decorator
+        # The key invariant: started_at must be *before* the function actually runs.
+        # Since we sleep 0.1s, completed_at - started_at should be >= 0.1s.
+        completed_at = datetime.fromisoformat(data["completed_at"])
+        wall_clock = (completed_at - started_at).total_seconds()
+        assert wall_clock >= 0.09, (
+            f"Wall clock {wall_clock:.3f}s should include function execution time (>= 0.1s)"
+        )
+
+    def test__started_at_reflects_full_lifecycle_async(self, tmp_path: Path) -> None:
+        """Test that started_at in saved JSON precedes function execution (async)."""
+        before_decorator = datetime.now(UTC)
+
+        @evaluate(
+            test_cases=[TestCase(id="timing_test", input="test")],
+            checks=[Check(
+                type=CheckType.CONTAINS,
+                arguments={"text": "$.output.value", "phrases": ["hello"]},
+            )],
+            samples=1,
+            success_threshold=1.0,
+            output_dir=tmp_path,
+        )
+        async def slow_async_func(test_case) -> str:  # noqa: ANN001, ARG001
+            await asyncio.sleep(0.1)
+            return "hello world"
+
+        slow_async_func()
+
+        data = json.loads(next(tmp_path.glob("*.json")).read_text())
+        started_at = datetime.fromisoformat(data["started_at"])
+        assert started_at >= before_decorator
+        completed_at = datetime.fromisoformat(data["completed_at"])
+        wall_clock = (completed_at - started_at).total_seconds()
+        assert wall_clock >= 0.09, (
+            f"Wall clock {wall_clock:.3f}s should include function execution time (>= 0.1s)"
+        )
 
 
 class TestEvaluateDecoratorParametrizeIntegration:
