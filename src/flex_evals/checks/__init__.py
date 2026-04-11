@@ -23,6 +23,7 @@ from .llm_judge import LLMJudgeCheck
 from .regex import RegexCheck, RegexFlags
 from .schema import SchemaValidationCheck
 from .semantic_similarity import SemanticSimilarityCheck
+from .subset import SubsetCheck
 from .threshold import ThresholdCheck
 
 __all__ = [
@@ -41,6 +42,7 @@ __all__ = [
     "RegexFlags",
     "SchemaValidationCheck",
     "SemanticSimilarityCheck",
+    "SubsetCheck",
     "ThresholdCheck",
     # Registry functions
     "get_check_class",
