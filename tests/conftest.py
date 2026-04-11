@@ -4,6 +4,7 @@ from flex_evals import (
     AttributeExistsCheck,
     ContainsCheck,
     CustomFunctionCheck,
+    DisjointCheck,
     EqualsCheck,
     ExactMatchCheck,
     IsEmptyCheck,
@@ -11,6 +12,9 @@ from flex_evals import (
     RegexCheck,
     SchemaValidationCheck,
     SemanticSimilarityCheck,
+    SetEqualCheck,
+    SubsetCheck,
+    SupersetCheck,
     ThresholdCheck,
     CheckType,
     register,
@@ -29,6 +33,7 @@ def restore_standard_checks():
     register(CheckType.ATTRIBUTE_EXISTS, version="1.0.0")(AttributeExistsCheck)
     register(CheckType.CONTAINS, version="1.0.0")(ContainsCheck)
     register(CheckType.CUSTOM_FUNCTION, version="1.0.0")(CustomFunctionCheck)
+    register(CheckType.DISJOINT, version="1.0.0")(DisjointCheck)
     register(CheckType.EQUALS, version="1.0.0")(EqualsCheck)
     register(CheckType.EXACT_MATCH, version="1.0.0")(ExactMatchCheck)
     register(CheckType.IS_EMPTY, version="1.0.0")(IsEmptyCheck)
@@ -36,4 +41,7 @@ def restore_standard_checks():
     register(CheckType.REGEX, version="1.0.0")(RegexCheck)
     register(CheckType.SCHEMA_VALIDATION, version="1.0.0")(SchemaValidationCheck)
     register(CheckType.SEMANTIC_SIMILARITY, version="1.0.0")(SemanticSimilarityCheck)
+    register(CheckType.SET_EQUAL, version="1.0.0")(SetEqualCheck)
+    register(CheckType.SUBSET, version="1.0.0")(SubsetCheck)
+    register(CheckType.SUPERSET, version="1.0.0")(SupersetCheck)
     register(CheckType.THRESHOLD, version="1.0.0")(ThresholdCheck)

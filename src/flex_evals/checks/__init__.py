@@ -16,6 +16,7 @@ from .base import BaseCheck, BaseAsyncCheck, EvaluationContext
 from .attribute_exists import AttributeExistsCheck
 from .contains import ContainsCheck
 from .custom_function import CustomFunctionCheck
+from .disjoint import DisjointCheck
 from .equals import EqualsCheck
 from .exact_match import ExactMatchCheck
 from .is_empty import IsEmptyCheck
@@ -23,6 +24,9 @@ from .llm_judge import LLMJudgeCheck
 from .regex import RegexCheck, RegexFlags
 from .schema import SchemaValidationCheck
 from .semantic_similarity import SemanticSimilarityCheck
+from .set_equal import SetEqualCheck
+from .subset import SubsetCheck
+from .superset import SupersetCheck
 from .threshold import ThresholdCheck
 
 __all__ = [
@@ -32,6 +36,7 @@ __all__ = [
     "BaseCheck",
     "ContainsCheck",
     "CustomFunctionCheck",
+    "DisjointCheck",
     "EqualsCheck",
     "EvaluationContext",
     "ExactMatchCheck",
@@ -41,6 +46,9 @@ __all__ = [
     "RegexFlags",
     "SchemaValidationCheck",
     "SemanticSimilarityCheck",
+    "SetEqualCheck",
+    "SubsetCheck",
+    "SupersetCheck",
     "ThresholdCheck",
     # Registry functions
     "get_check_class",
