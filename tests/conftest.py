@@ -4,6 +4,7 @@ from flex_evals import (
     AttributeExistsCheck,
     ContainsCheck,
     CustomFunctionCheck,
+    DisjointCheck,
     EqualsCheck,
     ExactMatchCheck,
     IsEmptyCheck,
@@ -32,6 +33,7 @@ def restore_standard_checks():
     register(CheckType.ATTRIBUTE_EXISTS, version="1.0.0")(AttributeExistsCheck)
     register(CheckType.CONTAINS, version="1.0.0")(ContainsCheck)
     register(CheckType.CUSTOM_FUNCTION, version="1.0.0")(CustomFunctionCheck)
+    register(CheckType.DISJOINT, version="1.0.0")(DisjointCheck)
     register(CheckType.EQUALS, version="1.0.0")(EqualsCheck)
     register(CheckType.EXACT_MATCH, version="1.0.0")(ExactMatchCheck)
     register(CheckType.IS_EMPTY, version="1.0.0")(IsEmptyCheck)

@@ -27,6 +27,7 @@ class CheckType(str, Enum):
     SEMANTIC_SIMILARITY = 'semantic_similarity'
     LLM_JUDGE = 'llm_judge'
     CUSTOM_FUNCTION = 'custom_function'
+    DISJOINT = 'disjoint'
     SCHEMA_VALIDATION = 'schema_validation'
     SUBSET = 'subset'
     SET_EQUAL = 'set_equal'

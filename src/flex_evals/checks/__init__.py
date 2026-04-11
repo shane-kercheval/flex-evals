@@ -16,6 +16,7 @@ from .base import BaseCheck, BaseAsyncCheck, EvaluationContext
 from .attribute_exists import AttributeExistsCheck
 from .contains import ContainsCheck
 from .custom_function import CustomFunctionCheck
+from .disjoint import DisjointCheck
 from .equals import EqualsCheck
 from .exact_match import ExactMatchCheck
 from .is_empty import IsEmptyCheck
@@ -35,6 +36,7 @@ __all__ = [
     "BaseCheck",
     "ContainsCheck",
     "CustomFunctionCheck",
+    "DisjointCheck",
     "EqualsCheck",
     "EvaluationContext",
     "ExactMatchCheck",

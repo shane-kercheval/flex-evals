@@ -27,6 +27,7 @@ from .checks import (
     BaseCheck,
     ContainsCheck,
     CustomFunctionCheck,
+    DisjointCheck,
     EqualsCheck,
     EvaluationContext,
     ExactMatchCheck,
@@ -64,6 +65,7 @@ __all__ = [
     "CheckType",
     "ContainsCheck",
     "CustomFunctionCheck",
+    "DisjointCheck",
     "EqualsCheck",
     "ErrorType",
     # Check system utilities
