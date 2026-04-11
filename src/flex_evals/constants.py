@@ -29,6 +29,7 @@ class CheckType(str, Enum):
     CUSTOM_FUNCTION = 'custom_function'
     SCHEMA_VALIDATION = 'schema_validation'
     SUBSET = 'subset'
+    SET_EQUAL = 'set_equal'
     SUPERSET = 'superset'
 
     def __str__(self) -> str:
