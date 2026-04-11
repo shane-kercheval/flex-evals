@@ -24,6 +24,7 @@ from .regex import RegexCheck, RegexFlags
 from .schema import SchemaValidationCheck
 from .semantic_similarity import SemanticSimilarityCheck
 from .subset import SubsetCheck
+from .superset import SupersetCheck
 from .threshold import ThresholdCheck
 
 __all__ = [
@@ -43,6 +44,7 @@ __all__ = [
     "SchemaValidationCheck",
     "SemanticSimilarityCheck",
     "SubsetCheck",
+    "SupersetCheck",
     "ThresholdCheck",
     # Registry functions
     "get_check_class",

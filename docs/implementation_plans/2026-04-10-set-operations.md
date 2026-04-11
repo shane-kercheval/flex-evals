@@ -14,7 +14,11 @@
 
 **Set semantics**: These are mathematical set operations. Duplicates are ignored — `["a", "a", "b"]` is treated as `{"a", "b"}`. Multiset/bag semantics (where duplicate counts matter) are out of scope.
 
-**Field naming**: All four checks use `actual`/`expected` (matching the `EqualsCheck` convention) rather than ambiguous names like `collection`/`items`.
+**Field naming**: Each check uses field names that are self-documenting for its specific semantics:
+- `SubsetCheck`: `collection`/`required` — "collection must contain all required items"
+- `SupersetCheck`: `collection`/`allowed` — "collection must contain only allowed items"
+- `SetEqualCheck`: `actual`/`expected` — "actual must equal expected" (symmetric, matches `EqualsCheck`)
+- `DisjointCheck`: `collection`/`forbidden` — "collection must not contain any forbidden items"
 
 **Element comparison**: Elements are compared using Python `==` by default. When `case_sensitive=False`, only `str` elements are lowercased for comparison; non-string elements are compared with `==` regardless. There is no implicit `str()` coercion — `1 != "1"`. To support unhashable elements (dicts, nested lists), comparison uses list iteration rather than Python `set()` construction.
 

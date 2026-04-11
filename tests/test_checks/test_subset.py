@@ -30,98 +30,98 @@ class TestSubsetValidation:
 
     def test_creation_with_literal_lists(self) -> None:
         check = SubsetCheck(
-            actual=["a", "b", "c"],
-            expected=["a", "b"],
+            collection=["a", "b", "c"],
+            required=["a", "b"],
         )
-        assert check.actual == ["a", "b", "c"]
-        assert check.expected == ["a", "b"]
+        assert check.collection == ["a", "b", "c"]
+        assert check.required == ["a", "b"]
         assert check.case_sensitive is True
         assert check.negate is False
 
     def test_jsonpath_auto_conversion(self) -> None:
         check = SubsetCheck(
-            actual="$.output.value.tags",
-            expected="$.test_case.expected.must_contain",
+            collection="$.output.value.tags",
+            required="$.test_case.expected.must_contain",
             case_sensitive="$.test_case.expected.case_sensitive",
             negate="$.test_case.expected.should_negate",
         )
-        assert isinstance(check.actual, JSONPath)
-        assert check.actual.expression == "$.output.value.tags"
-        assert isinstance(check.expected, JSONPath)
-        assert check.expected.expression == "$.test_case.expected.must_contain"
+        assert isinstance(check.collection, JSONPath)
+        assert check.collection.expression == "$.output.value.tags"
+        assert isinstance(check.required, JSONPath)
+        assert check.required.expression == "$.test_case.expected.must_contain"
         assert isinstance(check.case_sensitive, JSONPath)
         assert isinstance(check.negate, JSONPath)
 
     def test_invalid_jsonpath_raises(self) -> None:
         with pytest.raises(PydanticValidationError, match="Invalid JSONPath expression"):
-            SubsetCheck(actual="$.invalid[", expected=["a"])
+            SubsetCheck(collection="$.invalid[", required=["a"])
 
     def test_check_type_property(self) -> None:
-        check = SubsetCheck(actual=["a"], expected=["a"])
+        check = SubsetCheck(collection=["a"], required=["a"])
         assert check.check_type == CheckType.SUBSET
 
     def test_invalid_boolean_field_raises(self) -> None:
         with pytest.raises(PydanticValidationError):
-            SubsetCheck(actual=["a"], expected=["a"], case_sensitive="not_a_boolean")
+            SubsetCheck(collection=["a"], required=["a"], case_sensitive="not_a_boolean")
 
 
 class TestSubsetExecution:
     """Test SubsetCheck execution logic."""
 
-    def test_all_expected_present(self) -> None:
-        check = SubsetCheck(actual=["a", "b", "c"], expected=["a", "b"])
+    def test_all_required_present(self) -> None:
+        check = SubsetCheck(collection=["a", "b", "c"], required=["a", "b"])
         result = check()
         assert result["passed"] is True
         assert result["found"] == ["a", "b"]
         assert result["missing"] == []
 
-    def test_some_expected_missing(self) -> None:
-        check = SubsetCheck(actual=["a", "c"], expected=["a", "b"])
+    def test_some_required_missing(self) -> None:
+        check = SubsetCheck(collection=["a", "c"], required=["a", "b"])
         result = check()
         assert result["passed"] is False
         assert result["found"] == ["a"]
         assert result["missing"] == ["b"]
 
-    def test_all_expected_missing(self) -> None:
-        check = SubsetCheck(actual=["x", "y"], expected=["a", "b"])
+    def test_all_required_missing(self) -> None:
+        check = SubsetCheck(collection=["x", "y"], required=["a", "b"])
         result = check()
         assert result["passed"] is False
         assert result["missing"] == ["a", "b"]
         assert result["found"] == []
 
-    def test_empty_actual_nonempty_expected(self) -> None:
-        check = SubsetCheck(actual=[], expected=["a"])
+    def test_empty_collection_nonempty_required(self) -> None:
+        check = SubsetCheck(collection=[], required=["a"])
         result = check()
         assert result["passed"] is False
         assert result["missing"] == ["a"]
 
-    def test_empty_expected(self) -> None:
-        """Empty expected is vacuously true — empty set is subset of everything."""
-        check = SubsetCheck(actual=["a", "b"], expected=[])
+    def test_empty_required(self) -> None:
+        """Empty required is vacuously true — empty set is subset of everything."""
+        check = SubsetCheck(collection=["a", "b"], required=[])
         result = check()
         assert result["passed"] is True
         assert result["found"] == []
         assert result["missing"] == []
 
     def test_both_empty(self) -> None:
-        check = SubsetCheck(actual=[], expected=[])
+        check = SubsetCheck(collection=[], required=[])
         result = check()
         assert result["passed"] is True
 
     def test_negate_inverts_pass(self) -> None:
-        check = SubsetCheck(actual=["a", "b"], expected=["a", "b"], negate=True)
+        check = SubsetCheck(collection=["a", "b"], required=["a", "b"], negate=True)
         result = check()
         assert result["passed"] is False
 
     def test_negate_inverts_fail(self) -> None:
-        check = SubsetCheck(actual=["a"], expected=["a", "b"], negate=True)
+        check = SubsetCheck(collection=["a"], required=["a", "b"], negate=True)
         result = check()
         assert result["passed"] is True
 
     def test_case_insensitive_strings(self) -> None:
         check = SubsetCheck(
-            actual=["Python", "Flask"],
-            expected=["python", "flask"],
+            collection=["Python", "Flask"],
+            required=["python", "flask"],
             case_sensitive=False,
         )
         result = check()
@@ -131,8 +131,8 @@ class TestSubsetExecution:
 
     def test_case_sensitive_strings(self) -> None:
         check = SubsetCheck(
-            actual=["Python", "Flask"],
-            expected=["python", "flask"],
+            collection=["Python", "Flask"],
+            required=["python", "flask"],
             case_sensitive=True,
         )
         result = check()
@@ -141,42 +141,42 @@ class TestSubsetExecution:
     def test_case_insensitive_does_not_affect_non_strings(self) -> None:
         """case_sensitive=False only affects str elements; int 1 != str '1'."""
         check = SubsetCheck(
-            actual=[1, 2, 3],
-            expected=["1"],
+            collection=[1, 2, 3],
+            required=["1"],
             case_sensitive=False,
         )
         result = check()
         assert result["passed"] is False
         assert result["missing"] == ["1"]
 
-    def test_duplicate_elements_in_expected(self) -> None:
-        """Duplicates in expected are deduplicated (set semantics)."""
-        check = SubsetCheck(actual=["a", "b"], expected=["a", "a", "b", "b"])
+    def test_duplicate_elements_in_required(self) -> None:
+        """Duplicates in required are deduplicated (set semantics)."""
+        check = SubsetCheck(collection=["a", "b"], required=["a", "a", "b", "b"])
         result = check()
         assert result["passed"] is True
         assert result["found"] == ["a", "b"]
 
-    def test_duplicate_elements_in_actual(self) -> None:
-        check = SubsetCheck(actual=["a", "a", "b"], expected=["a", "b"])
+    def test_duplicate_elements_in_collection(self) -> None:
+        check = SubsetCheck(collection=["a", "a", "b"], required=["a", "b"])
         result = check()
         assert result["passed"] is True
 
     def test_non_string_elements(self) -> None:
-        check = SubsetCheck(actual=[1, 2, 3], expected=[1, 2])
+        check = SubsetCheck(collection=[1, 2, 3], required=[1, 2])
         result = check()
         assert result["passed"] is True
         assert result["found"] == [1, 2]
 
     def test_mixed_type_elements(self) -> None:
-        check = SubsetCheck(actual=[1, "a", True], expected=[1, "a"])
+        check = SubsetCheck(collection=[1, "a", True], required=[1, "a"])
         result = check()
         assert result["passed"] is True
 
     def test_dict_elements(self) -> None:
         """Unhashable elements (dicts) are supported via iteration-based comparison."""
         check = SubsetCheck(
-            actual=[{"key": "val"}, {"other": "data"}],
-            expected=[{"key": "val"}],
+            collection=[{"key": "val"}, {"other": "data"}],
+            required=[{"key": "val"}],
         )
         result = check()
         assert result["passed"] is True
@@ -184,20 +184,20 @@ class TestSubsetExecution:
 
     def test_dict_elements_missing(self) -> None:
         check = SubsetCheck(
-            actual=[{"other": "data"}],
-            expected=[{"key": "val"}],
+            collection=[{"other": "data"}],
+            required=[{"key": "val"}],
         )
         result = check()
         assert result["passed"] is False
         assert result["missing"] == [{"key": "val"}]
 
     def test_set_inputs(self) -> None:
-        check = SubsetCheck(actual={"a", "b", "c"}, expected={"a", "b"})
+        check = SubsetCheck(collection={"a", "b", "c"}, required={"a", "b"})
         result = check()
         assert result["passed"] is True
 
-    def test_single_item_expected(self) -> None:
-        check = SubsetCheck(actual=["a", "b"], expected=["a"])
+    def test_single_item_required(self) -> None:
+        check = SubsetCheck(collection=["a", "b"], required=["a"])
         result = check()
         assert result["passed"] is True
         assert result["found"] == ["a"]
@@ -205,8 +205,8 @@ class TestSubsetExecution:
     def test_case_insensitive_deduplication(self) -> None:
         """Deduplication respects case_sensitive setting."""
         check = SubsetCheck(
-            actual=["A", "b"],
-            expected=["a", "A"],
+            collection=["A", "b"],
+            required=["a", "A"],
             case_sensitive=False,
         )
         result = check()
@@ -216,22 +216,22 @@ class TestSubsetExecution:
 
     def test_none_elements(self) -> None:
         """None is a valid element, compared with ==."""
-        check = SubsetCheck(actual=["a", None, "b"], expected=[None])
+        check = SubsetCheck(collection=["a", None, "b"], required=[None])
         result = check()
         assert result["passed"] is True
         assert result["found"] == [None]
 
-    def test_negate_with_empty_expected(self) -> None:
-        """Empty expected is vacuously true; negate inverts to False."""
-        check = SubsetCheck(actual=["a"], expected=[], negate=True)
+    def test_negate_with_empty_required(self) -> None:
+        """Empty required is vacuously true; negate inverts to False."""
+        check = SubsetCheck(collection=["a"], required=[], negate=True)
         result = check()
         assert result["passed"] is False
 
     def test_case_insensitive_with_negate(self) -> None:
         """case_sensitive and negate compose without interference."""
         check = SubsetCheck(
-            actual=["Python", "Flask"],
-            expected=["python"],
+            collection=["Python", "Flask"],
+            required=["python"],
             case_sensitive=False,
             negate=True,
         )
@@ -243,45 +243,44 @@ class TestSubsetExecution:
 class TestSubsetErrorHandling:
     """Test error conditions for SubsetCheck."""
 
-    def test_actual_not_list_or_set(self) -> None:
-        check = SubsetCheck(actual=["placeholder"], expected=["a"])
-        # Simulate resolved field that's a string instead of list
-        check.actual = "not a list"  # type: ignore[assignment]
+    def test_collection_not_list_or_set(self) -> None:
+        check = SubsetCheck(collection=["placeholder"], required=["a"])
+        check.collection = "not a list"  # type: ignore[assignment]
         with pytest.raises(ValidationError, match="must be a list or set"):
             check()
 
-    def test_expected_not_list_or_set(self) -> None:
-        check = SubsetCheck(actual=["a"], expected=["placeholder"])
-        check.expected = "not a list"  # type: ignore[assignment]
+    def test_required_not_list_or_set(self) -> None:
+        check = SubsetCheck(collection=["a"], required=["placeholder"])
+        check.required = "not a list"  # type: ignore[assignment]
         with pytest.raises(ValidationError, match="must be a list or set"):
             check()
 
-    def test_actual_is_int(self) -> None:
-        check = SubsetCheck(actual=["placeholder"], expected=["a"])
-        check.actual = 42  # type: ignore[assignment]
+    def test_collection_is_int(self) -> None:
+        check = SubsetCheck(collection=["placeholder"], required=["a"])
+        check.collection = 42  # type: ignore[assignment]
         with pytest.raises(ValidationError, match="must be a list or set"):
             check()
 
-    def test_unresolved_jsonpath_actual(self) -> None:
-        check = SubsetCheck(actual="$.output.value", expected=["a"])
-        with pytest.raises(RuntimeError, match="JSONPath not resolved for 'actual'"):
+    def test_unresolved_jsonpath_collection(self) -> None:
+        check = SubsetCheck(collection="$.output.value", required=["a"])
+        with pytest.raises(RuntimeError, match="JSONPath not resolved for 'collection'"):
             check()
 
-    def test_unresolved_jsonpath_expected(self) -> None:
-        check = SubsetCheck(actual=["a"], expected="$.test_case.expected")
-        with pytest.raises(RuntimeError, match="JSONPath not resolved for 'expected'"):
+    def test_unresolved_jsonpath_required(self) -> None:
+        check = SubsetCheck(collection=["a"], required="$.test_case.expected")
+        with pytest.raises(RuntimeError, match="JSONPath not resolved for 'required'"):
             check()
 
     def test_unresolved_jsonpath_case_sensitive(self) -> None:
         check = SubsetCheck(
-            actual=["a"], expected=["a"], case_sensitive="$.test_case.expected.cs",
+            collection=["a"], required=["a"], case_sensitive="$.test_case.expected.cs",
         )
         with pytest.raises(RuntimeError, match="JSONPath not resolved for 'case_sensitive'"):
             check()
 
     def test_unresolved_jsonpath_negate(self) -> None:
         check = SubsetCheck(
-            actual=["a"], expected=["a"], negate="$.test_case.expected.neg",
+            collection=["a"], required=["a"], negate="$.test_case.expected.neg",
         )
         with pytest.raises(RuntimeError, match="JSONPath not resolved for 'negate'"):
             check()
@@ -292,8 +291,8 @@ class TestSubsetEngineIntegration:
 
     def test_execute_with_evaluation_context(self) -> None:
         check = SubsetCheck(
-            actual="$.output.value.tags",
-            expected="$.test_case.expected.must_contain",
+            collection="$.output.value.tags",
+            required="$.test_case.expected.must_contain",
         )
         test_case = TestCase(
             id="test_001",
@@ -308,13 +307,13 @@ class TestSubsetEngineIntegration:
         assert result.results["passed"] is True
         assert result.results["found"] == ["python", "flask"]
         assert result.results["missing"] == []
-        assert result.resolved_arguments["actual"]["value"] == ["python", "flask", "api"]
-        assert result.resolved_arguments["expected"]["value"] == ["python", "flask"]
+        assert result.resolved_arguments["collection"]["value"] == ["python", "flask", "api"]
+        assert result.resolved_arguments["required"]["value"] == ["python", "flask"]
 
     def test_execute_with_missing_items(self) -> None:
         check = SubsetCheck(
-            actual="$.output.value.tags",
-            expected="$.test_case.expected.must_contain",
+            collection="$.output.value.tags",
+            required="$.test_case.expected.must_contain",
         )
         test_case = TestCase(
             id="test_001",
@@ -329,7 +328,7 @@ class TestSubsetEngineIntegration:
         assert result.results["passed"] is False
         assert result.results["missing"] == ["django"]
 
-    @pytest.mark.parametrize(("output_tags", "expected_tags", "expected_passed"), [
+    @pytest.mark.parametrize(("output_tags", "required_tags", "expected_passed"), [
         (["a", "b", "c"], ["a", "b"], True),
         (["a", "b"], ["a", "b", "c"], False),
         (["a"], [], True),
@@ -338,20 +337,20 @@ class TestSubsetEngineIntegration:
     def test_via_evaluate_sync(
         self,
         output_tags: list[str],
-        expected_tags: list[str],
+        required_tags: list[str],
         expected_passed: bool,
     ) -> None:
         test_cases = [
             TestCase(
                 id="test_001",
                 input="test",
-                expected=expected_tags,
+                expected=required_tags,
                 checks=[
                     Check(
                         type=CheckType.SUBSET,
                         arguments={
-                            "actual": "$.output.value",
-                            "expected": "$.test_case.expected",
+                            "collection": "$.output.value",
+                            "required": "$.test_case.expected",
                         },
                     ),
                 ],
@@ -375,8 +374,8 @@ class TestSubsetEngineIntegration:
                 expected=["python", "flask"],
                 checks=[
                     SubsetCheck(
-                        actual="$.output.value",
-                        expected="$.test_case.expected",
+                        collection="$.output.value",
+                        required="$.test_case.expected",
                     ),
                 ],
             ),
@@ -390,10 +389,10 @@ class TestSubsetEngineIntegration:
         assert results.results[0].check_results[0].results["found"] == ["python", "flask"]
 
     def test_wrong_runtime_type_via_execute(self) -> None:
-        """When JSONPath resolves actual to a non-list, execute() returns error CheckResult."""
+        """When JSONPath resolves collection to a non-list, execute() returns error CheckResult."""
         check = SubsetCheck(
-            actual="$.output.value",
-            expected=["a"],
+            collection="$.output.value",
+            required=["a"],
         )
         test_case = TestCase(id="test_001", input="test")
         output = Output(value="not a list")
@@ -415,8 +414,8 @@ class TestSubsetEngineIntegration:
                     Check(
                         type=CheckType.SUBSET,
                         arguments={
-                            "actual": "$.output.value",
-                            "expected": "$.test_case.expected.must_contain",
+                            "collection": "$.output.value",
+                            "required": "$.test_case.expected.must_contain",
                             "case_sensitive": "$.test_case.expected.cs",
                         },
                     ),

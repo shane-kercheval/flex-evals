@@ -1,4 +1,4 @@
-"""Subset Check - checks if all expected items are present in a collection."""
+"""Subset Check - checks if all required items are present in a collection."""
 
 from typing import Any
 from pydantic import field_validator, Field
@@ -13,20 +13,20 @@ from ._set_utils import _partition_elements
 @register(CheckType.SUBSET, version='1.0.0')
 class SubsetCheck(BaseCheck):
     """
-    Checks whether all expected items are present in the actual collection.
+    Checks whether all required items are present in the collection.
 
-    Performs a set membership test: expected ⊆ actual. Duplicates are ignored
-    (set semantics). Elements are compared using Python == by default; when
-    case_sensitive=False, only string elements are lowercased for comparison.
+    Performs a set membership test: required ⊆ collection. Duplicates are
+    ignored (set semantics). Elements are compared using Python == by default;
+    when case_sensitive=False, only string elements are lowercased for comparison.
     """
 
-    actual: list | set | JSONPath = Field(
+    collection: list | set | JSONPath = Field(
         ...,
         description="The collection to check against (e.g., model output tags)",
     )
-    expected: list | set | JSONPath = Field(
+    required: list | set | JSONPath = Field(
         ...,
-        description="Items that must be present in actual",
+        description="Items that must be present in collection",
     )
     case_sensitive: bool | JSONPath = Field(
         True,
@@ -34,10 +34,10 @@ class SubsetCheck(BaseCheck):
     )
     negate: bool | JSONPath = Field(
         False,
-        description="If true, inverts the result (passes when not all expected items are found)",
+        description="If true, inverts the result",
     )
 
-    @field_validator('actual', 'expected', 'case_sensitive', 'negate', mode='before')
+    @field_validator('collection', 'required', 'case_sensitive', 'negate', mode='before')
     @classmethod
     def convert_jsonpath(cls, value: object) -> object | JSONPath:
         """Convert JSONPath-like strings to JSONPath objects."""
@@ -58,28 +58,29 @@ class SubsetCheck(BaseCheck):
         Raises:
             RuntimeError: If any field contains unresolved JSONPath objects
         """
-        if isinstance(self.actual, JSONPath):
-            raise RuntimeError(f"JSONPath not resolved for 'actual' field: {self.actual}")
-        if isinstance(self.expected, JSONPath):
-            raise RuntimeError(f"JSONPath not resolved for 'expected' field: {self.expected}")
+        if isinstance(self.collection, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'collection' field: {self.collection}")
+        if isinstance(self.required, JSONPath):
+            raise RuntimeError(f"JSONPath not resolved for 'required' field: {self.required}")
         if isinstance(self.case_sensitive, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'case_sensitive' field: {self.case_sensitive}")  # noqa: E501
         if isinstance(self.negate, JSONPath):
             raise RuntimeError(f"JSONPath not resolved for 'negate' field: {self.negate}")
 
-        if not isinstance(self.actual, list | set):
+        if not isinstance(self.collection, list | set):
             raise ValidationError(
-                f"Subset check 'actual' must be a list or set, got {type(self.actual).__name__}",
+                "Subset check 'collection' must be a list or set, "
+                f"got {type(self.collection).__name__}",
             )
-        if not isinstance(self.expected, list | set):
+        if not isinstance(self.required, list | set):
             raise ValidationError(
-                "Subset check 'expected' must be a list or set, "
-                f"got {type(self.expected).__name__}",
+                "Subset check 'required' must be a list or set, "
+                f"got {type(self.required).__name__}",
             )
 
         found, missing = _partition_elements(
-            source=self.expected,
-            target=self.actual,
+            source=self.required,
+            target=self.collection,
             case_sensitive=self.case_sensitive,
         )
 

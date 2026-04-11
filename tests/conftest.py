@@ -12,6 +12,7 @@ from flex_evals import (
     SchemaValidationCheck,
     SemanticSimilarityCheck,
     SubsetCheck,
+    SupersetCheck,
     ThresholdCheck,
     CheckType,
     register,
@@ -38,4 +39,5 @@ def restore_standard_checks():
     register(CheckType.SCHEMA_VALIDATION, version="1.0.0")(SchemaValidationCheck)
     register(CheckType.SEMANTIC_SIMILARITY, version="1.0.0")(SemanticSimilarityCheck)
     register(CheckType.SUBSET, version="1.0.0")(SubsetCheck)
+    register(CheckType.SUPERSET, version="1.0.0")(SupersetCheck)
     register(CheckType.THRESHOLD, version="1.0.0")(ThresholdCheck)
