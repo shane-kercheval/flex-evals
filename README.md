@@ -39,43 +39,66 @@ print(f"Passed: {results.results[0].check_results[0].results['passed']}")
 Use the `@evaluate` decorator to test functions with automatic evaluation:
 
 ```python
-from flex_evals import TestCase, ContainsCheck
+from flex_evals import TestCase, ContainsCheck, PassMode
 from flex_evals.pytest_decorator import evaluate
 
 @evaluate(
     test_cases=[TestCase(input="What is Python?")],
     checks=[
         ContainsCheck(
-            text="$.output.value",  # JSONPath expression
+            text="$.output.value",
             phrases=["Python", "programming"],
         ),
     ],
     samples=10,
-    success_threshold=0.8,  # Expect 80% success
+    pass_threshold=0.8,
 )
 async def test_python_explanation(test_case: TestCase) -> str:
-    # This function will be called `samples * len(test_cases)` times.
-    # Each test case will be evaluated against this function's output.
-    # The value returned by this function will be populated into the `Output` dataclass and
-    # can be referenced by the Check via JSONPath (e.g. `text="$.output.value"`)
     return my_llm(test_case.input)
 ```
 
 **Note**: All checks used with `@evaluate` must return a `passed: bool` field in their results. Standard checks (exact_match, contains, regex, threshold) include this by default. For custom checks like `LLMJudgeCheck`, ensure your response format includes a `passed` field or computed field.
 
-#### Understanding `success_threshold`
+#### Understanding `pass_mode` and `pass_threshold`
 
-The `success_threshold` parameter defines the minimum proportion of **samples** that must fully pass for the test to succeed. Success is evaluated at three levels:
+The `pass_mode` parameter controls how pass/fail is aggregated across samples. The `pass_threshold` (0.0 to 1.0, default 1.0) sets the minimum pass rate required.
 
-1. **Check level**: A check passes if its evaluation criteria are met
-2. **Test case level**: A test case passes only if **ALL** its checks pass
-3. **Sample level**: A sample passes only if **ALL** test cases pass
+**`PassMode.PER_TEST_CASE`** (default) — Each test case is evaluated independently across samples. A test case passes if it succeeds in at least `pass_threshold` proportion of samples. The overall eval passes if **all** test cases meet their individual threshold.
 
-**Example**: With 10 test cases (each having 3 checks), `samples=5`, and `success_threshold=0.6`:
-- You'll run 5 samples, each executing all 10 test cases
-- Each sample requires all 10 test cases to pass (all 30 checks total per sample)
-- At least 3 out of 5 samples (60%) must fully pass for the test to succeed
-- If only 2 samples have all tests pass, the test fails (2/5 = 0.4 < 0.6)
+Use this mode when test cases are independent scenarios (e.g., different inputs, tag suggestions, classification evals). This is the right choice for most LLM evaluations.
+
+**`PassMode.SAMPLE`** — A sample passes only if **all** test cases pass within that sample. The overall eval passes if at least `pass_threshold` proportion of samples fully pass.
+
+Use this mode when test cases are interdependent or sequential (e.g., end-to-end pipeline tests where "the whole pipeline works" is the meaningful question).
+
+#### Why `PER_TEST_CASE` is the default
+
+With sample-level aggregation, adding more test cases creates an exponential penalty. If each of N independent test cases passes at rate P, the probability of a clean sample is P^N:
+
+| Test cases | Individual pass rate | Clean sample probability |
+|------------|---------------------|--------------------------|
+| 5          | 90%                 | 59%                      |
+| 11         | 90%                 | 31%                      |
+| 20         | 90%                 | 12%                      |
+
+Per-test-case mode avoids this — each test case is judged on its own merit, and failures are attributed to the specific test case that's underperforming.
+
+#### Example: 3 test cases, 10 samples, `pass_threshold=0.8`
+
+```
+                 Sample 1  Sample 2  Sample 3  ...  Sample 10   Pass Rate
+test_case_A         ✓         ✓         ✓            ✓        10/10 = 100%
+test_case_B         ✓         ✗         ✓            ✓         9/10 = 90%
+test_case_C         ✓         ✓         ✗            ✓         8/10 = 80%
+```
+
+- **`PER_TEST_CASE`**: A=100% ✓, B=90% ✓, C=80% ✓ — all ≥ 80%, **passes**
+- **`SAMPLE`**: Samples 2 and 3 fail (one test case failed in each) → 8/10 = 80%, **passes**
+
+Now add a flaky test_case_D that passes 70% of the time:
+
+- **`PER_TEST_CASE`**: A ✓, B ✓, C ✓, D=70% ✗ — **fails**, clearly identifying D as the problem
+- **`SAMPLE`**: D's failures drag down additional samples → pass rate drops further below threshold
 
 ### Fixture Limitations
 

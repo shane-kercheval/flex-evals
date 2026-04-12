@@ -25,6 +25,7 @@ from functools import wraps
 
 import pytest
 
+from .constants import PassMode
 from .engine import evaluate as evaluate_async, evaluate_sync
 from .schemas import TestCase, Output, Check, CheckResult, FlexEvalsJSONEncoder
 
@@ -67,7 +68,8 @@ def evaluate(  # noqa: PLR0915
     test_cases: list[TestCase],
     checks: list[Check] | None = None,
     samples: int = 1,
-    success_threshold: float = 1.0,
+    pass_threshold: float = 1.0,
+    pass_mode: PassMode | str = PassMode.PER_TEST_CASE,
     max_concurrency: int | None = None,
     output_dir: str | Path | None = None,
     metadata: dict[str, Any] | None = None,
@@ -88,11 +90,25 @@ def evaluate(  # noqa: PLR0915
         test_cases: List of TestCase objects to cycle through for evaluation
         checks: Optional list of checks to apply to all samples
         samples: Number of times to execute the function (default: 1)
-        success_threshold: Minimum proportion of samples that must fully pass (0.0 to 1.0,
-            default: 1.0). A sample passes only if ALL test cases pass, and a test case
-            passes only if ALL its checks pass. For example, with 10 test cases (each with
-            3 checks), samples=5, and success_threshold=0.6, at least 3 out of 5 samples
-            must have all 10 test cases pass (with all 3 checks passing in each)
+        pass_threshold: Minimum pass rate required (0.0 to 1.0, default: 1.0).
+            How this threshold is applied depends on ``pass_mode``.
+        pass_mode: How pass/fail is aggregated (default: PassMode.PER_TEST_CASE).
+            Accepts PassMode enum or string ('sample', 'per_test_case').
+
+            - ``PassMode.PER_TEST_CASE``: Each test case is evaluated independently
+              across samples. A test case passes if it succeeds in at least
+              ``pass_threshold`` proportion of samples. The overall eval passes if ALL
+              test cases meet their individual threshold. Use this mode when test cases
+              are independent scenarios (e.g., different inputs, tag suggestions,
+              classification evals). This is the default and the right choice for most
+              LLM evaluations.
+
+            - ``PassMode.SAMPLE``: A sample passes only if ALL test cases pass within
+              that sample. The overall eval passes if at least ``pass_threshold``
+              proportion of samples fully pass. Use this mode when test cases are
+              interdependent or sequential (e.g., end-to-end pipeline tests where
+              "the whole pipeline works" is the meaningful question).
+
         max_concurrency: Maximum number of async test cases to execute concurrently
             (default: None, meaning unlimited). When set, a semaphore limits how many
             test cases run at once. The semaphore is acquired before timing starts, so
@@ -116,7 +132,7 @@ def evaluate(  # noqa: PLR0915
                 arguments={"text": "$.output.value", "phrases": ["expected"]},
             )],
             samples=10,
-            success_threshold=0.8
+            pass_threshold=0.8,
         )
         def test_my_function(test_case):
             response = example_llm_function(test_case.input)
@@ -128,14 +144,23 @@ def evaluate(  # noqa: PLR0915
         - Missing 'passed' field in CheckResult raises clear error
         - Incompatible checks (no 'passed' field) are validated early
     """
+    # Normalize pass_mode from str to PassMode enum
+    try:
+        pass_mode = PassMode(pass_mode)
+    except ValueError:
+        raise ValueError(
+            f"Invalid pass_mode: {pass_mode!r}. "
+            f"Must be one of: {', '.join(repr(m.value) for m in PassMode)}",
+        ) from None
+
     def decorator(func: F) -> F:  # noqa: PLR0915
         # Validate decorator parameters
         if not test_cases:
             raise ValueError("test_cases list cannot be empty")
         if samples <= 0:
             raise ValueError("samples must be positive")
-        if not 0.0 <= success_threshold <= 1.0:
-            raise ValueError("success_threshold must be between 0.0 and 1.0")
+        if not 0.0 <= pass_threshold <= 1.0:
+            raise ValueError("pass_threshold must be between 0.0 and 1.0")
         if max_concurrency is not None and max_concurrency <= 0:
             raise ValueError("max_concurrency must be a positive integer")
 
@@ -179,15 +204,19 @@ def evaluate(  # noqa: PLR0915
                     return
 
                 num_tc = len(test_cases)
-                passed = sum(
-                    1 for i in range(samples)
-                    if all(
-                        _check_sample_passed(tcr.check_results)
-                        for tcr in evaluation_result.results[i * num_tc:(i + 1) * num_tc]
-                    )
+                sample_passed, sample_failed, sample_pass_rate = _compute_sample_results(
+                    evaluation_result.results, num_tc, samples,
                 )
-                failed = samples - passed
-                success_rate = passed / samples
+                per_tc = _compute_per_test_case_results(
+                    evaluation_result.results, num_tc, samples,
+                )
+
+                if pass_mode == PassMode.PER_TEST_CASE:
+                    overall_passed = all(
+                        entry["rate"] >= pass_threshold for entry in per_tc
+                    )
+                else:
+                    overall_passed = sample_pass_rate >= pass_threshold
 
                 evaluation_result.metadata = {
                     **(evaluation_result.metadata or {}),
@@ -196,17 +225,24 @@ def evaluate(  # noqa: PLR0915
                         'test_function': func.__name__,
                         'test_module': func.__module__,
                         'samples': samples,
-                        'success_threshold': success_threshold,
+                        'pass_threshold': pass_threshold,
+                        'pass_mode': str(pass_mode),
                         'max_concurrency': max_concurrency,
                         'num_test_cases': num_tc,
                     },
                     '_test_results': {
-                        'passed_samples': passed,
-                        'failed_samples': failed,
+                        'pass_mode': str(pass_mode),
+                        'pass_threshold': pass_threshold,
+                        'passed': overall_passed,
+                        'passed_samples': sample_passed,
+                        'failed_samples': sample_failed,
                         'total_samples': samples,
-                        'success_rate': success_rate,
-                        'success_threshold': success_threshold,
-                        'passed': success_rate >= success_threshold,
+                        'sample_pass_rate': sample_pass_rate,
+                        'per_test_case': per_tc,
+                        'failed_test_cases': [
+                            {"index": e["index"], "id": e["id"]}
+                            for e in per_tc if e["rate"] < pass_threshold
+                        ],
                     },
                 }
 
@@ -256,44 +292,60 @@ def evaluate(  # noqa: PLR0915
             _process_evaluation_result(evaluation_result, exceptions)
 
         def _process_evaluation_result(evaluation_result, exceptions) -> None:  # noqa: ANN001
-            """Process evaluation result and check success threshold."""
-            # Calculate sample-based success rate
-            num_test_cases_per_sample = len(test_cases)
-            passed_samples = 0
-            failed_samples = []
+            """Process evaluation result and check pass threshold."""
+            num_tc = len(test_cases)
 
-            for sample_idx in range(samples):
-                start_idx = sample_idx * num_test_cases_per_sample
-                end_idx = start_idx + num_test_cases_per_sample
-
-                sample_test_case_results = evaluation_result.results[start_idx:end_idx]
-                sample_exceptions = exceptions[start_idx:end_idx]
-
-                # Sample passes if ALL test cases pass
-                sample_passed = all(
-                    _check_sample_passed(tcr.check_results) for tcr in sample_test_case_results
+            if pass_mode == PassMode.PER_TEST_CASE:
+                per_tc = _compute_per_test_case_results(
+                    evaluation_result.results, num_tc, samples,
                 )
+                failed_entries = [e for e in per_tc if e["rate"] < pass_threshold]
+                if failed_entries:
+                    _generate_per_test_case_failure_report(
+                        func_name=func.__name__,
+                        pass_threshold=pass_threshold,
+                        per_test_case_results=per_tc,
+                        all_results=evaluation_result.results,
+                        all_exceptions=exceptions,
+                        num_test_cases=num_tc,
+                        samples=samples,
+                    )
+            else:
+                # Sample mode: existing logic
+                passed_samples = 0
+                failed_samples = []
 
-                if sample_passed:
-                    passed_samples += 1
-                else:
-                    failed_samples.append({
-                        "sample_index": sample_idx,
-                        "exceptions": sample_exceptions,
-                        "test_case_results": sample_test_case_results,
-                    })
+                for sample_idx in range(samples):
+                    start_idx = sample_idx * num_tc
+                    end_idx = start_idx + num_tc
 
-            # Check success threshold
-            success_rate = passed_samples / samples
-            if success_rate < success_threshold:
-                _generate_failure_report(
-                    func_name=func.__name__,
-                    samples=samples,
-                    passed_count=passed_samples,
-                    success_rate=success_rate,
-                    success_threshold=success_threshold,
-                    failed_samples=failed_samples,
-                )
+                    sample_test_case_results = evaluation_result.results[start_idx:end_idx]
+                    sample_exceptions = exceptions[start_idx:end_idx]
+
+                    sample_passed = all(
+                        _check_sample_passed(tcr.check_results)
+                        for tcr in sample_test_case_results
+                    )
+
+                    if sample_passed:
+                        passed_samples += 1
+                    else:
+                        failed_samples.append({
+                            "sample_index": sample_idx,
+                            "exceptions": sample_exceptions,
+                            "test_case_results": sample_test_case_results,
+                        })
+
+                sample_pass_rate = passed_samples / samples
+                if sample_pass_rate < pass_threshold:
+                    _generate_sample_failure_report(
+                        func_name=func.__name__,
+                        samples=samples,
+                        passed_count=passed_samples,
+                        sample_pass_rate=sample_pass_rate,
+                        pass_threshold=pass_threshold,
+                        failed_samples=failed_samples,
+                    )
 
         async def _execute_async_calls(expanded_test_cases, args, kwargs) -> None:  # noqa: ANN001
             """Execute async function calls concurrently."""
@@ -593,24 +645,170 @@ def _check_sample_passed(check_results: list[CheckResult]) -> bool:
     return True
 
 
-def _generate_failure_report(
+def _compute_sample_results(
+    results: list,
+    num_test_cases: int,
+    samples: int,
+) -> tuple[int, int, float]:
+    """
+    Compute sample-level pass/fail stats.
+
+    Returns (passed_samples, failed_samples, sample_pass_rate).
+
+    Results list is assumed to be in test_cases * samples order:
+    all test cases for sample 0, then sample 1, etc.
+    """
+    passed = sum(
+        1 for s_idx in range(samples)
+        if all(
+            _check_sample_passed(results[s_idx * num_test_cases + tc_idx].check_results)
+            for tc_idx in range(num_test_cases)
+        )
+    )
+    failed = samples - passed
+    rate = passed / samples if samples > 0 else 0.0
+    return passed, failed, rate
+
+
+def _compute_per_test_case_results(
+    results: list,
+    num_test_cases: int,
+    samples: int,
+) -> list[dict[str, Any]]:
+    """
+    Compute per-test-case pass rates across samples.
+
+    Returns list preserving original test case order, each entry:
+        {"index": int, "id": str | None, "passed": int, "failed": int,
+         "total": int, "rate": float}
+
+    Grouping is by positional index, not by ID, to handle duplicate or None IDs.
+
+    Results list is assumed to be in test_cases * samples order:
+    all test cases for sample 0, then sample 1, etc.
+    """
+    per_tc: list[dict[str, Any]] = []
+    for tc_idx in range(num_test_cases):
+        passed = 0
+        for s_idx in range(samples):
+            tcr = results[s_idx * num_test_cases + tc_idx]
+            if _check_sample_passed(tcr.check_results):
+                passed += 1
+        failed = samples - passed
+        tc_id = results[tc_idx].execution_context.test_case.id
+        per_tc.append({
+            "index": tc_idx,
+            "id": tc_id,
+            "passed": passed,
+            "failed": failed,
+            "total": samples,
+            "rate": passed / samples if samples > 0 else 0.0,
+        })
+    return per_tc
+
+
+def _format_test_case_label(entry: dict[str, Any]) -> str:
+    """Format a test case label with index and optional ID."""
+    if entry["id"] is not None:
+        return f"test_case {entry['index']} (id: {entry['id']})"
+    return f"test_case {entry['index']}"
+
+
+def _generate_per_test_case_failure_report(  # noqa: PLR0912
+    func_name: str,
+    pass_threshold: float,
+    per_test_case_results: list[dict[str, Any]],
+    all_results: list,
+    all_exceptions: list,
+    num_test_cases: int,
+    samples: int,
+) -> None:
+    """Generate per-test-case failure report and call pytest.fail()."""
+    failed_count = sum(1 for e in per_test_case_results if e["rate"] < pass_threshold)
+    total_count = len(per_test_case_results)
+
+    report_lines = [
+        f"Statistical evaluation failed for {func_name}:",
+        "  Pass mode: per_test_case",
+        f"  Pass threshold: {pass_threshold:.2%}",
+        "",
+        "  Per-test-case results:",
+    ]
+
+    # Show all test cases (up to 20), mark failures
+    display_limit = 20
+    for entry in per_test_case_results[:display_limit]:
+        label = _format_test_case_label(entry)
+        rate_str = f"{entry['passed']}/{entry['total']} ({entry['rate']:.2%})"
+        if entry["rate"] < pass_threshold:
+            report_lines.append(f"    FAIL {label}: {rate_str}")
+        else:
+            report_lines.append(f"    PASS {label}: {rate_str}")
+
+    if len(per_test_case_results) > display_limit:
+        remaining = len(per_test_case_results) - display_limit
+        report_lines.append(f"    ... and {remaining} more test cases")
+
+    report_lines.append("")
+    report_lines.append(f"  Failed test cases: {failed_count} of {total_count}")
+
+    # Show first failure detail for each failing test case (up to 5)
+    failed_entries = [e for e in per_test_case_results if e["rate"] < pass_threshold]
+    if failed_entries:
+        report_lines.append("")
+        report_lines.append("  Failure details:")
+        for entry in failed_entries[:5]:
+            tc_idx = entry["index"]
+            label = _format_test_case_label(entry)
+            # Find the first failing sample for this test case
+            for s_idx in range(samples):
+                result_idx = s_idx * num_test_cases + tc_idx
+                tcr = all_results[result_idx]
+                exc = all_exceptions[result_idx] if result_idx < len(all_exceptions) else None
+                if not _check_sample_passed(tcr.check_results):
+                    report_lines.append(f"    {label} (first failure in sample {s_idx}):")
+                    if exc:
+                        report_lines.append(f"      Exception: {type(exc).__name__}: {exc}")
+                    for check_result in tcr.check_results:
+                        if check_result.status != 'completed':
+                            report_lines.append(f"      Check '{check_result.check_type}': {check_result.status}")  # noqa: E501
+                            if check_result.error:
+                                report_lines.append(f"        Error: {check_result.error.message}")
+                            if check_result.resolved_arguments:
+                                report_lines.append(f"        Resolved arguments: {check_result.resolved_arguments}")  # noqa: E501
+                        elif not check_result.results.get('passed', False):
+                            report_lines.append(f"      Check '{check_result.check_type}': failed")
+                            if 'reasoning' in check_result.results:
+                                report_lines.append(f"        Reasoning: {check_result.results['reasoning']}")  # noqa: E501
+                            if check_result.resolved_arguments:
+                                report_lines.append(f"        Resolved arguments: {check_result.resolved_arguments}")  # noqa: E501
+                    break  # Only show first failure per test case
+
+        if len(failed_entries) > 5:
+            report_lines.append(f"    ... and {len(failed_entries) - 5} more failed test cases")
+
+    pytest.fail("\n".join(report_lines), pytrace=False)
+
+
+def _generate_sample_failure_report(
     func_name: str,
     samples: int,
     passed_count: int,
-    success_rate: float,
-    success_threshold: float,
+    sample_pass_rate: float,
+    pass_threshold: float,
     failed_samples: list[dict],
 ) -> None:
-    """Generate detailed failure report and call pytest.fail()."""
+    """Generate sample-mode failure report and call pytest.fail()."""
     failed_count = samples - passed_count
 
     report_lines = [
         f"Statistical evaluation failed for {func_name}:",
+        "  Pass mode: sample",
         f"  Total samples: {samples}",
         f"  Passed: {passed_count}",
         f"  Failed: {failed_count}",
-        f"  Success rate: {success_rate:.2%}",
-        f"  Required threshold: {success_threshold:.2%}",
+        f"  Sample pass rate: {sample_pass_rate:.2%}",
+        f"  Pass threshold: {pass_threshold:.2%}",
         "",
         "Failed samples:",
     ]
