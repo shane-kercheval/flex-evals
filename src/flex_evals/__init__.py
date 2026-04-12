@@ -6,7 +6,7 @@ that produces complex or variable outputs.
 """
 
 from .engine import evaluate, evaluate_sync
-from .constants import CheckType, Status, ErrorType, SimilarityMetric
+from .constants import CheckType, Status, ErrorType, PassMode, SimilarityMetric
 # Import checks to trigger registration of standard checks
 from . import checks  # noqa: F401
 from .schemas.check import Check, CheckError, CheckResult
@@ -79,6 +79,7 @@ __all__ = [
     "JSONPathError",
     "LLMJudgeCheck",
     "Output",
+    "PassMode",
     "RegexCheck",
     "RegexFlags",
     "SchemaValidationCheck",

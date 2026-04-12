@@ -21,6 +21,7 @@ from flex_evals import (  # noqa: E402
     CheckType,
     ContainsCheck,
     JSONPath,
+    PassMode,
 )
 from datetime import datetime, UTC  # noqa: E402
 from typing import Never  # noqa: E402
@@ -54,7 +55,8 @@ class TestEvaluateDecoratorBasicFunctionality:
                 phrases=["Python"],
             )],
             samples=3,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def deterministic_success(test_case) -> str:  # noqa
             return "Python is awesome"
@@ -73,7 +75,8 @@ class TestEvaluateDecoratorBasicFunctionality:
                 arguments={"expected": "never_matches", "actual": "$.output.value"},
             )],
             samples=3,
-            success_threshold=0.5,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.5,
         )
         def deterministic_failure(test_case) -> str:  # noqa
             return "different_value"
@@ -84,8 +87,8 @@ class TestEvaluateDecoratorBasicFunctionality:
 
         error_message = str(exc_info.value)
         assert "Statistical evaluation failed" in error_message
-        assert "Success rate: 0.00%" in error_message
-        assert "Required threshold: 50.00%" in error_message
+        assert "Sample pass rate: 0.00%" in error_message
+        assert "Pass threshold: 50.00%" in error_message
 
     def test_exact_threshold_success(self):
         """Test success when success rate exactly meets threshold."""
@@ -98,7 +101,8 @@ class TestEvaluateDecoratorBasicFunctionality:
                 arguments={"expected": "pass", "actual": "$.output.value"},
             )],
             samples=4,
-            success_threshold=0.75,  # Exactly 75%
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.75,  # Exactly 75%
         )
         def exact_threshold_function(test_case) -> str:  # noqa
             nonlocal call_count
@@ -124,7 +128,8 @@ class TestEvaluateDecoratorStatistical:
                 arguments={"expected": "pass", "actual": "$.output.value"},
             )],
             samples=10,
-            success_threshold=0.7,  # 70% threshold
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.7,  # 70% threshold
         )
         def statistical_function(test_case) -> str:  # noqa
             nonlocal call_count
@@ -146,7 +151,8 @@ class TestEvaluateDecoratorStatistical:
                 arguments={"expected": "pass", "actual": "$.output.value"},
             )],
             samples=10,
-            success_threshold=0.8,  # 80% threshold
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.8,  # 80% threshold
         )
         def statistical_failure_function(test_case) -> str:  # noqa
             nonlocal call_count
@@ -159,8 +165,8 @@ class TestEvaluateDecoratorStatistical:
             statistical_failure_function()
 
         error_message = str(exc_info.value)
-        assert "Success rate: 60.00%" in error_message
-        assert "Required threshold: 80.00%" in error_message
+        assert "Sample pass rate: 60.00%" in error_message
+        assert "Pass threshold: 80.00%" in error_message
 
     def test_high_variance_statistical_evaluation(self):
         """Test with high variance in results."""
@@ -173,7 +179,8 @@ class TestEvaluateDecoratorStatistical:
                 arguments={"text": "$.output.value", "phrases": ["success"]},
             )],
             samples=20,
-            success_threshold=0.65,  # 65% threshold
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.65,  # 65% threshold
         )
         def high_variance_function(test_case) -> str:  # noqa
             nonlocal call_count
@@ -199,7 +206,8 @@ class TestEvaluateDecoratorErrorHandling:
                 arguments={"expected": "success", "actual": "$.output.value"},
             )],
             samples=6,
-            success_threshold=0.4,  # 40% threshold
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.4,  # 40% threshold
         )
         def exception_prone_function(test_case) -> str:  # noqa
             nonlocal call_count
@@ -221,7 +229,8 @@ class TestEvaluateDecoratorErrorHandling:
                 arguments={"expected": "success", "actual": "$.output.value"},
             )],
             samples=3,
-            success_threshold=0.1,  # Even 10% threshold
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.1,  # Even 10% threshold
         )
         def always_throws(test_case) -> Never:  # noqa
             raise ValueError("Always fails")
@@ -231,7 +240,7 @@ class TestEvaluateDecoratorErrorHandling:
             always_throws()
 
         error_message = str(exc_info.value)
-        assert "Success rate: 0.00%" in error_message
+        assert "Sample pass rate: 0.00%" in error_message
         assert "Test case 0 (id: all_exceptions) exception: ValueError: Always fails" in error_message  # noqa: E501
 
     def test_mixed_exceptions_and_failures(self):
@@ -245,7 +254,8 @@ class TestEvaluateDecoratorErrorHandling:
                 arguments={"expected": "success", "actual": "$.output.value"},
             )],
             samples=9,
-            success_threshold=0.25,  # 25% threshold
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.25,  # 25% threshold
         )
         def mixed_failure_function(test_case) -> str:  # noqa
             nonlocal call_count
@@ -283,7 +293,8 @@ class TestEvaluateDecoratorCheckTypes:
                 ),
             ],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def multi_check_function(test_case):  # noqa
             return {
@@ -313,7 +324,8 @@ class TestEvaluateDecoratorCheckTypes:
                 ),
             ],
             samples=4,
-            success_threshold=0.25,  # 25% threshold
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.25,  # 25% threshold
         )
         def partial_check_function(test_case) -> str:  # noqa
             # Only passes contains check, fails exact match
@@ -336,7 +348,8 @@ class TestEvaluateDecoratorCheckTypes:
                 },
             )],
             samples=3,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def regex_function(test_case) -> str:  # noqa
             return "Result: 42"
@@ -357,7 +370,8 @@ class TestEvaluateDecoratorCheckTypes:
                 },
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def threshold_function(test_case):  # noqa
             return {"score": 95, "message": "High quality"}
@@ -396,7 +410,8 @@ class TestEvaluateDecoratorLLMJudge:
                 },
             )],
             samples=3,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def good_response_function(test_case) -> str:  # noqa
             return "This is a good response"
@@ -429,7 +444,8 @@ class TestEvaluateDecoratorLLMJudge:
                 },
             )],
             samples=8,
-            success_threshold=0.6,  # 60% threshold
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.6,  # 60% threshold
         )
         def variable_quality_function(test_case) -> str:  # noqa
             nonlocal call_count
@@ -457,7 +473,8 @@ class TestEvaluateDecoratorLLMJudge:
                 },
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def simple_function(test_case) -> str:  # noqa
             return "test response"
@@ -484,7 +501,8 @@ class TestEvaluateDecoratorTestCaseChecks:
             test_cases=[test_case_with_checks],
             checks=None,  # Use TestCase checks
             samples=3,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def test_case_checks_function(test_case) -> str:  # noqa
             return "This is a success message"
@@ -517,8 +535,9 @@ class TestEvaluateDecoratorTestCaseChecks:
         @evaluate(
             test_cases=test_cases,
             checks=None,
-            samples=4,  # Will cycle: contains, exact, contains, exact
-            success_threshold=1.0,
+            samples=4,  # Will cycle: contains, exact, contains, exact,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def cycling_function(test_case) -> str:  # noqa
             nonlocal call_count
@@ -545,8 +564,9 @@ class TestEvaluateDecoratorTestCaseChecks:
                 type=CheckType.EXACT_MATCH,
                 arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
             )],
-            samples=4,  # Will cycle: case1, case2, case1, case2
-            success_threshold=1.0,
+            samples=4,  # Will cycle: case1, case2, case1, case2,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def cycling_function(test_case) -> str:  # noqa
             nonlocal call_count
@@ -572,7 +592,8 @@ class TestEvaluateDecoratorEdgeCases:
                 arguments={"text": "$.output.value.message", "phrases": ["success"]},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def complex_return_function(test_case):  # noqa
             return {
@@ -593,7 +614,8 @@ class TestEvaluateDecoratorEdgeCases:
                 arguments={"expected": None, "actual": "$.output.value.result"},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def none_return_function(test_case):  # noqa
             # Output.value can't be None, so wrap it in a dict
@@ -611,7 +633,8 @@ class TestEvaluateDecoratorEdgeCases:
                 arguments={"expected": "simple string", "actual": "$.output.value"},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def string_return_function(test_case) -> str:  # noqa
             return "simple string"
@@ -628,7 +651,8 @@ class TestEvaluateDecoratorEdgeCases:
                 arguments={"expected": [1, 2, 3], "actual": "$.output.value.items"},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def list_return_function(test_case):  # noqa
             # Output.value can't be a list, so wrap it in a dict
@@ -646,7 +670,8 @@ class TestEvaluateDecoratorEdgeCases:
                 arguments={"expected": "success", "actual": "$.output.value"},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def single_sample_function(test_case) -> str:  # noqa
             return "success"
@@ -663,7 +688,8 @@ class TestEvaluateDecoratorEdgeCases:
                 arguments={"text": "$.output.value", "phrases": ["pass"]},
             )],
             samples=50,
-            success_threshold=0.9,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.9,
         )
         def large_sample_function(test_case) -> str:  # noqa
             return "This should pass every time"
@@ -681,7 +707,8 @@ class TestEvaluateDecoratorParameterValidation:
                 test_cases=[],
                 checks=[Check(type=CheckType.EXACT_MATCH, arguments={})],
                 samples=1,
-                success_threshold=1.0,
+                pass_mode=PassMode.SAMPLE,
+                pass_threshold=1.0,
             )
             def empty_test_cases(test_case) -> str:  # noqa
                 return "test"
@@ -693,7 +720,8 @@ class TestEvaluateDecoratorParameterValidation:
                 test_cases=[TestCase(id="test", input="test")],
                 checks=[Check(type=CheckType.EXACT_MATCH, arguments={})],
                 samples=0,
-                success_threshold=1.0,
+                pass_mode=PassMode.SAMPLE,
+                pass_threshold=1.0,
             )
             def zero_samples(test_case) -> str:  # noqa
                 return "test"
@@ -705,31 +733,34 @@ class TestEvaluateDecoratorParameterValidation:
                 test_cases=[TestCase(id="test", input="test")],
                 checks=[Check(type=CheckType.EXACT_MATCH, arguments={})],
                 samples=-1,
-                success_threshold=1.0,
+                pass_mode=PassMode.SAMPLE,
+                pass_threshold=1.0,
             )
             def negative_samples(test_case) -> str:  # noqa
                 return "test"
 
     def test_invalid_threshold_high_error(self):
-        """Test error when success_threshold is > 1.0."""
-        with pytest.raises(ValueError, match="success_threshold must be between 0.0 and 1.0"):
+        """Test error when pass_threshold is > 1.0."""
+        with pytest.raises(ValueError, match="pass_threshold must be between 0.0 and 1.0"):
             @evaluate(
                 test_cases=[TestCase(id="test", input="test")],
                 checks=[Check(type=CheckType.EXACT_MATCH, arguments={})],
                 samples=1,
-                success_threshold=1.5,
+                pass_mode=PassMode.SAMPLE,
+                pass_threshold=1.5,
             )
             def invalid_high_threshold(test_case) -> str:  # noqa
                 return "test"
 
     def test_invalid_threshold_low_error(self):
-        """Test error when success_threshold is < 0.0."""
-        with pytest.raises(ValueError, match="success_threshold must be between 0.0 and 1.0"):
+        """Test error when pass_threshold is < 0.0."""
+        with pytest.raises(ValueError, match="pass_threshold must be between 0.0 and 1.0"):
             @evaluate(
                 test_cases=[TestCase(id="test", input="test")],
                 checks=[Check(type=CheckType.EXACT_MATCH, arguments={})],
                 samples=1,
-                success_threshold=-0.1,
+                pass_mode=PassMode.SAMPLE,
+                pass_threshold=-0.1,
             )
             def invalid_low_threshold(test_case) -> str:  # noqa
                 return "test"
@@ -743,7 +774,8 @@ class TestEvaluateDecoratorParameterValidation:
                 test_cases=[test_case_no_checks],
                 checks=None,
                 samples=1,
-                success_threshold=1.0,
+                pass_mode=PassMode.SAMPLE,
+                pass_threshold=1.0,
             )
             def no_checks_function(test_case) -> str:  # noqa
                 return "test"
@@ -763,7 +795,8 @@ class TestEvaluateDecoratorTestCaseParameter:
                 arguments={"expected": "success", "actual": "$.output.value"},
             )],
             samples=3,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def test_function_with_test_case(test_case) -> str:  # noqa
             received_test_cases.append(test_case)
@@ -798,8 +831,9 @@ class TestEvaluateDecoratorTestCaseParameter:
                 type=CheckType.EXACT_MATCH,
                 arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
             )],
-            samples=7,  # Will cycle: case_1, case_2, case_3, case_1, case_2, case_3, case_1
-            success_threshold=1.0,
+            samples=7,  # Will cycle: case_1, case_2, case_3, case_1, case_2, case_3, case_1,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def cycling_test_function(test_case) -> str:  # noqa
             received_test_cases.append(test_case)
@@ -836,7 +870,8 @@ class TestEvaluateDecoratorTestCaseParameter:
                 arguments={"text": "$.output.value", "phrases": ["Processed", "Python"]},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def test_llm_integration(test_case) -> str:  # noqa
             # Use test_case.input to call the LLM function
@@ -864,8 +899,9 @@ class TestEvaluateDecoratorSampling:
                 type=CheckType.EXACT_MATCH,
                 arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
             )],
-            samples=4,  # 4 samples * 3 test cases = 12 total function calls
-            success_threshold=1.0,
+            samples=4,  # 4 samples * 3 test cases = 12 total function calls,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def test_sampling_function(test_case) -> str:  # noqa
             execution_log.append((test_case.id, test_case.input))
@@ -893,8 +929,9 @@ class TestEvaluateDecoratorSampling:
                 type=CheckType.EXACT_MATCH,
                 arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
             )],
-            samples=3,  # 3 samples * 2 test cases = 6 total calls
-            success_threshold=0.1,  # Very low threshold (should still fail)
+            samples=3,  # 3 samples * 2 test cases = 6 total calls,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.1,  # Very low threshold (should still fail)
         )
         def test_partial_failure(test_case) -> str:  # noqa
             return test_case.input  # case_pass returns "pass", case_fail returns "fail"
@@ -904,8 +941,8 @@ class TestEvaluateDecoratorSampling:
             test_partial_failure()
 
         error_message = str(exc_info.value)
-        assert "Success rate: 0.00%" in error_message
-        assert "Required threshold: 10.00%" in error_message
+        assert "Sample pass rate: 0.00%" in error_message
+        assert "Pass threshold: 10.00%" in error_message
 
     def test_sample_success_when_all_test_cases_pass(self):
         """Test that a sample passes only when ALL test cases pass."""
@@ -922,7 +959,8 @@ class TestEvaluateDecoratorSampling:
                 arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
             )],
             samples=5,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def test_all_pass(test_case) -> str:  # noqa
             # Map input to expected output
@@ -946,8 +984,9 @@ class TestEvaluateDecoratorSampling:
                 type=CheckType.EXACT_MATCH,
                 arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
             )],
-            samples=4,  # 4 samples * 2 test cases = 8 calls
-            success_threshold=0.6,  # 60% threshold
+            samples=4,  # 4 samples * 2 test cases = 8 calls,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.6,  # 60% threshold
         )
         def test_mixed_results(test_case) -> str:  # noqa
             nonlocal call_count
@@ -970,8 +1009,8 @@ class TestEvaluateDecoratorSampling:
             test_mixed_results()
 
         error_message = str(exc_info.value)
-        assert "Success rate: 50.00%" in error_message
-        assert "Required threshold: 60.00%" in error_message
+        assert "Sample pass rate: 50.00%" in error_message
+        assert "Pass threshold: 60.00%" in error_message
 
     def test_single_test_case_multiple_samples(self):
         """Test edge case with single test case and multiple samples."""
@@ -984,7 +1023,8 @@ class TestEvaluateDecoratorSampling:
                 arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
             )],
             samples=10,
-            success_threshold=0.7,  # 70% threshold
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.7,  # 70% threshold
         )
         def test_single_case_sampling(test_case) -> str:  # noqa
             nonlocal call_count
@@ -1013,7 +1053,8 @@ class TestEvaluateDecoratorAsync:
                 arguments={"text": "$.output.value", "phrases": ["async"]},
             )],
             samples=3,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def test_async_function(test_case) -> str:  # noqa
             execution_log.append(test_case.input)
@@ -1041,7 +1082,8 @@ class TestEvaluateDecoratorAsync:
                 arguments={"text": "$.output.value", "phrases": ["result"]},
             )],
             samples=num_samples,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def test_concurrent_async(test_case) -> str:  # noqa
             nonlocal num_func_calls
@@ -1083,7 +1125,8 @@ class TestEvaluateDecoratorAsync:
                 arguments={"text": "$.output.value", "phrases": ["processed"]},
             )],
             samples=num_samples,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def test_multi_case_async(test_case) -> str:  # noqa
             nonlocal call_count
@@ -1117,7 +1160,8 @@ class TestEvaluateDecoratorAsync:
                 arguments={"text": "$.output.value", "phrases": ["success"]},
             )],
             samples=4,
-            success_threshold=0.6,  # 60% threshold
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.6,  # 60% threshold
         )
         async def test_async_exceptions(test_case) -> str:  # noqa
             await asyncio.sleep(0.01)
@@ -1144,7 +1188,8 @@ class TestEvaluateDecoratorAsync:
                 arguments={"text": "$.output.value", "phrases": ["processed", "test_data"]},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def test_async_simple(test_case: TestCase) -> str:
             # Use test_case parameter
@@ -1166,7 +1211,8 @@ class TestEvaluateDecoratorPytestFixtures:
                 arguments={"text": "$.output.value", "phrases": ["result"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def test_with_fixture(test_case: TestCase, tmp_path) -> str:  # noqa
             return f"result for {test_case.input}"
@@ -1188,7 +1234,8 @@ class TestEvaluateDecoratorPytestFixtures:
                 arguments={"text": "$.output.value", "phrases": ["result"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def test_with_multiple_fixtures(test_case: TestCase, tmp_path, monkeypatch) -> str:  # noqa
             return f"result for {test_case.input}"
@@ -1207,7 +1254,8 @@ class TestEvaluateDecoratorPytestFixtures:
                 arguments={"text": "$.output.value", "phrases": ["result"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def test_no_test_case_with_fixture(tmp_path) -> str:  # noqa
             return "static result"
@@ -1233,7 +1281,8 @@ class TestEvaluateDecoratorEdgeCasesAdvanced:
                 arguments={"expected": "static_result", "actual": "$.output.value"},
             )],
             samples=3,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def test_no_test_case_param() -> str:
             # Function doesn't take test_case parameter
@@ -1250,7 +1299,8 @@ class TestEvaluateDecoratorEdgeCasesAdvanced:
                 arguments={"text": "$.output.value", "phrases": ["data", "tmp"]},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def test_mixed_param_order(tmp_path, test_case: TestCase) -> str:  # noqa
             # test_case comes after fixture parameter
@@ -1274,8 +1324,9 @@ class TestEvaluateDecoratorEdgeCasesAdvanced:
                 type=CheckType.CONTAINS,
                 arguments={"text": "$.output.value", "phrases": ["processed"]},
             )],
-            samples=10,  # 5 test cases * 10 samples = 50 total calls
-            success_threshold=0.9,
+            samples=10,  # 5 test cases * 10 samples = 50 total calls,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.9,
         )
         def test_large_expansion(test_case: TestCase) -> str:
             nonlocal execution_count
@@ -1300,8 +1351,9 @@ class TestEvaluateDecoratorEdgeCasesAdvanced:
                 type=CheckType.CONTAINS,
                 arguments={"text": "$.output.value", "phrases": ["result"]},
             )],
-            samples=5,  # 2 test cases * 5 samples = 10 concurrent calls
-            success_threshold=1.0,
+            samples=5,  # 2 test cases * 5 samples = 10 concurrent calls,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def test_concurrent_state(test_case: TestCase) -> str:
             # Simulate some async work with shared data structure
@@ -1336,7 +1388,8 @@ class TestEvaluateDecoratorFailureReporting:
                 ),
             ],
             samples=2,
-            success_threshold=0.5,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.5,
         )
         def detailed_failure_function(test_case) -> str:  # noqa
             return "always fails both checks"
@@ -1366,7 +1419,8 @@ class TestEvaluateDecoratorFailureReporting:
                 arguments={"expected": "success", "actual": "$.output.value"},
             )],
             samples=3,
-            success_threshold=0.8,  # 80% threshold
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.8,  # 80% threshold
         )
         def exception_reporting_function(test_case) -> str:  # noqa
             nonlocal call_count
@@ -1401,7 +1455,8 @@ class TestEvaluateDecoratorDurationMetadata:
                 ),
             ],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def sync_test(test_case) -> str:  # noqa
             return "sync result"
@@ -1424,7 +1479,8 @@ class TestEvaluateDecoratorDurationMetadata:
                 ),
             ],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def async_test(test_case) -> str:  # noqa
             return "async result"
@@ -1443,7 +1499,8 @@ class TestEvaluateDecoratorDurationMetadata:
                 ),
             ],
             samples=1,
-            success_threshold=1.0,  # Exception outputs should still have duration
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,  # Exception outputs should still have duration
         )
         def exception_test(test_case) -> str:  # noqa
             raise ValueError("Test exception")
@@ -1463,7 +1520,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"text": "$.output.value", "phrases": ["hello"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
             output_dir=tmp_path,
         )
         def passing_func(test_case) -> str:  # noqa: ANN001, ARG001
@@ -1491,7 +1549,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"text": "$.output.value", "phrases": ["hello"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
             output_dir=None,
         )
         def passing_func(test_case) -> str:  # noqa: ANN001, ARG001
@@ -1512,7 +1571,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"text": "$.output.value", "phrases": ["hello"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
             output_dir=nested,
         )
         def passing_func(test_case) -> str:  # noqa: ANN001, ARG001
@@ -1535,7 +1595,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"text": "$.output.value", "phrases": ["hello"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
             output_dir=tmp_path,
             metadata=user_meta,
         )
@@ -1560,7 +1621,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"text": "$.output.value", "phrases": ["hello"]},
             )],
             samples=3,
-            success_threshold=0.5,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.5,
             output_dir=tmp_path,
         )
         def my_test_func(test_case) -> str:  # noqa: ANN001, ARG001
@@ -1574,7 +1636,7 @@ class TestEvaluateDecoratorResultPersistence:
         assert isinstance(config["test_module"], str)
         assert config["test_module"]
         assert config["samples"] == 3
-        assert config["success_threshold"] == 0.5
+        assert config["pass_threshold"] == 0.5
         assert config["max_concurrency"] is None
         assert config["num_test_cases"] == 2
 
@@ -1589,7 +1651,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"expected": "pass", "actual": "$.output.value"},
             )],
             samples=4,
-            success_threshold=0.25,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=0.25,
             output_dir=tmp_path,
         )
         def mixed_func(test_case) -> str:  # noqa: ANN001, ARG001
@@ -1604,8 +1667,8 @@ class TestEvaluateDecoratorResultPersistence:
         assert results["passed_samples"] == 3
         assert results["failed_samples"] == 1
         assert results["total_samples"] == 4
-        assert results["success_rate"] == 0.75
-        assert results["success_threshold"] == 0.25
+        assert results["sample_pass_rate"] == 0.75
+        assert results["pass_threshold"] == 0.25
         assert results["passed"] is True
 
     def test__save_failure_does_not_mask_test_result(self) -> None:
@@ -1617,7 +1680,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"text": "$.output.value", "phrases": ["hello"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
             output_dir="/dev/null/impossible",
         )
         def passing_func(test_case) -> str:  # noqa: ANN001, ARG001
@@ -1635,7 +1699,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"expected": "never", "actual": "$.output.value"},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
             output_dir="/dev/null/impossible",
         )
         def failing_func(test_case) -> str:  # noqa: ANN001, ARG001
@@ -1653,7 +1718,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"expected": "never", "actual": "$.output.value"},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
             output_dir=tmp_path,
         )
         def failing_func(test_case) -> str:  # noqa: ANN001, ARG001
@@ -1678,7 +1744,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"text": "$.output.value", "phrases": ["hello"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         def passing_func(test_case) -> str:  # noqa: ANN001, ARG001
             return "hello world"
@@ -1702,7 +1769,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"text": "$.output.value", "phrases": ["hello"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
             output_dir=explicit_dir,
         )
         def passing_func(test_case) -> str:  # noqa: ANN001, ARG001
@@ -1722,7 +1790,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"text": "$.output.value", "phrases": ["async"]},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
             output_dir=tmp_path,
         )
         async def async_func(test_case) -> str:  # noqa: ANN001, ARG001
@@ -1749,7 +1818,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"text": "$.output.value", "phrases": ["hello"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
             output_dir=tmp_path,
         )
         def slow_sync_func(test_case) -> str:  # noqa: ANN001, ARG001
@@ -1782,7 +1852,8 @@ class TestEvaluateDecoratorResultPersistence:
                 arguments={"text": "$.output.value", "phrases": ["hello"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
             output_dir=tmp_path,
         )
         async def slow_async_func(test_case) -> str:  # noqa: ANN001, ARG001
@@ -1814,7 +1885,7 @@ class TestEvaluateDecoratorParametrizeIntegration:
         pytester.makepyfile("""
             import pytest
             from flex_evals.pytest_decorator import evaluate
-            from flex_evals import TestCase, Check, CheckType
+            from flex_evals import TestCase, Check, CheckType, PassMode
 
             @pytest.mark.parametrize("greeting", ["hello", "hi"])
             @evaluate(
@@ -1824,7 +1895,8 @@ class TestEvaluateDecoratorParametrizeIntegration:
                     arguments={"text": "$.output.value", "phrases": ["world"]},
                 )],
                 samples=1,
-                success_threshold=1.0,
+                pass_mode=PassMode.SAMPLE,
+                pass_threshold=1.0,
             )
             def test_greet(test_case, greeting):
                 return f"{greeting} world"
@@ -1877,7 +1949,7 @@ class TestAsyncCleanupErrorSuppression:
         pytester.makepyfile("""
             import asyncio
             from flex_evals.pytest_decorator import evaluate
-            from flex_evals import TestCase, Check, CheckType
+            from flex_evals import TestCase, Check, CheckType, PassMode
 
             class _NoisyCleanup:
                 def __del__(self):
@@ -1890,7 +1962,8 @@ class TestAsyncCleanupErrorSuppression:
                     arguments={"expected": "never_matches", "actual": "$.output.value"},
                 )],
                 samples=1,
-                success_threshold=1.0,
+                pass_mode=PassMode.SAMPLE,
+                pass_threshold=1.0,
             )
             async def test_with_noisy_cleanup(test_case):
                 obj = _NoisyCleanup()
@@ -1912,7 +1985,7 @@ class TestAsyncCleanupErrorSuppression:
         pytester.makepyfile("""
             import asyncio
             from flex_evals.pytest_decorator import evaluate
-            from flex_evals import TestCase, Check, CheckType
+            from flex_evals import TestCase, Check, CheckType, PassMode
 
             class _NoisyCleanup:
                 def __del__(self):
@@ -1925,7 +1998,8 @@ class TestAsyncCleanupErrorSuppression:
                     arguments={"text": "$.output.value", "phrases": ["hello"]},
                 )],
                 samples=1,
-                success_threshold=1.0,
+                pass_mode=PassMode.SAMPLE,
+                pass_threshold=1.0,
             )
             async def test_with_noisy_cleanup(test_case):
                 obj = _NoisyCleanup()
@@ -1954,8 +2028,9 @@ class TestEvaluateDecoratorMaxConcurrency:
                 arguments={"text": "$.output.value", "phrases": ["done"]},
             )],
             samples=10,
+            pass_mode=PassMode.SAMPLE,
             max_concurrency=2,
-            success_threshold=1.0,
+            pass_threshold=1.0,
         )
         async def test_limited_concurrency(test_case: TestCase) -> str:  # noqa: ARG001
             nonlocal peak_concurrent, current_concurrent
@@ -1998,8 +2073,9 @@ class TestEvaluateDecoratorMaxConcurrency:
                 ),
             ],
             samples=5,
+            pass_mode=PassMode.SAMPLE,
             max_concurrency=1,
-            success_threshold=1.0,
+            pass_threshold=1.0,
         )
         async def test_timing(test_case: TestCase) -> str:  # noqa: ARG001
             await asyncio.sleep(0.05)
@@ -2019,8 +2095,9 @@ class TestEvaluateDecoratorMaxConcurrency:
                 arguments={"text": "$.output.value", "phrases": ["result"]},
             )],
             samples=num_samples,
+            pass_mode=PassMode.SAMPLE,
             max_concurrency=None,
-            success_threshold=1.0,
+            pass_threshold=1.0,
         )
         async def test_unlimited(test_case: TestCase) -> str:  # noqa: ARG001
             await asyncio.sleep(delay)
@@ -2045,6 +2122,7 @@ class TestEvaluateDecoratorMaxConcurrency:
                     arguments={"text": "$.output.value", "phrases": ["x"]},
                 )],
                 samples=1,
+                pass_mode=PassMode.SAMPLE,
                 max_concurrency=0,
             )
             async def test_zero(test_case: TestCase) -> str:  # noqa: ARG001
@@ -2060,6 +2138,7 @@ class TestEvaluateDecoratorMaxConcurrency:
                     arguments={"text": "$.output.value", "phrases": ["x"]},
                 )],
                 samples=1,
+                pass_mode=PassMode.SAMPLE,
                 max_concurrency=-3,
             )
             async def test_negative(test_case: TestCase) -> str:  # noqa: ARG001
@@ -2082,9 +2161,10 @@ class TestEvaluateDecoratorMaxConcurrency:
                 type=CheckType.CONTAINS,
                 arguments={"text": "$.output.value", "phrases": ["processed"]},
             )],
-            samples=3,  # 4 test cases * 3 samples = 12 total calls
+            samples=3,  # 4 test cases * 3 samples = 12 total calls,
+            pass_mode=PassMode.SAMPLE,
             max_concurrency=3,
-            success_threshold=1.0,
+            pass_threshold=1.0,
         )
         async def test_multi_case(test_case: TestCase) -> str:
             nonlocal peak_concurrent, current_concurrent
@@ -2115,8 +2195,9 @@ class TestEvaluateDecoratorMaxConcurrency:
                 arguments={"text": "$.output.value", "phrases": ["done"]},
             )],
             samples=5,
+            pass_mode=PassMode.SAMPLE,
             max_concurrency=1,
-            success_threshold=1.0,
+            pass_threshold=1.0,
         )
         async def test_sequential(test_case: TestCase) -> str:  # noqa: ARG001
             nonlocal peak_concurrent, current_concurrent
@@ -2144,8 +2225,9 @@ class TestEvaluateDecoratorMaxConcurrency:
                     arguments={"text": "$.output.value", "phrases": ["hello"]},
                 )],
                 samples=1,
+                pass_mode=PassMode.SAMPLE,
                 max_concurrency=2,
-                success_threshold=1.0,
+                pass_threshold=1.0,
             )
             def sync_with_concurrency(test_case: TestCase) -> str:  # noqa: ARG001
                 return "hello"
@@ -2165,7 +2247,7 @@ class TestFailureReportCleanOutput:
         """)
         pytester.makepyfile("""
             from flex_evals.pytest_decorator import evaluate
-            from flex_evals import TestCase, Check, CheckType
+            from flex_evals import TestCase, Check, CheckType, PassMode
 
             @evaluate(
                 test_cases=[TestCase(id="t1", input="data")],
@@ -2174,7 +2256,8 @@ class TestFailureReportCleanOutput:
                     arguments={"expected": "expected_value", "actual": "$.output.value"},
                 )],
                 samples=1,
-                success_threshold=1.0,
+                pass_mode=PassMode.SAMPLE,
+                pass_threshold=1.0,
             )
             async def test_failing_eval(test_case):
                 return "wrong_value"
@@ -2185,8 +2268,459 @@ class TestFailureReportCleanOutput:
         full_output = "\n".join(result.outlines + result.errlines)
         # The failure report content should be present
         assert "Statistical evaluation failed" in full_output
-        assert "Success rate:" in full_output
+        assert "Sample pass rate:" in full_output
         # The async decorator internals traceback should NOT be present
         assert "async_wrapper" not in full_output
         assert "_run_async_suppressing_cleanup_errors" not in full_output
         assert "RuntimeError: no running event loop" not in full_output
+
+
+class TestPerTestCaseMode:
+    """Tests for PassMode.PER_TEST_CASE evaluation mode."""
+
+    def test_all_test_cases_pass_threshold(self) -> None:
+        """All test cases pass threshold → overall passes."""
+        @evaluate(
+            test_cases=[
+                TestCase(id="case_a", input="a", expected="a"),
+                TestCase(id="case_b", input="b", expected="b"),
+            ],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=3,
+            pass_mode=PassMode.PER_TEST_CASE,
+            pass_threshold=1.0,
+        )
+        def test_all_pass(test_case: TestCase) -> str:
+            return test_case.expected
+
+        test_all_pass()  # Should pass silently
+
+    def test_one_test_case_below_threshold(self) -> None:
+        """One test case below threshold → overall fails, report identifies it."""
+        call_count = 0
+
+        @evaluate(
+            test_cases=[
+                TestCase(id="always_pass", input="good", expected="good"),
+                TestCase(id="sometimes_fail", input="bad", expected="good"),
+            ],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=4,
+            pass_mode=PassMode.PER_TEST_CASE,
+            pass_threshold=1.0,
+        )
+        def test_one_flaky(test_case: TestCase) -> str:
+            nonlocal call_count
+            call_count += 1
+            return test_case.input  # "good" passes, "bad" fails
+
+        with pytest.raises(_pytest.outcomes.Failed) as exc_info:
+            test_one_flaky()
+
+        error_message = str(exc_info.value)
+        assert "Pass mode: per_test_case" in error_message
+        assert "FAIL test_case 1 (id: sometimes_fail): 0/4 (0.00%)" in error_message
+        assert "PASS test_case 0 (id: always_pass): 4/4 (100.00%)" in error_message
+        assert "Failed test cases: 1 of 2" in error_message
+        # Verify failure details are shown
+        assert "Failure details:" in error_message
+        assert "Check 'exact_match': failed" in error_message
+
+    def test_threshold_boundary_exact(self) -> None:
+        """Test case at exactly pass_threshold → passes (>=)."""
+        call_count = 0
+
+        @evaluate(
+            test_cases=[
+                TestCase(id="boundary", input="x", expected="x"),
+            ],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=4,
+            pass_mode=PassMode.PER_TEST_CASE,
+            pass_threshold=0.75,  # Need 3/4 = 75%
+        )
+        def test_boundary(test_case: TestCase) -> str:  # noqa: ARG001
+            nonlocal call_count
+            call_count += 1
+            # Pass 3 out of 4 times
+            return "x" if call_count <= 3 else "wrong"
+
+        test_boundary()  # Should pass (3/4 = 0.75 >= 0.75)
+
+    def test_single_test_case(self) -> None:
+        """Single test case with per_test_case mode works correctly."""
+        @evaluate(
+            test_cases=[TestCase(id="solo", input="test", expected="test")],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=3,
+            pass_mode=PassMode.PER_TEST_CASE,
+            pass_threshold=1.0,
+        )
+        def test_solo(test_case: TestCase) -> str:
+            return test_case.expected
+
+        test_solo()
+
+    def test_samples_equals_one(self) -> None:
+        """Per-test-case with samples=1: each test case has 0% or 100% rate."""
+        @evaluate(
+            test_cases=[
+                TestCase(id="pass_case", input="a", expected="a"),
+                TestCase(id="fail_case", input="b", expected="c"),
+            ],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=1,
+            pass_mode=PassMode.PER_TEST_CASE,
+            pass_threshold=1.0,
+        )
+        def test_single_sample(test_case: TestCase) -> str:
+            return test_case.input
+
+        with pytest.raises(_pytest.outcomes.Failed) as exc_info:
+            test_single_sample()
+
+        error_message = str(exc_info.value)
+        assert "FAIL test_case 1 (id: fail_case): 0/1 (0.00%)" in error_message
+        assert "PASS test_case 0 (id: pass_case): 1/1 (100.00%)" in error_message
+
+    def test_exponential_penalty_demonstration(self) -> None:
+        """
+        Demonstrates the core motivation: test cases that pass individually at high rates
+        fail under sample mode (exponential penalty) but pass under per-test-case mode.
+        """
+        call_count = 0
+
+        test_cases = [
+            TestCase(id=f"case_{i}", input=str(i), expected=str(i))
+            for i in range(5)
+        ]
+
+        @evaluate(
+            test_cases=test_cases,
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=4,
+            pass_mode=PassMode.PER_TEST_CASE,
+            pass_threshold=0.5,
+        )
+        def test_per_tc(test_case: TestCase) -> str:
+            nonlocal call_count
+            call_count += 1
+            # Each test case passes 75% of the time (3/4 samples)
+            # Sample mode: probability of clean sample = 0.75^5 ≈ 24% → would fail at 50%
+            # Per-test-case mode: each at 75% ≥ 50% → passes
+            tc_idx = int(test_case.input)
+            sample_idx = (call_count - 1) // len(test_cases)
+            # Make each test case fail in exactly one different sample
+            if sample_idx == tc_idx % 4:
+                return "wrong"
+            return test_case.expected
+
+        test_per_tc()  # Passes under per_test_case mode
+
+    def test_mixed_per_test_case_results(self) -> None:
+        """Some test cases at 100%, some at threshold, some below."""
+        call_count = 0
+
+        @evaluate(
+            test_cases=[
+                TestCase(id="perfect", input="a", expected="a"),
+                TestCase(id="at_threshold", input="b", expected="b"),
+                TestCase(id="below_threshold", input="c", expected="c"),
+            ],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=4,
+            pass_mode=PassMode.PER_TEST_CASE,
+            pass_threshold=0.75,
+        )
+        def test_mixed(test_case: TestCase) -> str:
+            nonlocal call_count
+            call_count += 1
+            sample_idx = (call_count - 1) // 3
+            if test_case.id == "perfect":
+                return test_case.expected  # 4/4 = 100%
+            if test_case.id == "at_threshold":
+                return "wrong" if sample_idx == 0 else test_case.expected  # 3/4 = 75%
+            # below_threshold: fail in samples 0 and 1
+            return "wrong" if sample_idx <= 1 else test_case.expected  # 2/4 = 50%
+
+        with pytest.raises(_pytest.outcomes.Failed) as exc_info:
+            test_mixed()
+
+        error_message = str(exc_info.value)
+        assert "PASS test_case 0 (id: perfect): 4/4 (100.00%)" in error_message
+        assert "PASS test_case 1 (id: at_threshold): 3/4 (75.00%)" in error_message
+        assert "FAIL test_case 2 (id: below_threshold): 2/4 (50.00%)" in error_message
+        assert "Failed test cases: 1 of 3" in error_message
+
+    def test_default_mode_is_per_test_case(self) -> None:
+        """Verify default pass_mode is PER_TEST_CASE."""
+        @evaluate(
+            test_cases=[TestCase(id="default", input="x", expected="x")],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=2,
+            # No explicit pass_mode — should default to PER_TEST_CASE
+        )
+        def test_default(test_case: TestCase) -> str:
+            return test_case.expected
+
+        test_default()
+
+    def test_string_pass_mode_accepted(self) -> None:
+        """String values for pass_mode are accepted and normalized."""
+        @evaluate(
+            test_cases=[TestCase(id="str_mode", input="x", expected="x")],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=1,
+            pass_mode="per_test_case",
+        )
+        def test_str_ptc(test_case: TestCase) -> str:
+            return test_case.expected
+
+        test_str_ptc()
+
+        @evaluate(
+            test_cases=[TestCase(id="str_mode", input="x", expected="x")],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=1,
+            pass_mode="sample",
+        )
+        def test_str_sample(test_case: TestCase) -> str:
+            return test_case.expected
+
+        test_str_sample()
+
+    def test_invalid_pass_mode_raises(self) -> None:
+        """Invalid pass_mode raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid pass_mode"):
+            @evaluate(
+                test_cases=[TestCase(id="test", input="x")],
+                checks=[Check(
+                    type=CheckType.EXACT_MATCH,
+                    arguments={"expected": "x", "actual": "$.output.value"},
+                )],
+                pass_mode="invalid_mode",
+            )
+            def test_bad_mode(test_case: TestCase) -> str:  # noqa: ARG001
+                return "x"
+
+    def test_duplicate_test_case_ids(self) -> None:
+        """Duplicate IDs are tracked separately by positional index."""
+        @evaluate(
+            test_cases=[
+                TestCase(id="same_id", input="a", expected="a"),
+                TestCase(id="same_id", input="b", expected="b"),
+            ],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=2,
+            pass_mode=PassMode.PER_TEST_CASE,
+            pass_threshold=1.0,
+        )
+        def test_dup_ids(test_case: TestCase) -> str:
+            return test_case.expected
+
+        test_dup_ids()  # Both pass — no conflation
+
+    def test_none_test_case_ids(self) -> None:
+        """Test cases with id=None are tracked by positional index."""
+        @evaluate(
+            test_cases=[
+                TestCase(input="a", expected="a"),
+                TestCase(input="b", expected="wrong"),  # Will fail
+            ],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=2,
+            pass_mode=PassMode.PER_TEST_CASE,
+            pass_threshold=1.0,
+        )
+        def test_none_ids(test_case: TestCase) -> str:
+            return test_case.input
+
+        with pytest.raises(_pytest.outcomes.Failed) as exc_info:
+            test_none_ids()
+
+        error_message = str(exc_info.value)
+        # Should use index-based label for None IDs
+        assert "FAIL test_case 1: 0/2 (0.00%)" in error_message
+
+    def test_exception_details_in_failure_report(self) -> None:
+        """Exception details appear in per-test-case failure report."""
+        @evaluate(
+            test_cases=[
+                TestCase(id="good", input="a", expected="a"),
+                TestCase(id="explodes", input="b", expected="b"),
+            ],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=2,
+            pass_mode=PassMode.PER_TEST_CASE,
+            pass_threshold=1.0,
+        )
+        def test_exc_detail(test_case: TestCase) -> str:
+            if test_case.id == "explodes":
+                raise ValueError("something broke")
+            return test_case.expected
+
+        with pytest.raises(_pytest.outcomes.Failed) as exc_info:
+            test_exc_detail()
+
+        error_message = str(exc_info.value)
+        assert "FAIL test_case 1 (id: explodes): 0/2 (0.00%)" in error_message
+        assert "Exception: ValueError: something broke" in error_message
+
+
+class TestPerTestCaseMetadata:
+    """Tests for _test_results metadata with per-test-case mode."""
+
+    def test_per_test_case_metadata_structure(self, tmp_path: Path) -> None:
+        """Verify _test_results includes per_test_case breakdown."""
+        @evaluate(
+            test_cases=[
+                TestCase(id="case_a", input="a", expected="a"),
+                TestCase(id="case_b", input="b", expected="b"),
+            ],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=3,
+            pass_mode=PassMode.PER_TEST_CASE,
+            pass_threshold=1.0,
+            output_dir=tmp_path,
+        )
+        def test_metadata(test_case: TestCase) -> str:
+            return test_case.expected
+
+        test_metadata()
+
+        data = json.loads(next(tmp_path.glob("*.json")).read_text())
+        results = data["metadata"]["_test_results"]
+        config = data["metadata"]["_test_config"]
+
+        # Check config
+        assert config["pass_mode"] == "per_test_case"
+        assert config["pass_threshold"] == 1.0
+
+        # Check results structure
+        assert results["pass_mode"] == "per_test_case"
+        assert results["pass_threshold"] == 1.0
+        assert results["passed"] is True
+
+        # Sample-level stats always present
+        assert results["passed_samples"] == 3
+        assert results["failed_samples"] == 0
+        assert results["total_samples"] == 3
+        assert results["sample_pass_rate"] == 1.0
+
+        # Per-test-case breakdown
+        per_tc = results["per_test_case"]
+        assert len(per_tc) == 2
+        assert per_tc[0]["index"] == 0
+        assert per_tc[0]["id"] == "case_a"
+        assert per_tc[0]["passed"] == 3
+        assert per_tc[0]["total"] == 3
+        assert per_tc[0]["rate"] == 1.0
+        assert per_tc[1]["index"] == 1
+        assert per_tc[1]["id"] == "case_b"
+
+        assert results["failed_test_cases"] == []
+
+    def test_sample_mode_includes_per_test_case_breakdown(self, tmp_path: Path) -> None:
+        """Per-test-case stats are present even in sample mode."""
+        @evaluate(
+            test_cases=[
+                TestCase(id="tc_1", input="a", expected="a"),
+                TestCase(id="tc_2", input="b", expected="b"),
+            ],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=2,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
+            output_dir=tmp_path,
+        )
+        def test_sample_meta(test_case: TestCase) -> str:
+            return test_case.expected
+
+        test_sample_meta()
+
+        data = json.loads(next(tmp_path.glob("*.json")).read_text())
+        results = data["metadata"]["_test_results"]
+
+        assert results["pass_mode"] == "sample"
+        # Per-test-case breakdown is present
+        per_tc = results["per_test_case"]
+        assert len(per_tc) == 2
+        assert per_tc[0]["id"] == "tc_1"
+        assert per_tc[1]["id"] == "tc_2"
+
+    def test_failed_test_cases_metadata(self, tmp_path: Path) -> None:
+        """Verify failed_test_cases list in metadata."""
+
+        @evaluate(
+            test_cases=[
+                TestCase(id="good", input="a", expected="a"),
+                TestCase(id="bad", input="b", expected="a"),  # Will fail
+            ],
+            checks=[Check(
+                type=CheckType.EXACT_MATCH,
+                arguments={"expected": "$.test_case.expected", "actual": "$.output.value"},
+            )],
+            samples=2,
+            pass_mode=PassMode.PER_TEST_CASE,
+            pass_threshold=1.0,
+            output_dir=tmp_path,
+        )
+        def test_failed_meta(test_case: TestCase) -> str:
+            return test_case.input
+
+        # Will fail but still saves
+        with pytest.raises(_pytest.outcomes.Failed):
+            test_failed_meta()
+
+        data = json.loads(next(tmp_path.glob("*.json")).read_text())
+        results = data["metadata"]["_test_results"]
+
+        assert results["passed"] is False
+        assert len(results["failed_test_cases"]) == 1
+        assert results["failed_test_cases"][0]["index"] == 1
+        assert results["failed_test_cases"][0]["id"] == "bad"

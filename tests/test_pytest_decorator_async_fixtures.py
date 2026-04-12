@@ -44,6 +44,7 @@ import pytest
 import _pytest.outcomes
 from flex_evals import TestCase, Check, CheckType
 from flex_evals.pytest_decorator import evaluate
+from flex_evals import PassMode
 from typing import Never
 
 
@@ -94,7 +95,8 @@ class TestAsyncFixtureBasic:
             arguments={"text": "$.output.value", "phrases": ["async_fixture_value"]},
         )],
         samples=2,
-        success_threshold=1.0,
+        pass_mode=PassMode.SAMPLE,
+        pass_threshold=1.0,
     )
     async def test_simple_async_fixture(
             self,
@@ -111,7 +113,8 @@ class TestAsyncFixtureBasic:
             arguments={"text": "$.output.value", "phrases": ["data_test"]},
         )],
         samples=2,
-        success_threshold=1.0,
+        pass_mode=PassMode.SAMPLE,
+        pass_threshold=1.0,
     )
     async def test_complex_async_fixture(
             self,
@@ -128,7 +131,8 @@ class TestAsyncFixtureBasic:
             arguments={"text": "$.output.value", "phrases": ["item1", "item2"]},
         )],
         samples=1,
-        success_threshold=1.0,
+        pass_mode=PassMode.SAMPLE,
+        pass_threshold=1.0,
     )
     async def test_async_list_fixture(
             self,
@@ -149,7 +153,8 @@ class TestMixedFixtures:
             arguments={"text": "$.output.value", "phrases": ["sync_value", "async_fixture_value"]},
         )],
         samples=2,
-        success_threshold=1.0,
+        pass_mode=PassMode.SAMPLE,
+        pass_threshold=1.0,
     )
     async def test_mixed_sync_and_async_fixtures(
         self,
@@ -171,7 +176,8 @@ class TestMultipleAsyncFixtures:
             arguments={"text": "$.output.value", "phrases": ["async_fixture_value", "data_test"]},
         )],
         samples=1,
-        success_threshold=1.0,
+        pass_mode=PassMode.SAMPLE,
+        pass_threshold=1.0,
     )
     async def test_multiple_async_fixtures(
         self,
@@ -201,7 +207,8 @@ class TestAsyncFixtureStatisticalEvaluation:
             arguments={"text": "$.output.value", "phrases": ["success"]},
         )],
         samples=10,
-        success_threshold=0.7,  # 70% threshold
+        pass_mode=PassMode.SAMPLE,
+        pass_threshold=0.7,  # 70% threshold
     )
     async def test_statistical_with_async_fixture(
         self,
@@ -235,7 +242,8 @@ class TestAsyncFixturePerformance:
             arguments={"text": "$.output.value", "phrases": ["timed_value"]},
         )],
         samples=5,  # 5 samples with 50ms fixture delay each
-        success_threshold=1.0,
+        pass_mode=PassMode.SAMPLE,
+        pass_threshold=1.0,
     )
     async def test_async_fixture_concurrency(
         self,
@@ -257,7 +265,8 @@ class TestAsyncFixtureContextValidation:
             arguments={"text": "$.output.value", "phrases": ["async_fixture_value"]},
         )],
         samples=1,
-        success_threshold=1.0,
+        pass_mode=PassMode.SAMPLE,
+        pass_threshold=1.0,
     )
     async def test_async_fixture_in_pytest_asyncio_context(
         self,
@@ -280,7 +289,8 @@ class TestAsyncFixtureFailureScenarios:
                 arguments={"expected": "expected_value", "actual": "$.output.value"},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def failing_async_test(test_case: TestCase) -> str:  # noqa: ARG001
             # Return wrong value - should fail the exact match check
@@ -292,7 +302,7 @@ class TestAsyncFixtureFailureScenarios:
 
         error_message = str(exc_info.value)
         assert "Statistical evaluation failed" in error_message
-        assert "Success rate: 0.00%" in error_message
+        assert "Sample pass rate: 0.00%" in error_message
 
     def test_async_function_exception_failure(self):
         """Test that @evaluate fails when async test throws exceptions."""
@@ -303,7 +313,8 @@ class TestAsyncFixtureFailureScenarios:
                 arguments={"text": "$.output.value", "phrases": ["success"]},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def exception_async_test(test_case: TestCase) -> str:  # noqa: ARG001
             # Always throw exception - should fail
@@ -347,7 +358,8 @@ class TestNoEventLoopContext:
                 arguments={"text": "$.output.value", "phrases": ["fixture_value"]},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def test_func(test_case: TestCase, simple_fixture) -> str:  # noqa: ANN001, ARG001
             """Test function that uses an async fixture."""
@@ -384,7 +396,8 @@ class TestNoEventLoopContext:
                 arguments={"text": "$.output.value", "phrases": ["value1", "value2"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def test_multi_fixtures(test_case: TestCase, fixture1, fixture2) -> str:  # noqa: ANN001, ARG001
             """Test with multiple async fixtures."""
@@ -422,7 +435,8 @@ class TestNoEventLoopContext:
                 arguments={"text": "$.output.value", "phrases": ["sync_val", "async_val"]},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def test_mixed(test_case: TestCase, sync_fix, async_fix) -> str:  # noqa: ANN001, ARG001
             """Test with mixed fixture types."""
@@ -465,7 +479,8 @@ class TestNoEventLoopContext:
                 arguments={"expected": "test", "actual": "$.output.value"},
             )],
             samples=2,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def test_with_failing_fixture(test_case: TestCase, failing_fixture):  # noqa: ANN001, ANN202, ARG001
             """Test function with fixture that will fail."""
@@ -501,7 +516,8 @@ class TestNoEventLoopContext:
                 arguments={"text": "$.output.value", "phrases": ["result"]},
             )],
             samples=5,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def test_performance(test_case: TestCase, perf_fixture) -> str:  # noqa: ANN001, ARG001
             """Test function for performance measurement."""
@@ -547,7 +563,8 @@ class TestMixedContextCompatibility:
                 arguments={"text": "$.output.value", "phrases": ["async_fixture_value"]},
             )],
             samples=1,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def test_func(
                 test_case: TestCase,  # noqa: ARG001
@@ -570,7 +587,8 @@ class TestMixedContextCompatibility:
                 arguments={"expected": "plain_result", "actual": "$.output.value"},
             )],
             samples=3,
-            success_threshold=1.0,
+            pass_mode=PassMode.SAMPLE,
+            pass_threshold=1.0,
         )
         async def test_no_async(test_case: TestCase) -> str:  # noqa: ARG001
             """Test without any async fixtures."""
@@ -594,7 +612,8 @@ class TestMixedContextCompatibility:
             ),
         ],
         samples=1,
-        success_threshold=1.0,
+        pass_mode=PassMode.SAMPLE,
+        pass_threshold=1.0,
     )
     async def test_async_with_fixtures_duration_populated(
             self,

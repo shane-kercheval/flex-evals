@@ -62,6 +62,17 @@ class ErrorType(str, Enum):
         return str(self.value)
 
 
+class PassMode(str, Enum):
+    """Evaluation pass/fail aggregation mode for the @evaluate decorator."""
+
+    SAMPLE = 'sample'
+    PER_TEST_CASE = 'per_test_case'
+
+    def __str__(self) -> str:
+        """Return the enum value as string."""
+        return str(self.value)
+
+
 class SimilarityMetric(str, Enum):
     """Similarity calculation methods for semantic similarity checks."""
 

@@ -16,6 +16,7 @@ from flex_evals import (
     ContainsCheck,
     ExactMatchCheck,
     LLMJudgeCheck,
+    PassMode,
     ThresholdCheck,
 )
 from flex_evals.pytest_decorator import evaluate
@@ -50,7 +51,8 @@ def simple_quality_judge(prompt: str, response_format: type) -> tuple:
         phrases=["Python", "programming"],
     )],
     samples=3,
-    success_threshold=1.0,  # Expect 100% success
+    pass_mode=PassMode.SAMPLE,
+    pass_threshold=1.0,  # Expect 100% success
 )
 def test_python_explanation(test_case: TestCase) -> str:
     """Deterministic function that always produces good Python explanations."""
@@ -78,7 +80,8 @@ def test_python_explanation(test_case: TestCase) -> str:
         ),
     ],
     samples=2,
-    success_threshold=1.0,
+    pass_mode=PassMode.SAMPLE,
+    pass_threshold=1.0,
 )
 def test_code_generation(test_case: TestCase) -> dict:
     """Generate code examples with multiple validation checks."""
@@ -110,7 +113,8 @@ test_case_with_checks = TestCase(
     test_cases=[test_case_with_checks],
     checks=None,  # Use TestCase's own checks
     samples=2,
-    success_threshold=1.0,
+    pass_mode=PassMode.SAMPLE,
+    pass_threshold=1.0,
 )
 def test_with_testcase_checks(test_case: TestCase) -> str:
     """Demonstrate TestCase-defined checks pattern."""
@@ -127,7 +131,8 @@ def test_with_testcase_checks(test_case: TestCase) -> str:
         llm_function=simple_quality_judge,
     )],
     samples=2,
-    success_threshold=1.0,
+    pass_mode=PassMode.SAMPLE,
+    pass_threshold=1.0,
 )
 def test_llm_quality_assessment(test_case: TestCase) -> str:
     """Demonstrate LLM judge evaluation with deterministic mock."""
@@ -151,7 +156,8 @@ def test_llm_quality_assessment(test_case: TestCase) -> str:
         actual="$.output.value",
     )],
     samples=4,
-    success_threshold=0.75,  # 75% threshold (3 out of 4 must pass)
+    pass_mode=PassMode.SAMPLE,
+    pass_threshold=0.75,  # 75% threshold (3 out of 4 must pass)
 )
 def test_statistical_threshold(test_case: TestCase) -> str:  # noqa: ARG001
     """Demonstrate statistical threshold with predictable variance."""
@@ -186,7 +192,8 @@ def user_data_fixture() -> str:
         actual="$.output.value",
     )],
     samples=2,
-    success_threshold=1.0,
+    pass_mode=PassMode.SAMPLE,
+    pass_threshold=1.0,
 )
 def test_with_simple_fixture(test_case: TestCase, simple_fixture) -> str:  # noqa: ANN001
     """Demonstrate basic fixture integration with simple string values."""
@@ -201,7 +208,8 @@ def test_with_simple_fixture(test_case: TestCase, simple_fixture) -> str:  # noq
         actual="$.output.value",
     )],
     samples=2,
-    success_threshold=1.0,
+    pass_mode=PassMode.SAMPLE,
+    pass_threshold=1.0,
 )
 def test_with_multiple_fixtures(test_case: TestCase, simple_fixture, user_data_fixture) -> str:  # noqa: ANN001
     """Demonstrate multiple fixture integration with simple string concatenation."""
@@ -219,7 +227,8 @@ def test_with_multiple_fixtures(test_case: TestCase, simple_fixture, user_data_f
         phrases=["completed", "async"],
     )],
     samples=100,  # 100 samples executed concurrently
-    success_threshold=1.0,
+    pass_mode=PassMode.SAMPLE,
+    pass_threshold=1.0,
 )
 async def test_async_concurrent_execution(test_case: TestCase) -> str:
     """
@@ -249,7 +258,8 @@ async def test_async_concurrent_execution(test_case: TestCase) -> str:
         ),
     ],
     samples=20,  # 20 concurrent executions, each timed individually
-    success_threshold=1.0,
+    pass_mode=PassMode.SAMPLE,
+    pass_threshold=1.0,
 )
 async def test_performance_under_threshold(test_case: TestCase) -> str:
     """
@@ -311,7 +321,8 @@ def failing_function(should_fail: bool = True) -> str:
         ),
     ],
     samples=2,
-    success_threshold=1.0,
+    pass_mode=PassMode.SAMPLE,
+    pass_threshold=1.0,
 )
 def test_error_detection() -> str:
     """
