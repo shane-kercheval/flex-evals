@@ -171,6 +171,27 @@ def test_statistical_threshold(test_case: TestCase) -> str:  # noqa: ARG001
     return "pass" if test_statistical_threshold._counter <= 3 else "fail"
 
 
+# Example 5b: Per-test-case mode with multiple test cases
+# Each test case is evaluated independently across samples.
+# The eval passes if ALL test cases individually meet the threshold.
+@evaluate(
+    test_cases=[
+        TestCase(id="greeting", input="hello", expected="hello world"),
+        TestCase(id="farewell", input="bye", expected="bye world"),
+    ],
+    checks=[ExactMatchCheck(
+        expected="$.test_case.expected",
+        actual="$.output.value",
+    )],
+    samples=4,
+    pass_mode=PassMode.PER_TEST_CASE,
+    pass_threshold=1.0,
+)
+def test_per_test_case_mode(test_case: TestCase) -> str:
+    """Demonstrate per-test-case evaluation mode with multiple test cases."""
+    return f"{test_case.input} world"
+
+
 # Simple fixtures for demonstration
 @pytest.fixture
 def simple_fixture() -> str:
