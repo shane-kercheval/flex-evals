@@ -257,7 +257,9 @@ Rewrite the "Pytest Integration" section (lines ~37-78):
 
 The docstring in `evaluate()` should clearly document:
 - `pass_threshold` parameter with explanation for both modes
-- `pass_mode` parameter with description of each mode
+- `pass_mode` parameter with description of each mode and when to use each:
+  - `PER_TEST_CASE`: use when test cases are independent scenarios (e.g., different inputs, tag suggestions, classification evals). Each test case is evaluated on its own merit. This is the default and the right choice for most LLM evaluations.
+  - `SAMPLE`: use when test cases are interdependent or sequential (e.g., end-to-end pipeline tests where "the whole pipeline works" is the meaningful question). A single failure in any test case means the entire sample failed.
 - Updated example showing both modes
 
 ### Testing Strategy
